@@ -36,9 +36,9 @@ AIは売買の正解を当てる装置ではない。このツールは、複数
    node tools/validate.mjs data/stocks/<code>/analyses/<file>.json
    ```
    NG なら理由を読んで直す。OK になるまで次へ進まない。
-7. **表示する。**
+7. **表示する。** `open` には必ず `file://` で始まる絶対URLを渡す（相対パスに `#` を付けると開けない）。
    ```bash
-   node build.mjs && open "app/index.html#/stock/<code>/quick"
+   node build.mjs && open "file://$PWD/app/index.html#/stock/<code>/quick"
    ```
 8. **報告する。** 3〜5行で：一言の要約、4点診断の結果、3つのシナリオの要点、今回の気づき。取得できなかった項目があれば添える。分析の全文は画面にあるので繰り返さない。
 

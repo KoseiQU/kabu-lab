@@ -46,7 +46,7 @@ AIは売買の正解を当てる装置ではない。複数のシナリオと根
   ② Claude が digest.md と Web検索で分析 → data/stocks/6501/analyses/2026-10-03-quick.json
   ③ node tools/validate.mjs <その JSON>      スキーマ検証（不合格なら②を直す）
   ④ node build.mjs                           data/ 全体 → app/data.js（window.KABU）
-  ⑤ open app/index.html#/stock/6501/quick
+  ⑤ open "file://$PWD/app/index.html#/stock/6501/quick"   （file:// の絶対URLで渡す。相対パス＋# は開けない）
 ```
 
 ### ディレクトリ
