@@ -64,6 +64,14 @@
       const over = [...ph.querySelectorAll('*')].some((c) => { const r = c.getBoundingClientRect(); return r.width > 0 && r.right > box.right - 1; });
       if (over) add('① 見出しがはみ出している', (ph.querySelector('h2') || {}).textContent || '');
     });
+    // 文字の切れ（はみ出しを隠す枠の中で内容が収まっていない）
+    main.querySelectorAll('.ck, .sc, .vg, .term, .dg, .insight, .srow, .mi').forEach((el) => {
+      if (el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1) add('① 文字が切れている', el.textContent.trim().slice(0, 24));
+    });
+    main.querySelectorAll('table').forEach((t) => {
+      const box = t.parentElement.getBoundingClientRect(), r = t.getBoundingClientRect();
+      if (r.right > box.right + 1) add('① 表が枠からはみ出している', (t.querySelector('td') || {}).textContent || '');
+    });
     // ② NaN / undefined / Infinity（SVG属性・style属性・画面テキスト）
     document.querySelectorAll('#main svg *, #main svg, #top *, #bot *').forEach((el) => {
       SVG_ATTRS.forEach((k) => { const v = el.getAttribute && el.getAttribute(k); if (v && BAD.test(v)) add('② 属性に不正値', `${el.tagName}[${k}]=${v.slice(0, 60)}`); });

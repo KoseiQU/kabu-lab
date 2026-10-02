@@ -411,7 +411,7 @@
     const cells = Object.keys(DIAG).map((k) => {
       const d = list.find((x) => x && x.key === k), m = DIAG[k];
       if (!d) return `<div class="dg nd" data-nodata="diagnosis:${k}"><div class="dgh"><svg><use href="#${m.icon}"/></svg>${m.label}<b class="vd">—</b></div><div class="mt"><span class="nd">未取得</span></div><p>${esc(missFor(a, 'diagnosis') || 'この観点の評価がありません')}</p></div>`;
-      return `<div class="dg"><div class="dgh"><svg><use href="#${m.icon}"/></svg>${esc(d.label || m.label)}<b class="vd">${esc(d.verdict || '—')}</b></div>`
+      return `<div class="dg"><div class="dgh"><svg><use href="#${m.icon}"/></svg>${esc(d.label || m.label)}<b class="vd${String(d.verdict || '').length > 5 ? ' long' : ''}">${esc(d.verdict || '—')}</b></div>`
         + `<div class="mt">${K.meter(d.level)}<span class="ml" data-side="l">${m.l}</span><span class="ml" data-side="r">${m.r}</span></div><p>${richNums(d.reason)}</p></div>`;
     }).join('');
     return panel('diagnosis', 'SYS-01 / DIAG', '4点診断', '<span class="jp">評価メーター</span>', `<div class="diag">${cells}</div>`);
@@ -459,7 +459,7 @@
   }
   function scenPanel(a, dec) {
     const close = a.price && isNum(a.price.close) ? a.price.close : null;
-    const pm = `<span class="jp">起点 現在値 <span class="mono">${fmt(close, dec)}</span>円</span>`;
+    const pm = `<span class="jp">起点 <span class="u-wide">現在値 </span><span class="mono">${fmt(close, dec)}</span>円</span>`;
     if (secAbsent(a, 'scenarios')) return panel('scenarios', 'SYS-06 / SCENARIO', '3つのシナリオ', pm, `<div class="pb">${noData('scenarios', a)}</div>`);
     const list = arr(a.sections.scenarios);
     const order = [['bull', 'SCN-A', 'bull'], ['base', 'SCN-B', 'mid'], ['bear', 'SCN-C', 'bear']];
