@@ -80,3 +80,20 @@ test('fetch: タイムアウトは原因が分かるメッセージ', async () =
     srv.close();
   }
 });
+
+test('writeRowsJson: 1行=1日足で書いても JSON として同値', async () => {
+  const { writeRowsJson } = await import('../collect/lib/util.mjs');
+  const { mkdtempSync, readFileSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const dir = mkdtempSync(join(tmpdir(), 'kabu-rows-'));
+  try {
+    const obj = { meta: { code: '6501', name: '日立' }, rows: [{ d: '2026-10-01', o: 1, h: 2, l: 0.5, c: 1.5, v: 10 }, { d: '2026-10-02', o: 1, h: 2, l: 1, c: 2, v: 0 }] };
+    writeRowsJson(join(dir, 'p.json'), obj);
+    const text = readFileSync(join(dir, 'p.json'), 'utf8');
+    assert.deepEqual(JSON.parse(text), obj);
+    assert.equal(text.split('\n').filter((l) => l.includes('"d":')).length, 2);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

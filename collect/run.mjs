@@ -5,7 +5,7 @@ import { fetchPrices, pricesPath } from './prices.mjs';
 import { fetchKabutan, profilePath } from './kabutan.mjs';
 import { computeAll } from './lib/indicators.mjs';
 import { buildDigest, DIGEST_LIMIT } from './lib/digest.mjs';
-import { ROOT, writeJson, writeText, checkCode, fail } from './lib/util.mjs';
+import { ROOT, writeJson, writeRowsJson, writeText, checkCode, fail } from './lib/util.mjs';
 
 const TYPES = ['quick'];
 
@@ -35,6 +35,8 @@ let prices = null;
 try {
   prices = await fetchPrices(code);
 } catch (e) {
+  // 銘柄そのものが存在しない（Yahoo 404）なら何も書かずに終える。株探は指数等の別ページを返すことがあるため
+  if (/HTTP 404/.test(e.message)) fail(`銘柄 ${code} の株価が見つかりません（Yahoo 404）。コードを確認してください: ${e.message}`);
   errors.push(`株価(Yahoo)の取得に失敗: ${e.message}`);
   missing.push('株価・テクニカル指標（Yahoo chart API の取得失敗）');
 }
@@ -50,7 +52,7 @@ try {
 
 if (prices) {
   if (profile?.name) prices.meta.name = profile.name;
-  writeJson(pricesPath(code), prices);
+  writeRowsJson(pricesPath(code), prices);
   written.push(pricesPath(code));
 }
 if (profile) {

@@ -13,6 +13,14 @@ export function writeJson(path, obj) {
   writeFileSync(path, JSON.stringify(obj, null, 1) + '\n');
 }
 
+/** {meta, rows} を「1行=1日足」で書く（差分を読みやすくする） */
+export function writeRowsJson(path, { rows, ...rest }) {
+  mkdirSync(dirname(path), { recursive: true });
+  const head = JSON.stringify(rest, null, 1).replace(/\n}$/, '');
+  const body = rows.map((r) => ' ' + JSON.stringify(r)).join(',\n');
+  writeFileSync(path, `${head},\n "rows": [\n${body}\n ]\n}\n`);
+}
+
 export function writeText(path, text) {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, text);

@@ -2,7 +2,7 @@
 // 使い方: node collect/prices.mjs <code>
 import { join } from 'node:path';
 import { defaultFetcher } from './lib/fetch.mjs';
-import { ROOT, isMain, writeJson, checkCode, fail } from './lib/util.mjs';
+import { ROOT, isMain, writeRowsJson, checkCode, fail } from './lib/util.mjs';
 
 export const chartUrl = (symbol, range = '2y') =>
   `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=1d`;
@@ -69,7 +69,7 @@ if (isMain(import.meta.url)) {
   const code = process.argv[2];
   try {
     const p = await fetchPrices(checkCode(code));
-    writeJson(pricesPath(code), p);
+    writeRowsJson(pricesPath(code), p);
     console.log(`${pricesPath(code)} (${p.rows.length}本, 最終 ${p.meta.asOf})`);
   } catch (e) {
     fail(`株価の取得に失敗しました: ${e.message}`);
