@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><title>KABU LAB モック比較</title>
+<link rel="icon" href="data:,">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--bg:#070b12;--panel:#0d1420;--line:#1d3346;--cy:#39d7f5;--tx:#dbe7f0;--mut:#8aa0b2}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:"Hiragino Sans","Noto Sans JP",system-ui,sans-serif;line-height:1.6}
+header{padding:28px 32px 8px}
+h1{margin:0;font-size:22px;letter-spacing:.06em}
+header p{margin:6px 0 0;color:var(--mut);font-size:14px}
+.tabs{display:flex;gap:8px;padding:16px 32px 0}
+.tabs button{background:transparent;border:1px solid var(--line);color:var(--mut);padding:8px 18px;font-size:14px;cursor:pointer;border-radius:4px;font-family:inherit}
+.tabs button[aria-pressed="true"]{border-color:var(--cy);color:var(--cy);background:rgba(57,215,245,.08)}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;padding:20px 32px 40px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden;display:flex;flex-direction:column}
+.card h2{margin:0;padding:14px 16px 2px;font-size:17px}
+.card h2 small{color:var(--cy);font-size:12px;letter-spacing:.1em;margin-right:8px}
+.card .desc{padding:0 16px 12px;color:var(--mut);font-size:13px;min-height:66px}
+.card a.shot{display:block;border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:#000}
+.card img{display:block;width:100%;height:auto}
+.card ul{margin:0;padding:12px 16px 4px 34px;font-size:13px}
+.card li{margin-bottom:4px}
+.card .open{margin:10px 16px 16px;display:inline-block;text-align:center;padding:10px;border:1px solid var(--cy);color:var(--cy);text-decoration:none;border-radius:4px;font-size:14px}
+.card .open:hover{background:rgba(57,215,245,.12)}
+.note{padding:0 32px 40px;color:var(--mut);font-size:13px}
+.note a{color:var(--cy)}
+@media(max-width:1100px){.grid{grid-template-columns:1fr}}
+</style></head><body>
+<header><h1>KABU LAB モック比較 ― 案1 / 案4 / 案5</h1>
+<p>3案とも中身（日立製作所のクイック診断）は同じです。画像をクリックすると原寸で開き、「このモックを開く」で実際に動く画面が開きます。</p></header>
+<div class="tabs" role="group" aria-label="表示する画面">
+<button data-v="stock-top" aria-pressed="true">銘柄ページ（最初の1画面）</button>
+<button data-v="stock-full" aria-pressed="false">銘柄ページ（全体）</button>
+<button data-v="home" aria-pressed="false">ホーム</button>
+</div>
+<main class="grid">
+<section class="card"><h2><small>案1</small>管制室HUD（基準）</h2>
+<p class="desc">最初に作った基準の案。左ナビとタブ式のダッシュボード。チャートと4点診断が大きく、余白がある。</p>
+<a class="shot" href="shots/mock-1-stock-top.png" target="_blank"><img data-n="1" src="shots/mock-1-stock-top.png" alt="案1"></a>
+<ul><li>情報量：中（下の項目はスクロール）</li><li>表現：平面の計器盤</li><li>文字：大きめで読みやすい</li></ul>
+<a class="open" href="mock-1-hud.html" target="_blank">このモックを開く</a></section>
+<section class="card"><h2><small>案4</small>HUD高密度</h2>
+<p class="desc">案3の情報量とペイン配置を、案1のデザインで作り直した案。1画面で9要素のうち8つを一望できる。</p>
+<a class="shot" href="shots/mock-4-stock-top.png" target="_blank"><img data-n="4" src="shots/mock-4-stock-top.png" alt="案4"></a>
+<ul><li>情報量：多（ほぼスクロール不要）</li><li>表現：平面の計器盤</li><li>文字：小さめ（12〜13px基調）</li></ul>
+<a class="open" href="mock-4-hud-dense.html" target="_blank">このモックを開く</a></section>
+<section class="card"><h2><small>案5</small>立体ホログラム</h2>
+<p class="desc">案1と同じレイアウトのまま、立体感と近未来感を強めた案。厚みのあるパネル、箱の中のチャート、立体の棒と円盤。</p>
+<a class="shot" href="shots/mock-5-stock-top.png" target="_blank"><img data-n="5" src="shots/mock-5-stock-top.png" alt="案5"></a>
+<ul><li>情報量：中（案1と同じ）</li><li>表現：立体・奥行き・視差で動く</li><li>文字：大きめ。動きは実物で確認を</li></ul>
+<a class="open" href="mock-5-holo3d.html" target="_blank">このモックを開く</a></section>
+</main>
+<p class="note">参考：<a href="mock-2-glass.html" target="_blank">案2 グラスネオン</a> ／ <a href="mock-3-terminal.html" target="_blank">案3 トレーディング端末</a></p>
+<script>
+document.querySelectorAll('.tabs button').forEach(function(b){b.addEventListener('click',function(){
+ document.querySelectorAll('.tabs button').forEach(function(x){x.setAttribute('aria-pressed',x===b?'true':'false')});
+ document.querySelectorAll('.card img').forEach(function(i){var s='shots/mock-'+i.dataset.n+'-'+b.dataset.v+'.png';i.src=s;i.parentNode.href=s;});
+});});
+</script></body></html>
