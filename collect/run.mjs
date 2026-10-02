@@ -1,15 +1,19 @@
-// 入口: node collect/run.mjs <code> [--type quick] [--if-stale]
-// --if-stale: digest.md が最新（直近の大引け以降に作成、または作成から3時間以内）なら収集を省く。
-// 株価(Yahoo)と株探を取得し、指標を計算して data/stocks/<code>/ に prices.json・profile.json・digest.md を書く。
+// 入口: node collect/run.mjs <code> [--type quick|chart|kessan] [--if-stale]
+// quick/chart: 株価(Yahoo)と株探の基本ページを取得し、指標を計算して prices.json・profile.json・digest.md を書く。
+//   （chart 型は quick と同じ収集・同じ digest を使う）
+// kessan: 株探の決算ページだけを取得し finance.json・digest-kessan.md を書く（同じ実行で quick の収集はしない）。
+// --if-stale: その型の digest が最新（直近の大引け以降に作成、または作成から3時間以内）なら収集を省く。
 import { join } from 'node:path';
 import { mkdirSync, statSync, existsSync } from 'node:fs';
 import { fetchPrices, pricesPath } from './prices.mjs';
 import { fetchKabutan, profilePath } from './kabutan.mjs';
 import { computeAll } from './lib/indicators.mjs';
 import { buildDigest, DIGEST_LIMIT } from './lib/digest.mjs';
+import { fetchFinance, financePath } from './kabutan-finance.mjs';
+import { buildKessanDigest } from './lib/digest-kessan.mjs';
 import { ROOT, writeJson, writeRowsJson, writeText, checkCode, fail, isDigestFresh } from './lib/util.mjs';
 
-const TYPES = ['quick'];
+const TYPES = ['quick', 'chart', 'kessan'];
 
 function parseArgs(argv) {
   const args = { code: null, type: 'quick', ifStale: false };
@@ -25,14 +29,14 @@ const { code, type, ifStale } = parseArgs(process.argv.slice(2));
 try {
   checkCode(code);
 } catch (e) {
-  fail(`${e.message}\n使い方: node collect/run.mjs <code> [--type quick] [--if-stale]`);
+  fail(`${e.message}\n使い方: node collect/run.mjs <code> [--type quick|chart|kessan] [--if-stale]`);
 }
 if (!TYPES.includes(type)) fail(`未対応の型です: ${type}（対応: ${TYPES.join(', ')}）`);
 
 const dir = join(ROOT, 'data', 'stocks', code);
 if (ifStale) {
-  const dp = join(dir, 'digest.md');
-  const need = [dp, pricesPath(code), profilePath(code)];
+  const dp = join(dir, type === 'kessan' ? 'digest-kessan.md' : 'digest.md');
+  const need = type === 'kessan' ? [dp, financePath(code)] : [dp, pricesPath(code), profilePath(code)];
   if (need.every((f) => existsSync(f)) && isDigestFresh(statSync(dp).mtime)) {
     mkdirSync(join(dir, 'analyses'), { recursive: true });
     console.log(`収集を省略（${code} の digest は最新です）:\n  ${dp}`);
@@ -43,6 +47,26 @@ if (ifStale) {
 const written = [];
 const errors = [];
 const missing = [];
+
+if (type === 'kessan') {
+  let fin = null;
+  try {
+    fin = await fetchFinance(code, { saveHtml: join(dir, 'raw', 'kabutan-finance.html') });
+  } catch (e) {
+    fail(`株探（決算ページ）の取得に失敗しました: ${e.message}`);
+  }
+  writeJson(financePath(code), fin);
+  written.push(financePath(code));
+  const digest = buildKessanDigest({ code, fin });
+  const p = join(dir, 'digest-kessan.md');
+  writeText(p, digest);
+  written.push(`${p} (${Buffer.byteLength(digest)} bytes / 上限 ${DIGEST_LIMIT})`);
+  mkdirSync(join(dir, 'analyses'), { recursive: true });
+  console.log(`書いたファイル（${code} ${fin.name ?? ''} 決算）:`);
+  for (const w of written) console.log(`  ${w}`);
+  if (fin.parseErrors) console.log(`注意: 取れなかった表 ${Object.keys(fin.parseErrors).join(', ')}（missing に記録）`);
+  process.exit(0);
+}
 
 let prices = null;
 try {

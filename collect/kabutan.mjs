@@ -51,17 +51,17 @@ function normalizeMarket(raw) {
 }
 
 /** 範囲切り出し: start を含む位置から end までの部分 */
-function between(html, start, end) {
+export function between(html, start, end) {
   const i = html.indexOf(start);
   if (i < 0) return null;
   const j = html.indexOf(end, i + start.length);
   return j < 0 ? html.slice(i) : html.slice(i, j);
 }
 
-function rows(tableHtml) {
+export function rows(tableHtml) {
   return [...tableHtml.matchAll(/<tr[\s\S]*?<\/tr>/gi)].map((m) => m[0]);
 }
-function cells(trHtml) {
+export function cells(trHtml) {
   return [...trHtml.matchAll(/<(t[hd])\b[^>]*>([\s\S]*?)<\/\1>/gi)].map((m) => ({ tag: m[1].toLowerCase(), html: m[2] }));
 }
 /** <th scope='row'>ラベル</th><td>値</td> 形式の表から値HTMLを探す */
