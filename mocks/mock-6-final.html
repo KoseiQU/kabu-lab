@@ -254,7 +254,8 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:poin
 .tbl tr:last-child td{border-bottom:0}
 .tbl .fc,.tbl .fc td{color:var(--cy2)}
 .tbl td.jp{font:500 12px/1 var(--jp)}
-#perf{margin:2px 0 3px}
+#perf{margin:0}
+.pair>.panel:first-child .pb{padding-top:3px; padding-bottom:3px}
 
 /* 稼ぎ頭マップ */
 .sg-top{--dz:clamp(50px, calc((100vh - 900px) * .4 + 50px), 104px); flex:none; display:flex; align-items:center; gap:14px; margin-bottom:3px}
@@ -656,14 +657,6 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:poin
               <div class="ph"><span class="code">SYS-03 / PERF</span><h2>業績推移</h2></div>
               <div class="pb">
                 <div class="host" id="perf"></div>
-                <table class="tbl">
-                  <thead><tr><th>決算期</th><th>売上高<small>(億円)</small></th><th>最終利益<small>(億円)</small></th><th>1株利益<small>(円)</small></th><th>1株配当<small>(円)</small></th></tr></thead>
-                  <tbody>
-                    <tr><td>2025.3</td><td>97,833</td><td>6,157</td><td>133.9</td><td>43</td></tr>
-                    <tr><td>2026.3</td><td>105,867</td><td>8,023</td><td>176.8</td><td>50</td></tr>
-                    <tr class="fc"><td>2027.3予</td><td>117,000</td><td>9,000</td><td>202.2</td><td class="jp">中間28・期末未定</td></tr>
-                  </tbody>
-                </table>
               </div>
             </div>
           </section>
@@ -1072,52 +1065,79 @@ function tube(p, d, col, dark, w){
   return g;
 }
 
-/* ---------- 業績推移（立体棒＋浮遊する利益線） ---------- */
+/* ---------- 業績推移（立体棒＋浮遊する利益線＋転置した数表） ----------
+   左の余白列＝凡例と数表の行見出し。決算期ラベルは棒の真下に置き、数表の列見出しを兼ねる。
+   縦の積み順（上から）：最終利益の札 → 利益の点・線 → 売上高の値 → 立体棒 → 床 → 決算期 → 1株利益 → 1株配当 */
 function drawPerf(){
   const host=$('#perf'); const [W,H]=box(host); if(!W||!H) return;
-  const DX=Math.min(14,Math.max(9,H*.09)), DY=DX*.66;
-  const LG=17, LBW=46;                    /* 凡例の帯の高さ／利益ラベルの幅 */
-  const pl=6+DX, pr=LBW+8, pb=3, base=H-pb, ch=(base-LG-DY-15)/0.936; /* 最も高い棒の上面ラベルが凡例に触れない最大の高さ */
-  const svg=el('svg',{width:W,height:H,viewBox:`0 0 ${W} ${H}`,role:'img','aria-label':'売上高と最終利益の推移'},host);
+  const svg=el('svg',{width:W,height:H,viewBox:`0 0 ${W} ${H}`,role:'img',
+    'aria-label':'業績推移。売上高(億円) 2025.3 97,833／2026.3 105,867／2027.3予 117,000。最終利益(億円) 6,157／8,023／9,000。1株利益(円) 133.9／176.8／202.2。1株配当(円) 43／50／中間28・期末未定'},host);
   const defs=el('defs',null,svg);
   const hp=el('pattern',{id:'fch',width:6,height:6,patternUnits:'userSpaceOnUse',patternTransform:'rotate(45)'},defs);
   el('line',{x1:0,y1:0,x2:0,y2:6,stroke:'rgba(62,230,255,.5)','stroke-width':2},hp);
-  // 凡例（SVG内の上端に置いて棒の高さを稼ぐ）
-  const lgd=el('g',null,svg); let lx=0;
-  el('rect',{x:lx,y:3,width:10,height:10,fill:'rgba(62,230,255,.4)'},lgd); el('rect',{x:lx,y:3,width:10,height:2,fill:C.cy},lgd); tx(lgd,lx+16,12.5,'売上高',{class:'st-j',fill:C.tx2}); lx+=16+40+14;
-  el('line',{x1:lx,x2:lx+16,y1:8,y2:8,stroke:C.w,'stroke-width':2},lgd); tx(lgd,lx+22,12.5,'最終利益',{class:'st-j',fill:C.tx2}); lx+=22+50+14;
-  el('rect',{x:lx+.5,y:3.5,width:10,height:10,fill:'url(#fch)',stroke:C.cy,'stroke-dasharray':'2 2'},lgd); tx(lgd,lx+16,12.5,'予想',{class:'st-j',fill:C.tx2});
+
+  const GUT=76, RH=16, AX=17;                          /* 左余白列／数表の行高／決算期の行高 */
+  const DX=Math.round(Math.min(18,Math.max(12,W*.034))), DY=Math.round(DX*.66);
+  const pl=GUT+DX+2, pr=4, base=H-2-RH*2-AX-3;
+  const gw=(W-pl-pr)/3, bwid=Math.min(70,gw*.52);
   const rows=[['2025.3',97833,6157,false],['2026.3',105867,8023,false],['2027.3予',117000,9000,true]];
-  const gw=(W-pl-pr)/3, bwid=Math.min(60,gw*.46);
-  const RY=v=>base-v/125000*ch, PY=v=>base-v/12500*ch;
-  // 奥の壁の目盛＋床グリッド
-  [.25,.5,.75].forEach(f=>{ const y=base-ch*f; el('line',{x1:pl-DX,x2:W-pr-DX,y1:y-DY,y2:y-DY,stroke:'rgba(62,230,255,.07)'},svg); });
+  /* 最も高い棒の上に「売上高の値(13)＋隙間(5)＋利益の札(20)」が収まる最大の高さ */
+  const H3=Math.min(base-DY-41, (base-6)*.86);
+  const RY=v=>base-v/117000*H3;
+  const labTop=i=>RY(rows[i][1])-DY-13;              /* 売上高の値の上端 */
+  const p3=labTop(2)-6;
+  const k=Math.min((labTop(0)-6-p3)/(9000-6157),(labTop(1)-6-p3)/(9000-8023))*.92;
+  const PY=v=>p3+(9000-v)*k;
+
+  // 左余白列：凡例（単位は1回だけ）
+  const lgd=el('g',null,svg); let ly=10;
+  el('rect',{x:0,y:ly-8,width:10,height:10,fill:'rgba(62,230,255,.4)'},lgd); el('rect',{x:0,y:ly-8,width:10,height:2,fill:C.cy},lgd); tx(lgd,15,ly+1.5,'売上高',{class:'st-j',fill:C.tx2}); ly+=18;
+  el('line',{x1:0,x2:10,y1:ly-3,y2:ly-3,stroke:C.w,'stroke-width':2},lgd); tx(lgd,15,ly+1.5,'最終利益',{class:'st-j',fill:C.tx2}); ly+=18;
+  el('rect',{x:.5,y:ly-7.5,width:10,height:10,fill:'url(#fch)',stroke:C.cy,'stroke-dasharray':'2 2'},lgd); tx(lgd,15,ly+1.5,'予想',{class:'st-j',fill:C.tx2}); ly+=18;
+  tx(lgd,0,ly+1.5,'単位 億円',{class:'st-j',fill:C.tx3});
+
+  // 奥の壁の目盛＋床グリッド＋足元の影
+  [.25,.5,.75,1].forEach(f=>{ const y=base-H3*f; el('line',{x1:pl-DX,x2:W-pr-DX,y1:y-DY,y2:y-DY,stroke:'rgba(62,230,255,.06)'},svg); });
+  el('line',{x1:pl-DX,x2:pl-DX,y1:base-H3-DY,y2:base-DY,stroke:'rgba(62,230,255,.14)'},svg);
   floor3d(svg,pl,W-pr,base,DX,DY);
   const pts=[];
   rows.forEach((r,i)=>{
-    const cx=pl+gw*(i+.5), y=RY(r[1]), x0=cx-bwid/2, f=r[3];
+    const cx=pl+gw*(i+.5), x0=cx-bwid/2, y=RY(r[1]), f=r[3];
+    el('ellipse',{cx:cx-DX/2,cy:base-DY/2+1,rx:bwid*.62+DX/2,ry:DY*.55+2,fill:'url(#g3Pool)',opacity:f?.5:.9},svg);
     const bg=el('g',{class:'a-grow'},svg); bg.style.animationDelay=(i*.12)+'s';
     bar3d(bg,x0,y,bwid,base,DX,DY, f
-      ? {front:'url(#fch)',side:'rgba(62,230,255,.07)',top:'rgba(62,230,255,.16)',edge:C.cy,dash:'3 3',fedge:C.cy,fdash:'4 3'}
-      : {front:'url(#g3BarF)',side:'url(#g3BarL)',top:'rgba(166,243,255,.8)',fedge:'rgba(62,230,255,.55)',hi:true});
-    // 売上高：上面の上に置く
-    tx(svg,cx-DX/2,y-DY-5,fmt(r[1]),{class:'st-t','text-anchor':'middle',fill:f?C.cy2:C.tx});
-    pts.push([cx,PY(r[2]),r[2],x0+bwid]);
+      ? {front:'url(#fch)',side:'rgba(62,230,255,.08)',top:'rgba(62,230,255,.18)',edge:C.cy,dash:'3 3',fedge:C.cy,fdash:'4 3'}
+      : {front:'url(#g3BarF)',side:'url(#g3BarL)',top:'rgba(166,243,255,.82)',fedge:'rgba(62,230,255,.55)',hi:true});
+    const mx=cx-DX/2;                                   /* 上面の中心＝ラベルの軸 */
+    tx(svg,mx,y-DY-4,fmt(r[1]),{class:'st-t','text-anchor':'middle',fill:f?C.cy2:C.tx});
+    pts.push([mx,PY(r[2]),r[2]]);
+    // 決算期（軸ラベル兼 数表の列見出し）
+    tx(svg,cx,base+AX-3,r[0],{class:'st-t','text-anchor':'middle',fill:f?C.cy2:C.tx2});
   });
-  // 浮遊する利益線：床へ落ちる点線と光だまり
-  pts.forEach(p=>{
-    el('line',{x1:p[0],x2:p[0],y1:p[1]+5,y2:base-DY*.5,stroke:'rgba(244,251,255,.3)','stroke-dasharray':'2 3'},svg);
-    el('ellipse',{cx:p[0],cy:base-DY*.5,rx:9,ry:2.8,fill:'url(#g3Pool)'},svg);
-  });
+  // 浮遊する最終利益の線と札（点の上側）
   const lg=el('g',{class:'a-rv'},svg); lg.style.animationDelay='.5s';
-  tube(lg,'M'+pts.map(p=>p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' L'),C.w,'#5d7686',1.7);
-  // 最終利益：棒の右の隙間に札を出す
+  tube(lg,'M'+pts.map(p=>p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' L'),C.w,'#5d7686',1.6);
   pts.forEach(p=>{
-    el('circle',{cx:p[0],cy:p[1],r:4.4,fill:'url(#g3OrbW)',filter:'url(#mglow)'},svg);
-    const bx=p[3]+5;
-    el('line',{x1:p[0]+4,x2:bx,y1:p[1],y2:p[1],stroke:'rgba(244,251,255,.55)'},svg);
-    el('rect',{x:bx,y:p[1]-8.5,width:LBW,height:17,fill:'rgba(6,14,22,.95)',stroke:'rgba(244,251,255,.5)'},svg);
-    tx(svg,bx+LBW/2,p[1]+4,fmt(p[2]),{class:'st-t','text-anchor':'middle',fill:C.w});
+    el('circle',{cx:p[0],cy:p[1],r:3.6,fill:'url(#g3OrbW)',filter:'url(#mglow)'},svg);
+    const lab=fmt(p[2]), w=lab.length*7.3+10;
+    el('rect',{x:p[0]-w/2,y:p[1]-20,width:w,height:15,fill:'rgba(6,14,22,.95)',stroke:'rgba(244,251,255,.55)'},svg);
+    tx(svg,p[0],p[1]-8.5,lab,{class:'st-t','text-anchor':'middle',fill:C.w});
+  });
+
+  // 転置した数表（行＝1株利益／1株配当、列＝決算期。列は棒の真下に揃える）
+  tx(svg,0,base+AX-3,'決算期',{class:'st-j',fill:C.tx3});
+  const t0=base+AX;
+  el('line',{x1:0,x2:W,y1:t0+.5,y2:t0+.5,stroke:'rgba(62,230,255,.14)'},svg);
+  [['1株利益(円)',['133.9','176.8','202.2']],['1株配当(円)',['43','50','中間28・期末未定']]].forEach(([lab,vals],j)=>{
+    const yb=t0+RH*(j+1)-4.5;
+    if(j) el('line',{x1:0,x2:W,y1:t0+RH+.5,y2:t0+RH+.5,stroke:'rgba(62,230,255,.07)'},svg);
+    tx(svg,0,yb,lab,{class:'st-j',fill:C.tx2});
+    vals.forEach((v,i)=>{
+      const cx=pl+gw*(i+.5), jp=/[^\d.,]/.test(v);
+      const tt=tx(svg,cx,yb,v,{class:jp?'st-j':'st-t','text-anchor':'middle',fill:i===2?C.cy2:C.tx});
+      const tw=tt.getComputedTextLength();
+      if(cx+tw/2>W-1){ tt.setAttribute('text-anchor','end'); tt.setAttribute('x',W-1); }
+    });
   });
 }
 
@@ -1131,7 +1151,9 @@ function drawSupply(){
   const hp=el('pattern',{id:'sh',width:4,height:4,patternUnits:'userSpaceOnUse',patternTransform:'rotate(45)'},defs);
   el('rect',{width:4,height:4,fill:'rgba(157,179,194,.12)'},hp); el('line',{x1:0,y1:0,x2:0,y2:4,stroke:'#9db3c2','stroke-width':1.6},hp);
   const gw=(W-pl-pr)/rows.length, bw=Math.min(15,gw*.26);
-  const BY=v=>base-v/8000*ch, RY=v=>pt+16+(12-v)/(12-5)*(ch*.38);
+  const BY=v=>base-v/9000*ch;
+  /* 倍率の線は棒の上の帯だけを使う（最も高い棒の上面より8px上まで）＝棒と線・ラベルが重ならない */
+  const bandTop=pt+16, bandBot=BY(4101.6)-DY-8, RY=v=>bandTop+(12-v)/(12-5)*(bandBot-bandTop);
   [2000,4000].forEach(v=>el('line',{x1:pl-DX,x2:W-pr-DX,y1:BY(v)-DY,y2:BY(v)-DY,stroke:'rgba(62,230,255,.07)'},svg));
   [0,2000,4000].forEach(v=>tx(svg,pl-DX-6,BY(v)-DY*.5+4,v?fmt(v):'0',{class:'st-t','text-anchor':'end',fill:C.tx3}));
   floor3d(svg,pl,W-pr,base,DX,DY);
