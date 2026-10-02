@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KABU LAB — 案4 HUD高密度</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&family=Orbitron:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#05080d;
+  --cy:#3ee6ff; --cy2:#a6f3ff; --cyd:rgba(62,230,255,.16); --cyl:rgba(62,230,255,.32);
+  --amber:#ffb340; --mag:#ff5ca3;
+  --tx:#d8e7ef; --tx2:#9db3c2; --tx3:#7f97a8; --wh:#effcff;
+  --line:rgba(62,230,255,.14); --line2:rgba(62,230,255,.075);
+  --glow:0 0 6px rgba(62,230,255,.65),0 0 18px rgba(62,230,255,.25);
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  --orb:"Orbitron","JetBrains Mono",sans-serif;
+  --jp:"Noto Sans JP",system-ui,sans-serif;
+  --railW:56px; --topH:32px; --botH:41px; --g:6px;
+  /* 1440×900で下段の下端まで収まる配分（chrome 169px＋下段242px＝411px） */
+  --rowA:clamp(484px, calc(100vh - 411px), 760px);
+  --rowB:242px;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{
+  background:
+    radial-gradient(1200px 700px at 70% -10%,rgba(30,120,160,.16),transparent 60%),
+    radial-gradient(900px 600px at 0% 100%,rgba(20,70,110,.14),transparent 60%),
+    linear-gradient(rgba(62,230,255,.045) 1px,transparent 1px) 0 0/120px 120px,
+    linear-gradient(90deg,rgba(62,230,255,.045) 1px,transparent 1px) 0 0/120px 120px,
+    linear-gradient(rgba(62,230,255,.022) 1px,transparent 1px) 0 0/24px 24px,
+    linear-gradient(90deg,rgba(62,230,255,.022) 1px,transparent 1px) 0 0/24px 24px,
+    var(--bg);
+  background-attachment:fixed;
+  color:var(--tx); font:12.5px/1.5 var(--jp); overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+body::before{ /* 走査線（静止） */
+  content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.22) 0 1px,transparent 1px 3px); opacity:.35;
+}
+p{margin:0; line-break:strict; text-wrap:pretty}
+.mono,.num{font-family:var(--mono); font-variant-numeric:tabular-nums; letter-spacing:0}
+.up{color:var(--cy)} .dn{color:var(--mag)} .am{color:var(--amber)}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:left}
+:focus-visible{outline:1px solid var(--cy); outline-offset:1px}
+.cur{display:inline-block; width:8px; height:15px; background:var(--cy); box-shadow:var(--glow); vertical-align:-3px; animation:blink 1.06s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+
+/* ===== 細いアイコンレール ===== */
+.rail{position:fixed; left:0; top:0; bottom:0; width:var(--railW); z-index:30; display:flex; flex-direction:column; align-items:center; gap:4px;
+  background:rgba(8,17,26,.95); border-right:1px solid var(--line)}
+.rail::after{content:""; position:absolute; right:-1px; top:0; width:1px; height:110px; background:linear-gradient(var(--cy),transparent); box-shadow:var(--glow)}
+.logo{width:100%; height:var(--topH); display:grid; place-items:center; position:relative; border-bottom:1px solid var(--line); margin-bottom:6px}
+.logo svg{position:absolute; left:50%; top:50%; width:28px; height:30px; transform:translate(-50%,-50%)}
+.logo b{font:800 12px/1 var(--orb); color:var(--cy); text-shadow:var(--glow); letter-spacing:.04em; position:relative}
+.rl{width:48px; padding:8px 0 6px; display:flex; flex-direction:column; align-items:center; gap:4px; position:relative; color:var(--tx2);
+  clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px)}
+.rl svg{width:20px; height:20px}
+.rl span{font:500 12px/1 var(--mono)}
+.rl:hover{color:var(--tx); background:rgba(62,230,255,.06)}
+.rl.on{color:var(--cy); background:linear-gradient(90deg,rgba(62,230,255,.18),rgba(62,230,255,.04))}
+.rl.on::before{content:""; position:absolute; left:0; top:7px; bottom:7px; width:2px; background:var(--cy); box-shadow:var(--glow)}
+.rl.on span{text-shadow:var(--glow)}
+.rail .sep{width:26px; height:1px; background:var(--line); margin:6px 0}
+.rail .foot{margin-top:auto; margin-bottom:calc(var(--botH) + 8px); font:500 12px/1.3 var(--mono); color:var(--tx3); text-align:center}
+.rail .foot i{display:block; width:7px; height:7px; margin:0 auto 6px; background:var(--cy); box-shadow:var(--glow); transform:rotate(45deg)}
+
+/* ===== 上部バー（ブランド＋コマンドライン） ===== */
+.top{position:sticky; top:0; z-index:20; height:var(--topH); margin-left:var(--railW); display:flex; align-items:stretch;
+  background:rgba(5,8,13,.9); backdrop-filter:blur(8px); border-bottom:1px solid var(--line)}
+.top::after{content:""; position:absolute; left:0; right:0; bottom:-1px; height:1px; background:repeating-linear-gradient(90deg,var(--cyl) 0 1px,transparent 1px 12px); opacity:.6; pointer-events:none}
+.brand{display:flex; align-items:center; gap:10px; padding:0 14px; border-right:1px solid var(--line); white-space:nowrap}
+.brand b{font:800 13px/1 var(--orb); letter-spacing:.2em; color:var(--cy); text-shadow:var(--glow)}
+.brand span{font-size:12px; color:var(--tx2)}
+.cmdw{flex:1; min-width:0; display:flex; align-items:center; padding:0 12px}
+.cmdbox{flex:1; min-width:0; height:22px; display:flex; align-items:center; gap:9px; padding:0 10px; border:1px solid var(--cyl); background:rgba(5,8,13,.85);
+  box-shadow:inset 0 0 18px rgba(62,230,255,.07); clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);
+  font:500 13px/1 var(--mono); white-space:nowrap; overflow:hidden}
+.cmdbox .lbl{font:700 12px/1 var(--orb); letter-spacing:.14em; color:var(--tx3)}
+.cmdbox .pr{color:var(--cy); font-weight:700; text-shadow:var(--glow)}
+.cmdbox .hint{color:var(--tx3)}
+.cmdbox kbd{margin-left:auto; font:500 12px/1 var(--mono); color:var(--tx3); border:1px solid rgba(157,179,194,.3); padding:2px 6px}
+.meta{display:flex; align-items:stretch; font:500 12px/1 var(--mono); color:var(--tx3); white-space:nowrap}
+.meta>span{display:flex; align-items:center; gap:7px; padding:0 13px; border-left:1px solid var(--line)}
+.meta b{color:var(--tx); font-weight:500}
+
+/* ===== 下部バー（ティッカー＋ファンクションキー） ===== */
+.bot{position:fixed; left:var(--railW); right:0; bottom:0; z-index:25; height:var(--botH); background:rgba(5,8,13,.96); border-top:1px solid var(--line)}
+.bot::before{content:""; position:absolute; left:0; top:-1px; width:180px; height:1px; background:var(--cy); box-shadow:var(--glow)}
+.tape{height:18px; display:flex; align-items:stretch; overflow:hidden; white-space:nowrap; font:500 12px/1 var(--mono);
+  -webkit-mask:linear-gradient(90deg,#000 calc(100% - 80px),transparent); mask:linear-gradient(90deg,#000 calc(100% - 80px),transparent)}
+.tape .lb{flex:none; display:flex; align-items:center; padding:0 12px; font:700 12px/1 var(--orb); letter-spacing:.16em; color:var(--cy); text-shadow:var(--glow);
+  background:linear-gradient(90deg,rgba(62,230,255,.14),transparent)}
+.tape .it{display:flex; align-items:center; gap:7px; padding:0 13px; border-left:1px solid var(--line2); color:var(--tx3); font-family:var(--jp)}
+.tape .it b{font:500 12px/1 var(--mono); color:var(--tx)}
+.tape .it em{font:500 12px/1 var(--mono); font-style:normal}
+.fk{height:22px; display:flex; align-items:center; gap:4px; padding:0 6px; border-top:1px solid var(--line2); white-space:nowrap; overflow:hidden; font-size:12px}
+.fk .k{flex:none; height:18px; display:flex; align-items:center; gap:7px; padding-right:10px; color:var(--tx2); border:1px solid var(--line);
+  clip-path:polygon(0 0,calc(100% - 6px) 0,100% 6px,100% 100%,0 100%)}
+.fk .k i{font:700 12px/16px var(--mono); font-style:normal; color:var(--cy); background:rgba(62,230,255,.1); padding:0 5px; border-right:1px solid var(--line)}
+.fk button.k:hover{color:var(--tx); background:rgba(62,230,255,.06)}
+.fk .k.on{color:var(--cy); border-color:rgba(62,230,255,.6); background:linear-gradient(180deg,rgba(62,230,255,.2),rgba(62,230,255,.05)); font-weight:700}
+.fk .k.on i{background:var(--cy); color:#05080d; border-color:var(--cy)}
+.fk .k.off{color:var(--tx3)}
+.fk .k.off i{color:var(--tx3); background:rgba(127,151,168,.08)}
+.fk .st{margin-left:auto; display:flex; gap:14px; padding:0 8px; color:var(--tx3); font-family:var(--mono)}
+.fk .st b{color:var(--tx2); font-weight:500; font-family:var(--jp)}
+
+/* ===== 本体 ===== */
+.main{position:relative; z-index:1; margin-left:var(--railW); padding:var(--g) 8px calc(var(--botH) + 8px)}
+.view{display:none} .view.on{display:block}
+
+/* ===== パネル（斜めカット＋ブラケット） ===== */
+.panel{--c:10px; position:relative; padding:1px; min-width:0; min-height:0;
+  background:linear-gradient(170deg,rgba(62,230,255,.5),rgba(62,230,255,.14) 40%,rgba(62,230,255,.10) 70%,rgba(62,230,255,.34));
+  clip-path:polygon(var(--c) 0,100% 0,100% calc(100% - var(--c)),calc(100% - var(--c)) 100%,0 100%,0 var(--c))}
+.panel>.pi{position:relative; z-index:1; height:100%; display:flex; flex-direction:column; min-height:0; overflow:hidden;
+  background:linear-gradient(180deg,rgba(11,24,35,.97),rgba(7,13,20,.97));
+  clip-path:polygon(calc(var(--c) - .6px) 0,100% 0,100% calc(100% - var(--c) + .6px),calc(100% - var(--c) + .6px) 100%,0 100%,0 calc(var(--c) - .6px))}
+.panel::after{content:""; position:absolute; inset:0; z-index:2; pointer-events:none;
+  background:
+   linear-gradient(var(--cy),var(--cy)) right 0 top 0/12px 2px no-repeat,
+   linear-gradient(var(--cy),var(--cy)) right 0 top 0/2px 12px no-repeat,
+   linear-gradient(var(--cy),var(--cy)) left 0 bottom 0/12px 2px no-repeat,
+   linear-gradient(var(--cy),var(--cy)) left 0 bottom 0/2px 12px no-repeat}
+.ph{flex:none; height:25px; display:flex; align-items:center; gap:10px; padding:0 10px 0 14px; border-bottom:1px solid var(--line); position:relative; white-space:nowrap; overflow:hidden}
+.ph::after{content:""; position:absolute; left:14px; bottom:-1px; width:44px; height:1px; background:var(--cy); box-shadow:var(--glow)}
+.code{font:700 12px/1 var(--orb); letter-spacing:.12em; color:var(--cy); text-shadow:var(--glow); white-space:nowrap}
+.ph h2{margin:0; font:700 13px/1 var(--jp); color:var(--tx); white-space:nowrap}
+.ph .pm{margin-left:auto; font:500 12px/1 var(--mono); color:var(--tx2); display:flex; gap:12px; align-items:center}
+.ph .pm .jp{font-family:var(--jp)}
+.pb{flex:1; min-height:0; padding:6px 10px 7px; display:flex; flex-direction:column; position:relative}
+.host{position:relative; flex:1; min-height:0}
+.host>svg{position:absolute; left:0; top:0; display:block}
+.cap{font:500 12px/1.4 var(--mono); color:var(--tx3)}
+.legend{display:flex; flex-wrap:wrap; gap:1px 14px; font-size:12px; color:var(--tx2); line-height:17px}
+.legend span{display:inline-flex; align-items:center; gap:6px; white-space:nowrap}
+.legend b{font:500 12px var(--mono); color:var(--tx)}
+.sw{display:inline-block; width:10px; height:11px; flex:none}
+.sw.cu{border:1px solid var(--cy); background:rgba(62,230,255,.25)}
+.sw.cd{background:var(--mag)}
+.sw.l25{width:16px; height:2px; background:#f4fbff}
+.sw.l75{width:16px; height:2px; background:var(--amber)}
+.sw.bd{width:16px; height:8px; border-top:1px dashed var(--tx2); border-bottom:1px dashed var(--tx2); background:rgba(216,231,239,.08)}
+.st-t{font:500 12px var(--mono); fill:var(--tx2)}
+.st-j{font:500 12px var(--jp); fill:var(--tx2)}
+
+/* ===== 銘柄ヘッダー ===== */
+.sh{position:relative; height:44px; display:flex; align-items:stretch; margin-bottom:4px;
+  border:1px solid var(--line); background:linear-gradient(90deg,rgba(62,230,255,.08),rgba(8,17,26,.62) 42%,rgba(8,17,26,.62));
+  clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px)}
+.sh::before{content:""; position:absolute; left:0; right:0; bottom:0; height:5px; pointer-events:none;
+  background:repeating-linear-gradient(90deg,rgba(62,230,255,.45) 0 1px,transparent 1px 8px); opacity:.5;
+  -webkit-mask:linear-gradient(90deg,#000,transparent 70%); mask:linear-gradient(90deg,#000,transparent 70%)}
+.sh>div{display:flex; align-items:center; white-space:nowrap}
+.sh-id{gap:14px; padding:0 18px 0 20px}
+.ticker{font:800 26px/1 var(--orb); color:var(--cy); text-shadow:var(--glow); letter-spacing:.06em; padding-right:14px; border-right:1px solid var(--cyl)}
+.sh-id h1{margin:0 0 2px; font:700 16px/1.15 var(--jp); letter-spacing:.04em}
+.tags{display:flex; gap:5px}
+.tags span{font-size:12px; line-height:15px; color:var(--tx2); border:1px solid rgba(157,179,194,.32); padding:0 6px}
+.sh-price{gap:12px; padding:0 20px; border-left:1px solid var(--line)}
+.sh-price .ret{width:32px; height:32px; flex:none}
+.sh-price .lbl{font:500 12px/1 var(--mono); color:var(--tx2); margin-bottom:3px}
+.sh-price .lbl span{font-family:var(--jp)}
+.pxrow{display:flex; align-items:baseline; gap:12px}
+.px{font:700 25px/1 var(--mono); color:var(--wh); text-shadow:var(--glow); letter-spacing:-.01em}
+.px small{font:500 13px var(--jp); color:var(--tx2); margin-left:3px; text-shadow:none}
+.chg{font:500 12.5px/1 var(--mono)}
+.chg span{font-family:var(--jp)}
+.sh-kv{flex-direction:column; align-items:flex-start!important; justify-content:center; gap:4px; padding:0 18px; border-left:1px solid var(--line)}
+.sh-kv span{font-size:12px; line-height:1; color:var(--tx2)}
+.sh-kv b{font:500 14px/1 var(--mono); color:var(--tx)}
+.sh-kv b span{font:500 13px var(--jp); color:var(--tx)}
+.sh-fill{flex:1; justify-content:flex-end; padding-right:22px; border-left:1px solid var(--line)}
+.sh-fill svg{width:150px; height:26px; opacity:.85}
+
+/* ===== 型タブ ===== */
+.tabs{height:24px; display:flex; align-items:flex-end; gap:3px; margin-bottom:var(--g); border-bottom:1px solid var(--line); white-space:nowrap}
+.tab{height:23px; display:flex; align-items:center; gap:7px; padding:0 14px 0 11px; color:var(--tx2); font-size:12.5px; position:relative;
+  clip-path:polygon(8px 0,100% 0,100% 100%,0 100%,0 8px); background:rgba(62,230,255,.035)}
+.tab i{font:500 12px/1 var(--mono); font-style:normal; color:var(--tx3)}
+.tab:hover{color:var(--tx); background:rgba(62,230,255,.08)}
+.tab.on{color:var(--cy); background:linear-gradient(180deg,rgba(62,230,255,.22),rgba(62,230,255,.05)); font-weight:700}
+.tab.on i{color:var(--cy2)}
+.tab.on::after{content:""; position:absolute; left:0; right:0; bottom:0; height:2px; background:var(--cy); box-shadow:var(--glow)}
+.tab .dot{width:5px; height:5px; border:1px solid var(--tx3); transform:rotate(45deg); margin-left:2px}
+.tab.on .dot{background:var(--cy); border-color:var(--cy); box-shadow:var(--glow)}
+.tabs .rt{margin-left:auto; display:flex; align-items:center; gap:14px; padding:0 4px 5px; font-size:12px; color:var(--tx2)}
+.tabs .rt .lgd{display:inline-flex; align-items:center; gap:5px}
+.tabs .rt .lgd i{width:9px; height:9px; display:inline-block}
+.tabs .rt .note{font:500 12px/1 var(--mono); color:var(--tx3); padding-left:14px; border-left:1px solid var(--line)}
+.tabs .rt .note b{color:var(--cy); font-weight:500}
+
+/* ===== 行A：チャート｜右カラム ===== */
+.rowA{display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1fr); gap:var(--g); height:var(--rowA)}
+.rcol{display:grid; grid-template-rows:minmax(174px,.8fr) 86px minmax(217px,1.2fr); gap:var(--g); min-height:0; min-width:0}
+.pair{display:grid; grid-template-columns:minmax(358px,1.25fr) minmax(0,1fr); gap:var(--g); min-height:0; min-width:0}
+
+/* チャート */
+#chart{margin:2px 0 4px}
+.dev{flex:none; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border-top:1px solid var(--line)}
+.dv{padding:5px 12px 0; border-left:1px solid var(--line)}
+.dv:first-child{border-left:0; padding-left:2px}
+.dvh{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px; line-height:16px}
+.dvh span{font-size:12px; color:var(--tx2)}
+.dvh b{font:700 14px var(--mono); color:var(--cy); text-shadow:var(--glow)}
+.dvt{position:relative; height:6px; background:linear-gradient(90deg,rgba(255,179,64,.24) 0 6%,rgba(62,230,255,.06) 6% 94%,rgba(255,179,64,.24) 94%)}
+.dvt::before{content:""; position:absolute; left:50%; top:-3px; bottom:-3px; width:1px; background:var(--tx2)}
+.dvt i{position:absolute; left:50%; top:1px; bottom:1px; width:calc(var(--v) * 4.7%); background:var(--cy); box-shadow:0 0 8px rgba(62,230,255,.6); transform-origin:left}
+.dvs{display:flex; justify-content:space-between; font:500 12px/1 var(--mono); color:var(--tx3); margin-top:4px}
+
+/* 4点診断（小型円弧メーター4連） */
+.diag{flex:1; min-height:0; display:grid; grid-template-columns:repeat(4,minmax(0,1fr))}
+.dg{display:flex; flex-direction:column; min-width:0; min-height:0; padding:6px 8px 6px; border-left:1px solid var(--line)}
+.dg:first-child{border-left:0}
+.dgh{display:flex; align-items:center; gap:6px; font-weight:700; font-size:12.5px; line-height:18px; white-space:nowrap}
+.dgh svg{width:15px; height:15px; color:var(--cy); flex:none}
+.dgh .vd{margin-left:auto; font:700 14px/18px var(--jp); color:var(--wh); text-shadow:var(--glow)}
+.mt{position:relative; flex:1; min-height:48px; margin-top:3px}
+.mt svg{position:absolute; left:0; right:0; top:0; bottom:15px; width:100%; height:calc(100% - 15px); overflow:visible}
+.mt .ml{position:absolute; bottom:0; font-size:12px; line-height:14px; color:var(--tx3); white-space:nowrap; transform:translateX(-50%)}
+.dg p{margin-top:3px; font-size:12px; line-height:1.38; color:var(--tx2); text-align:center; min-height:calc(1.38em * 3)}
+.dg p .mono{color:var(--tx)}
+.nw{white-space:nowrap}
+
+/* 割高・割安ゲージ3連 */
+.vals{flex:1; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); column-gap:20px; padding:4px 16px 0 14px}
+.vg{min-width:0}
+.vg .hd{display:flex; align-items:baseline; gap:8px; line-height:19px; white-space:nowrap}
+.vg .nm{font:700 12px var(--mono); color:var(--tx); letter-spacing:.06em}
+.vg .vl{font:700 17px/1 var(--mono); color:var(--wh); text-shadow:var(--glow)}
+.vg .vl small{font:500 12px var(--jp); color:var(--tx2); text-shadow:none; margin-left:2px}
+.vg .ref{display:block; font-size:12px; line-height:15px; color:var(--tx2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-height:15px}
+.gt{position:relative; flex:1; height:7px; background:linear-gradient(90deg,rgba(62,230,255,.10),rgba(62,230,255,.22) 50%,rgba(255,179,64,.32)); border:1px solid rgba(62,230,255,.25)}
+.gt .tk{position:absolute; top:100%; height:3px; width:1px; background:var(--tx3)}
+.gtr{display:flex; align-items:center; gap:8px; margin-top:7px; font:500 12px/1 var(--mono); color:var(--tx3)}
+.gt .gmk{position:absolute; top:-6px; bottom:-6px; width:2px; margin-left:-1px; background:var(--wh); box-shadow:var(--glow)}
+.gt .gmk::before{content:""; position:absolute; top:-6px; left:-4px; border:5px solid transparent; border-top-color:var(--cy); border-bottom:0}
+.gt .rf{position:absolute; top:-4px; bottom:-4px; width:0; border-left:1px dashed var(--tx)}
+
+/* 業績推移 */
+.tbl{width:100%; border-collapse:collapse; font-size:12px}
+.tbl th{font:500 12px/1.25 var(--jp); color:var(--tx2); text-align:right; padding:2px 4px 3px; border-bottom:1px solid var(--line); white-space:nowrap; vertical-align:bottom}
+.tbl th small{display:block; font:500 12px/1.2 var(--mono); color:var(--tx3)}
+.tbl td{font:500 12.5px/1 var(--mono); text-align:right; padding:3px 4px; border-bottom:1px solid var(--line2); white-space:nowrap; color:var(--tx)}
+.tbl th:first-child,.tbl td:first-child{text-align:left; padding-left:0}
+.tbl td:first-child{color:var(--tx2)}
+.tbl tr:last-child td{border-bottom:0}
+.tbl .fc,.tbl .fc td{color:var(--cy2)}
+.tbl td.jp{font:500 12px/1 var(--jp)}
+#perf{margin:2px 0 3px}
+
+/* 稼ぎ頭マップ */
+.sg-top{--dz:clamp(50px, calc((100vh - 900px) * .4 + 50px), 104px); flex:none; display:flex; align-items:center; gap:14px; margin-bottom:3px}
+.sg-top svg{flex:none; width:var(--dz,50px); height:var(--dz,50px)}
+.sg-top .t{font-size:12px; color:var(--tx2); line-height:1.3}
+.sg-top .t .code{display:block; margin-bottom:2px}
+.sg-rows{flex:1; display:flex; flex-direction:column; justify-content:space-evenly; min-height:0; max-height:220px}
+.srow{min-width:0}
+.srh{display:flex; align-items:center; gap:6px; height:16px; font-size:12px; line-height:16px; white-space:nowrap}
+.srh i{width:8px; height:8px; flex:none; background:var(--k)}
+.srh .sn{min-width:0; overflow:hidden; text-overflow:ellipsis}
+.srh .yoy,.srh .pf{flex:none}
+.srh .yoy{font:500 12px/13px var(--mono); color:var(--cy); border:1px solid var(--cyl); padding:0 4px}
+.srh .pf{margin-left:auto; font:700 12.5px var(--mono); color:var(--tx)}
+.srh .pf small{font:500 12px var(--jp); color:var(--tx2); margin-left:1px}
+.mbar{display:flex; align-items:center; gap:8px; height:14px; line-height:14px}
+.mbar .tr{flex:1; height:5px; background:rgba(62,230,255,.07); position:relative}
+.mbar .tr::after{content:""; position:absolute; left:50%; top:-2px; bottom:-2px; width:1px; background:rgba(127,151,168,.45)}
+.mbar .tr u{position:absolute; left:0; top:0; bottom:0; width:calc(var(--m) / 20 * 100%); background:var(--k); text-decoration:none; opacity:.9}
+.mbar b{font:500 12px var(--mono); color:var(--tx); width:44px; text-align:right}
+
+/* ===== 行B：シナリオ｜需給｜チェック ===== */
+.rowB{display:grid; grid-template-columns:minmax(0,1.46fr) minmax(0,1fr) minmax(0,1.56fr); gap:var(--g); height:var(--rowB); margin-top:var(--g)}
+.scn{flex:1; min-height:0; display:grid; grid-template-columns:minmax(0,.72fr) minmax(0,1.28fr); gap:10px}
+.scards{display:flex; flex-direction:column; gap:4px; min-height:0}
+.sc{flex:1; display:flex; flex-direction:column; justify-content:center; gap:1px; padding:3px 9px 4px 10px; background:rgba(62,230,255,.035); border:1px solid var(--line2); border-left:3px solid var(--k); min-height:0}
+.sc.bull{--k:var(--cy)} .sc.mid{--k:#cfdde6} .sc.bear{--k:var(--mag)}
+.sch{display:flex; align-items:baseline; gap:8px; line-height:17px; white-space:nowrap}
+.sch .scode{font:700 12px/1 var(--orb); letter-spacing:.1em; color:var(--k)}
+.sch b{font-size:13px; color:var(--k)}
+.sch .tgt{margin-left:auto; font-size:12px; color:var(--tx2)}
+.sch .tgt em{font:700 12.5px var(--mono); font-style:normal; color:var(--tx)}
+.sc p{font-size:12px; line-height:1.4; color:var(--tx)}
+.inv{display:flex; gap:7px; align-items:baseline; font-size:12px; color:var(--tx2); line-height:1.4}
+.inv span{flex:none; font:700 12px/16px var(--jp); color:var(--amber); border:1px solid rgba(255,179,64,.45); padding:0 5px}
+#fan{min-height:0}
+#supply{margin:1px 0 2px}
+.tbl.sm th,.tbl.sm td{padding:2px 3px}
+.tbl.sm td{font-size:12px}
+.tbl.sm th{font-family:var(--mono)}
+
+.ck-sum{flex:none; display:flex; align-items:center; gap:14px; margin-bottom:5px}
+.ck-bar{display:flex; gap:3px; flex:1}
+.ck-bar i{flex:1; height:9px; border:1px solid rgba(62,230,255,.35)}
+.ck-bar i.d{background:var(--cy); box-shadow:0 0 8px rgba(62,230,255,.5); border-color:var(--cy)}
+.ck-bar i.p{background:repeating-linear-gradient(135deg,rgba(62,230,255,.6) 0 3px,transparent 3px 6px)}
+.ck-bar i.x{border-style:dashed; border-color:rgba(127,151,168,.6)}
+.ck-cnt{display:flex; gap:12px; font-size:12px; color:var(--tx2); white-space:nowrap; align-items:center}
+.ck-cnt span{display:inline-flex; align-items:center; gap:4px}
+.ck-cnt svg{width:13px; height:13px}
+.ck-cnt b{font:700 15px/1 var(--mono); color:var(--tx); margin-left:2px}
+.ck-cnt .d b{color:var(--cy); text-shadow:var(--glow)}
+.ckg{flex:1; min-height:0; display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); grid-template-rows:1fr 1fr; gap:4px}
+.ck{position:relative; min-width:0; min-height:0; padding:4px 6px 4px 7px; border:1px solid var(--line); background:rgba(62,230,255,.025); display:flex; flex-direction:column; overflow:hidden;
+  clip-path:polygon(0 0,calc(100% - 7px) 0,100% 7px,100% 100%,0 100%)}
+.ck .n{display:flex; justify-content:space-between; align-items:center; font:500 12px/1 var(--mono); color:var(--tx3)}
+.ck .n svg{width:14px; height:14px}
+.ck p{margin-top:3px; font-size:12px; line-height:1.35; color:var(--tx)}
+.ck .s{margin-top:auto; font:700 12px/1.2 var(--jp); color:var(--tx3)}
+.ck.d{border-color:rgba(62,230,255,.55); background:linear-gradient(180deg,rgba(62,230,255,.14),rgba(62,230,255,.03))}
+.ck.d .s{color:var(--cy)}
+.ck.d .n{color:var(--cy2)}
+.ck.p{background:repeating-linear-gradient(135deg,rgba(62,230,255,.055) 0 6px,transparent 6px 12px); border-color:rgba(62,230,255,.32)}
+.ck.p .s{color:var(--cy2)}
+.ck.x{border-style:dashed; border-color:rgba(127,151,168,.35)}
+.ck.x p{color:var(--tx2)}
+
+/* ===== 最下段：学びノート ===== */
+.rowC{margin-top:var(--g)}
+.notes{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)) minmax(0,1.45fr); align-items:stretch}
+.term{display:grid; grid-template-columns:auto minmax(0,1fr); gap:10px; align-items:start; padding:9px 14px 10px 12px; border-left:1px solid var(--line)}
+.term:first-child{border-left:0}
+.chip{font:700 12.5px/1 var(--jp); color:var(--cy); border:1px solid var(--cyl); background:rgba(62,230,255,.08); padding:6px 8px; white-space:nowrap;
+  clip-path:polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px)}
+.term p{font-size:12.5px; line-height:1.55}
+.fx{display:flex; align-items:center; gap:5px; margin-top:5px; font:500 12px var(--mono); color:var(--tx2); flex-wrap:wrap}
+.fx b{color:var(--tx); font-weight:500; border:1px solid rgba(157,179,194,.3); padding:0 5px; line-height:17px; font-family:var(--jp)}
+.fx b.m{font-family:var(--mono)}
+.fx .eq{color:var(--cy); border-color:var(--cyl)}
+.insight{margin:6px 6px 6px 8px; padding:8px 14px 9px 14px; background:linear-gradient(90deg,rgba(62,230,255,.13),rgba(62,230,255,.02)); border-left:2px solid var(--cy); display:flex; flex-direction:column; justify-content:center}
+.insight .code{display:block; margin-bottom:5px}
+.insight p{font-size:13.5px; line-height:1.65; color:var(--wh)}
+
+/* ===== 空状態 ===== */
+.empty{min-height:calc(var(--rowA) + var(--rowB) + var(--g))}
+.empty .panel{height:calc(var(--rowA) + var(--rowB) + var(--g))}
+.emp{flex:1; display:grid; grid-template-columns:auto minmax(0,1fr); gap:44px; align-items:center; padding:30px 64px}
+.emp svg{width:220px; height:220px}
+.emp h3{margin:10px 0 8px; font:700 24px/1.3 var(--jp)}
+.emp p{margin:0 0 18px; color:var(--tx2); font-size:13px}
+.emp .cmdl{display:inline-flex; gap:10px; align-items:center; padding:9px 14px; border:1px solid var(--cyl); font:500 13px var(--mono); color:var(--tx)}
+.emp .cmdl em{color:var(--cy); font-style:normal}
+
+/* ===== フッター ===== */
+.foot-b{margin-top:var(--g); padding:9px 4px 2px; border-top:1px solid var(--line); display:flex; justify-content:space-between; gap:20px; font-size:12px; color:var(--tx2)}
+.foot-b .warn{color:var(--tx)}
+.foot-b .warn::before{content:"!"; display:inline-grid; place-items:center; width:15px; height:14px; margin-right:8px; font:700 12px/1 var(--mono); color:#05080d; background:var(--amber); clip-path:polygon(50% 0,100% 100%,0 100%); padding-top:3px; vertical-align:-2px}
+
+/* ===== ホーム ===== */
+.h-strip{position:relative; height:44px; display:flex; align-items:stretch; margin-bottom:var(--g);
+  border:1px solid var(--line); background:linear-gradient(90deg,rgba(62,230,255,.08),rgba(8,17,26,.62) 42%,rgba(8,17,26,.62));
+  clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px)}
+.h-strip::before{content:""; position:absolute; left:0; right:0; bottom:0; height:5px; pointer-events:none;
+  background:repeating-linear-gradient(90deg,rgba(62,230,255,.45) 0 1px,transparent 1px 8px); opacity:.5;
+  -webkit-mask:linear-gradient(90deg,#000,transparent 70%); mask:linear-gradient(90deg,#000,transparent 70%)}
+.h-strip>div{display:flex; align-items:center; white-space:nowrap}
+.h-brand{gap:14px; padding:0 20px}
+.h-brand svg{width:30px; height:30px}
+.h-brand b{font:800 25px/1 var(--orb); letter-spacing:.16em; color:var(--wh); text-shadow:var(--glow)}
+.h-brand .h-div{width:1px; height:26px; background:var(--cyl)}
+.h-brand .sub{font-size:13px; color:var(--tx); line-height:1.3}
+.h-brand .sub em{display:block; font:500 12px var(--mono); font-style:normal; color:var(--tx2)}
+.h-stat{margin-left:auto; padding:0 6px}
+.h-stat span{display:flex; flex-direction:column; gap:4px; padding:0 18px; border-left:1px solid var(--line)}
+.h-stat i{font:700 12px/1 var(--orb); letter-spacing:.12em; font-style:normal; color:var(--tx3)}
+.h-stat b{font:700 15px/1 var(--mono); color:var(--tx)}
+.h-stat b small{font:500 12px var(--jp); color:var(--tx2); margin-left:2px}
+
+.h-a{display:grid; grid-template-columns:minmax(0,1.6fr) minmax(0,1fr); gap:var(--g); height:clamp(470px, calc(100vh - 362px), 640px)}
+.h-rc{display:grid; grid-template-rows:minmax(0,1.12fr) minmax(0,1fr); gap:var(--g); min-height:0; min-width:0}
+.h-b{display:grid; grid-template-columns:minmax(0,2.7fr) minmax(0,1fr); gap:var(--g); height:170px; margin-top:var(--g)}
+
+.h-tbl{width:100%; height:100%; border-collapse:collapse}
+.h-tbl th{font:500 12px/1 var(--jp); color:var(--tx3); text-align:left; padding:7px 10px 6px; border-bottom:1px solid var(--line); white-space:nowrap; height:26px}
+.h-tbl th.r,.h-tbl td.r{text-align:right}
+.h-tbl td{padding:0 10px; border-bottom:1px solid var(--line2); vertical-align:middle}
+.h-tbl tbody tr:last-child td{border-bottom:0}
+.h-tbl tr.go{cursor:pointer}
+.h-tbl tr.go td{background:rgba(62,230,255,.055)}
+.h-tbl tr.go:hover td{background:rgba(62,230,255,.11)}
+.h-tbl tr.go td:first-child{box-shadow:inset 2px 0 0 var(--cy)}
+.h-tbl tr.go:focus-visible{outline:1px solid var(--cy); outline-offset:-1px}
+.h-cd{font:700 16px/1 var(--orb); color:var(--cy); letter-spacing:.08em; text-shadow:var(--glow)}
+.h-nm{font-size:14px; font-weight:700; white-space:nowrap}
+.h-op{display:block; margin-top:3px; font:500 12px/1 var(--mono); color:var(--cy2)}
+.h-px{font:700 17px/1 var(--mono); color:var(--wh); white-space:nowrap}
+.h-px small{font:500 12px var(--jp); color:var(--tx2); margin-left:2px}
+.h-ch{font:500 13px/1 var(--mono); white-space:nowrap}
+.h-bd{display:flex; flex-wrap:wrap; gap:4px; max-width:250px}
+.h-bd span{font-size:12px; line-height:18px; color:var(--cy2); border:1px solid var(--cyl); padding:0 6px; background:rgba(62,230,255,.06); white-space:nowrap}
+.h-bd span.w{color:var(--amber); border-color:rgba(255,179,64,.6); background:rgba(255,179,64,.1); font-weight:700}
+.h-dt{font:500 13px/1 var(--mono); color:var(--tx)}
+.h-sp{display:block; width:160px; height:48px}
+.h-tf{flex:none; display:flex; justify-content:space-between; padding:6px 12px 7px; font-size:12px; color:var(--tx3); border-top:1px solid var(--line)}
+
+.h-mk{flex:1; display:flex; flex-direction:column; padding:2px 12px 4px; min-height:0}
+.h-mr{flex:1; display:grid; grid-template-columns:104px 96px minmax(0,1fr) 112px; align-items:center; column-gap:10px; border-bottom:1px solid var(--line2); min-height:0}
+.h-mr:last-child{border-bottom:0}
+.h-mr .nm{font-size:12.5px; color:var(--tx2); white-space:nowrap; display:flex; flex-direction:column; line-height:1.25}
+.h-mr .nm i{font:500 12px var(--mono); font-style:normal; color:var(--tx3)}
+.h-mr .vl{text-align:right; font:700 15px/1 var(--mono); color:var(--wh); white-space:nowrap}
+.h-mr .vl small{font:500 12px var(--jp); color:var(--tx2); margin-left:1px}
+.h-mr .cg{font:500 12px/1.3 var(--mono); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.h-mr .cg.n{font-family:var(--jp); color:var(--tx2)}
+.zt{position:relative; height:6px; background:rgba(62,230,255,.07)}
+.zt::before{content:""; position:absolute; left:50%; top:-4px; bottom:-4px; width:1px; background:var(--tx3)}
+.zt u{position:absolute; left:50%; top:0; bottom:0; width:calc(var(--p) / 4 * 50%); min-width:2px; background:var(--cy); box-shadow:0 0 8px rgba(62,230,255,.55); text-decoration:none}
+.vz-s{display:flex; justify-content:space-between; font:500 12px/1 var(--mono); color:var(--tx3); margin-top:4px}
+.lv{position:relative; height:6px; background:rgba(62,230,255,.07)}
+.lv u{position:absolute; left:0; top:0; bottom:0; width:var(--p); background:linear-gradient(90deg,rgba(62,230,255,.25),var(--cy)); text-decoration:none}
+.dir{display:flex; align-items:center; gap:7px; font-size:12px; color:var(--tx2)}
+.dir .ax{flex:1; height:2px; background:linear-gradient(90deg,rgba(157,179,194,.3),var(--cy)); position:relative}
+.dir .ax::after{content:""; position:absolute; right:-2px; top:-4px; border:5px solid transparent; border-left:8px solid var(--cy); border-right:0}
+.dir .ax i{position:absolute; left:72%; top:-5px; width:2px; height:12px; background:var(--wh); box-shadow:var(--glow)}
+.dir b{color:var(--cy); font-weight:700}
+.cmpb{display:grid; grid-template-columns:minmax(0,1fr) 38px; gap:4px 6px; align-items:center; font:500 12px/1 var(--mono); color:var(--tx2)}
+.cmpb .b{height:5px; background:rgba(62,230,255,.07); position:relative}
+.cmpb .b u{position:absolute; left:0; top:0; bottom:0; width:var(--p); text-decoration:none; background:var(--cy)}
+.cmpb .b.avg u{background:var(--tx2)}
+.cmpb em{font-style:normal; text-align:right; color:var(--tx)}
+
+.h-geo{flex:1; display:flex; flex-direction:column; padding:0 12px 4px; min-height:0}
+.gr{flex:1; display:grid; grid-template-columns:24px minmax(0,1fr) 70px 84px; column-gap:10px; align-items:center; border-bottom:1px solid var(--line2); min-height:0}
+.gr:last-of-type{border-bottom:0}
+.gr .r{font:700 12px var(--orb); color:var(--tx3)}
+.gr .nm{font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.gr .lvl{font:500 13px/1 var(--jp); color:rgba(157,179,194,.6); letter-spacing:0; white-space:nowrap}
+.gr .lvl b{color:var(--amber); font-weight:700}
+.segs{display:flex; gap:3px}
+.segs i{flex:1; height:8px; border:1px solid rgba(255,179,64,.3)}
+.segs i.on{background:var(--amber); border-color:var(--amber); box-shadow:0 0 6px rgba(255,179,64,.45)}
+.geo-lg{flex:none; display:flex; justify-content:flex-end; gap:8px; font-size:12px; color:var(--tx3); padding-top:3px}
+
+.h-menu{flex:1; display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); min-height:0}
+.mi{padding:10px 12px 9px; border-left:1px solid var(--line); display:flex; flex-direction:column; gap:3px; min-width:0}
+.mi:first-child{border-left:0}
+.mi .ic{display:flex; align-items:center; justify-content:space-between}
+.mi svg{width:24px; height:24px; color:var(--cy)}
+.mi .ic i{font:500 12px var(--mono); font-style:normal; color:var(--tx3)}
+.mi b{font-size:14px; margin-top:4px}
+.mi p{font-size:12px; line-height:1.45; color:var(--tx2)}
+.wt{display:flex; align-items:center; gap:6px; margin-top:auto; font-size:12px; color:var(--tx2)}
+.wt span{display:inline-flex; gap:2px}
+.wt u{width:7px; height:10px; border:1px solid var(--cyl); text-decoration:none}
+.wt u.on{background:var(--cy); border-color:var(--cy)}
+.h-term{flex:1; display:grid; grid-template-columns:auto minmax(0,1fr); gap:6px 16px; align-content:center; padding:8px 16px 10px}
+.h-term .w{font:800 34px/1 var(--orb); color:var(--wh); text-shadow:var(--glow); letter-spacing:.1em; grid-row:span 2; align-self:center}
+.h-term p{font-size:13px; line-height:1.6}
+.perviz{display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--tx2)}
+.perviz .row{display:flex; align-items:center; gap:8px}
+.perviz .row>span{width:72px; flex:none}
+.perviz .unit{width:18px; height:11px; background:var(--cy); box-shadow:0 0 8px rgba(62,230,255,.5)}
+.perviz .px2{flex:1; height:11px; background:repeating-linear-gradient(90deg,rgba(62,230,255,.45) 0 17px,transparent 17px 19px)}
+.perviz .x{font:500 12px var(--mono); color:var(--cy)}
+
+/* ===== 1280〜1399px：右カラムを少し広げて稼ぎ頭の事業名を守る ===== */
+@media (max-width:1399px){
+  .rowA{grid-template-columns:minmax(0,1fr) minmax(0,1.05fr)}
+  .pair{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr)}
+  .tbl td.jp{white-space:normal; line-height:1.3}
+}
+
+/* ===== 動き（初回のみ・控えめ） ===== */
+@keyframes rv{from{clip-path:inset(0 100% 0 0)}}
+@keyframes dash{from{stroke-dashoffset:var(--len)}}
+@keyframes grow{from{transform:scaleY(0)}}
+@keyframes growx{from{transform:scaleX(0)}}
+@keyframes fade{from{opacity:0}}
+@keyframes rise{from{opacity:0; transform:translateY(5px)}}
+.anim .a-rv{animation:rv 1.4s cubic-bezier(.3,.6,.2,1) both}
+.anim .a-dash{stroke-dasharray:var(--len); animation:dash 1.5s .3s cubic-bezier(.4,.1,.2,1) both}
+.anim .a-grow{transform-box:fill-box; transform-origin:50% 100%; animation:grow .9s cubic-bezier(.3,.7,.2,1) both}
+.anim .a-gx{transform-origin:left; animation:growx 1s .2s cubic-bezier(.3,.7,.2,1) both}
+.anim .a-fade{animation:fade .8s .9s both}
+.anim .view.on .panel{animation:rise .55s cubic-bezier(.3,.7,.2,1) both}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important; transition:none!important}
+}
+</style>
+</head>
+<body>
+<script type="application/json" id="ohlc">[{"d":"2026-04-02","o":4802,"h":4844,"l":4639,"c":4675,"v":12344100},{"d":"2026-04-03","o":4800,"h":4840,"l":4780,"c":4811,"v":7658200},{"d":"2026-04-06","o":4805,"h":4811,"l":4719,"c":4719,"v":7853200},{"d":"2026-04-07","o":4718,"h":4787,"l":4712,"c":4764,"v":7102400},{"d":"2026-04-08","o":4954,"h":4955,"l":4850,"c":4915,"v":13616600},{"d":"2026-04-09","o":4945,"h":4946,"l":4818,"c":4843,"v":13677900},{"d":"2026-04-10","o":4830,"h":4859,"l":4770,"c":4810,"v":11797600},{"d":"2026-04-13","o":4880,"h":4945,"l":4826,"c":4848,"v":12164800},{"d":"2026-04-14","o":4930,"h":4957,"l":4855,"c":4957,"v":12203300},{"d":"2026-04-15","o":5060,"h":5233,"l":5025,"c":5220,"v":22050700},{"d":"2026-04-16","o":5210,"h":5274,"l":5157,"c":5220,"v":15083400},{"d":"2026-04-17","o":5167,"h":5210,"l":5109,"c":5157,"v":10437400},{"d":"2026-04-20","o":5193,"h":5257,"l":5117,"c":5153,"v":8848200},{"d":"2026-04-21","o":5110,"h":5189,"l":5097,"c":5189,"v":8784900},{"d":"2026-04-22","o":5129,"h":5138,"l":5034,"c":5034,"v":11183900},{"d":"2026-04-23","o":5185,"h":5298,"l":5130,"c":5203,"v":18639900},{"d":"2026-04-24","o":5230,"h":5235,"l":5095,"c":5229,"v":10572600},{"d":"2026-04-27","o":5333,"h":5422,"l":5258,"c":5356,"v":18121800},{"d":"2026-04-28","o":5200,"h":5202,"l":4990,"c":5047,"v":29820000},{"d":"2026-04-30","o":4947,"h":5018,"l":4828,"c":4882,"v":22771900},{"d":"2026-05-01","o":4800,"h":4861,"l":4775,"c":4795,"v":11393000},{"d":"2026-05-07","o":4900,"h":4981,"l":4850,"c":4850,"v":25537000},{"d":"2026-05-08","o":4844,"h":4973,"l":4806,"c":4938,"v":16696700},{"d":"2026-05-11","o":4920,"h":5012,"l":4795,"c":4887,"v":15801200},{"d":"2026-05-12","o":4892,"h":4959,"l":4812,"c":4868,"v":11607400},{"d":"2026-05-13","o":4775,"h":4844,"l":4702,"c":4750,"v":14259600},{"d":"2026-05-14","o":4700,"h":4736,"l":4646,"c":4671,"v":14167400},{"d":"2026-05-15","o":4690,"h":4845,"l":4683,"c":4812,"v":15316500},{"d":"2026-05-18","o":4755,"h":4818,"l":4723,"c":4808,"v":9951800},{"d":"2026-05-19","o":4900,"h":5019,"l":4863,"c":4944,"v":17371300},{"d":"2026-05-20","o":4883,"h":4934,"l":4814,"c":4908,"v":13438800},{"d":"2026-05-21","o":4907,"h":5123,"l":4882,"c":5123,"v":17823800},{"d":"2026-05-22","o":5105,"h":5153,"l":4995,"c":5002,"v":13406000},{"d":"2026-05-25","o":5050,"h":5102,"l":5000,"c":5054,"v":9871700},{"d":"2026-05-26","o":5095,"h":5134,"l":5024,"c":5056,"v":8934400},{"d":"2026-05-27","o":5100,"h":5108,"l":4955,"c":4960,"v":10796000},{"d":"2026-05-28","o":4963,"h":5194,"l":4962,"c":5174,"v":17942700},{"d":"2026-05-29","o":5374,"h":5375,"l":5166,"c":5166,"v":27362800},{"d":"2026-06-01","o":5200,"h":5274,"l":5076,"c":5126,"v":13201200},{"d":"2026-06-02","o":5126,"h":5140,"l":4987,"c":5083,"v":10393900},{"d":"2026-06-03","o":5139,"h":5375,"l":5129,"c":5270,"v":15132500},{"d":"2026-06-04","o":5180,"h":5215,"l":5131,"c":5183,"v":8401300},{"d":"2026-06-05","o":5146,"h":5369,"l":5141,"c":5300,"v":11799100},{"d":"2026-06-08","o":5095,"h":5148,"l":4968,"c":5031,"v":14584100},{"d":"2026-06-09","o":5113,"h":5113,"l":4864,"c":4882,"v":14980900},{"d":"2026-06-10","o":4906,"h":4924,"l":4782,"c":4784,"v":15252700},{"d":"2026-06-11","o":4641,"h":4679,"l":4579,"c":4655,"v":15175900},{"d":"2026-06-12","o":4682,"h":4740,"l":4585,"c":4657,"v":18882700},{"d":"2026-06-15","o":4704,"h":4828,"l":4703,"c":4737,"v":13258100},{"d":"2026-06-16","o":4741,"h":4798,"l":4646,"c":4747,"v":11238700},{"d":"2026-06-17","o":4692,"h":4736,"l":4670,"c":4701,"v":11385900},{"d":"2026-06-18","o":4680,"h":4805,"l":4680,"c":4800,"v":13329600},{"d":"2026-06-19","o":4805,"h":4854,"l":4690,"c":4764,"v":18577100},{"d":"2026-06-22","o":4702,"h":4914,"l":4702,"c":4864,"v":10220000},{"d":"2026-06-23","o":4930,"h":4948,"l":4750,"c":4750,"v":12304900},{"d":"2026-06-24","o":4719,"h":4747,"l":4632,"c":4691,"v":11616300},{"d":"2026-06-25","o":4714,"h":4717,"l":4554,"c":4554,"v":12236600},{"d":"2026-06-26","o":4484,"h":4547,"l":4478,"c":4478,"v":13899700},{"d":"2026-06-29","o":4530,"h":4541,"l":4435,"c":4486,"v":11492800},{"d":"2026-06-30","o":4494,"h":4499,"l":4422,"c":4471,"v":12297000},{"d":"2026-07-01","o":4550,"h":4555,"l":4476,"c":4496,"v":11138200},{"d":"2026-07-02","o":4595,"h":4719,"l":4520,"c":4669,"v":16571400},{"d":"2026-07-03","o":4711,"h":4713,"l":4571,"c":4615,"v":9892300},{"d":"2026-07-06","o":4699,"h":4805,"l":4682,"c":4805,"v":11352800},{"d":"2026-07-07","o":4822,"h":5004,"l":4790,"c":4942,"v":20014200},{"d":"2026-07-08","o":4872,"h":4890,"l":4769,"c":4778,"v":11272800},{"d":"2026-07-09","o":4750,"h":4810,"l":4703,"c":4758,"v":7238600},{"d":"2026-07-10","o":4725,"h":4768,"l":4686,"c":4700,"v":11624900},{"d":"2026-07-13","o":4700,"h":4775,"l":4686,"c":4716,"v":9347200},{"d":"2026-07-14","o":4724,"h":4817,"l":4714,"c":4802,"v":8776800},{"d":"2026-07-15","o":4795,"h":4812,"l":4651,"c":4796,"v":13914900},{"d":"2026-07-16","o":4771,"h":4894,"l":4726,"c":4828,"v":13955100},{"d":"2026-07-17","o":4688,"h":4779,"l":4616,"c":4717,"v":12028800},{"d":"2026-07-21","o":4696,"h":4832,"l":4675,"c":4792,"v":11059300},{"d":"2026-07-22","o":4789,"h":4872,"l":4762,"c":4807,"v":9137700},{"d":"2026-07-23","o":4827,"h":4889,"l":4813,"c":4854,"v":8471800},{"d":"2026-07-24","o":4840,"h":4873,"l":4795,"c":4850,"v":7130900},{"d":"2026-07-27","o":4920,"h":5034,"l":4910,"c":5023,"v":11712100},{"d":"2026-07-28","o":4923,"h":4946,"l":4797,"c":4890,"v":12339000},{"d":"2026-07-29","o":4911,"h":4993,"l":4885,"c":4957,"v":13881100},{"d":"2026-07-30","o":5200,"h":5267,"l":4990,"c":5255,"v":24607900},{"d":"2026-07-31","o":5299,"h":5362,"l":5170,"c":5267,"v":19901100},{"d":"2026-08-03","o":5181,"h":5336,"l":5167,"c":5301,"v":14071300},{"d":"2026-08-04","o":5390,"h":5527,"l":5312,"c":5412,"v":15277700},{"d":"2026-08-05","o":5425,"h":5498,"l":5314,"c":5476,"v":14031000},{"d":"2026-08-06","o":5425,"h":5595,"l":5424,"c":5500,"v":11584500},{"d":"2026-08-07","o":5503,"h":5620,"l":5475,"c":5620,"v":12076900},{"d":"2026-08-10","o":5590,"h":5689,"l":5575,"c":5620,"v":11815200},{"d":"2026-08-12","o":5589,"h":5697,"l":5537,"c":5669,"v":11575200},{"d":"2026-08-13","o":5677,"h":5764,"l":5657,"c":5702,"v":9441100},{"d":"2026-08-14","o":5670,"h":5830,"l":5670,"c":5767,"v":10672600},{"d":"2026-08-17","o":5668,"h":5688,"l":5568,"c":5571,"v":9693800},{"d":"2026-08-18","o":5500,"h":5552,"l":5472,"c":5514,"v":11545800},{"d":"2026-08-19","o":5322,"h":5376,"l":5216,"c":5225,"v":13005100},{"d":"2026-08-20","o":5273,"h":5354,"l":5233,"c":5263,"v":9035500},{"d":"2026-08-21","o":5263,"h":5298,"l":5186,"c":5196,"v":10673600},{"d":"2026-08-24","o":5278,"h":5336,"l":5248,"c":5266,"v":8736100},{"d":"2026-08-25","o":5243,"h":5300,"l":5166,"c":5300,"v":7142800},{"d":"2026-08-26","o":5320,"h":5396,"l":5306,"c":5307,"v":8709500},{"d":"2026-08-27","o":5361,"h":5465,"l":5314,"c":5433,"v":9614800},{"d":"2026-08-28","o":5512,"h":5645,"l":5486,"c":5550,"v":15398000},{"d":"2026-08-31","o":5452,"h":5480,"l":5395,"c":5438,"v":10725200},{"d":"2026-09-01","o":5420,"h":5573,"l":5407,"c":5541,"v":8838600},{"d":"2026-09-02","o":5453,"h":5478,"l":5312,"c":5335,"v":11452000},{"d":"2026-09-03","o":5377,"h":5428,"l":5319,"c":5352,"v":7544400},{"d":"2026-09-04","o":5425,"h":5426,"l":5330,"c":5377,"v":8019400},{"d":"2026-09-07","o":5418,"h":5445,"l":5350,"c":5358,"v":6868400},{"d":"2026-09-08","o":5300,"h":5312,"l":5187,"c":5187,"v":7749800},{"d":"2026-09-09","o":5150,"h":5233,"l":5121,"c":5173,"v":8454600},{"d":"2026-09-10","o":5130,"h":5182,"l":5130,"c":5182,"v":7143900},{"d":"2026-09-11","o":5044,"h":5200,"l":5040,"c":5199,"v":9761900},{"d":"2026-09-14","o":5219,"h":5387,"l":5167,"c":5325,"v":9012800},{"d":"2026-09-15","o":5281,"h":5301,"l":5196,"c":5221,"v":8785600},{"d":"2026-09-16","o":5263,"h":5410,"l":5250,"c":5372,"v":7394100},{"d":"2026-09-17","o":5399,"h":5510,"l":5390,"c":5475,"v":8733900},{"d":"2026-09-18","o":5497,"h":5530,"l":5425,"c":5524,"v":15940600},{"d":"2026-09-24","o":5582,"h":5590,"l":5452,"c":5497,"v":13495800},{"d":"2026-09-25","o":5512,"h":5578,"l":5485,"c":5536,"v":9858600},{"d":"2026-09-28","o":5490,"h":5621,"l":5490,"c":5518,"v":10745800},{"d":"2026-09-29","o":5504,"h":5572,"l":5441,"c":5465,"v":10745100},{"d":"2026-09-30","o":5465,"h":5514,"l":5393,"c":5489,"v":14102000},{"d":"2026-10-01","o":5460,"h":5520,"l":5443,"c":5510,"v":13032100}]</script>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7.5" height="7.5"/><rect x="13.5" y="3" width="7.5" height="7.5"/><rect x="3" y="13.5" width="7.5" height="7.5"/><path d="M13.5 13.5h7.5v7.5h-7.5z" stroke-dasharray="2 2"/></symbol>
+    <symbol id="i-stock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 3v4M6 15v5M12 6v3M12 17v3M18 2v4M18 12v4"/><rect x="4" y="7" width="4" height="8"/><rect x="10" y="9" width="4" height="8"/><rect x="16" y="6" width="4" height="6"/></symbol>
+    <symbol id="i-quick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3.5 16a8.5 8.5 0 0 1 17 0"/><path d="M12 16l4.5-5"/><circle cx="12" cy="16" r="1.5"/><path d="M5 20h14"/></symbol>
+    <symbol id="i-kessan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 2.5h10l4 4V21.5H5z"/><path d="M15 2.5v4h4"/><path d="M8.5 18v-3M12 18v-6M15.5 18v-4"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 20h18"/><path d="M4 16l5-5 4 3 7-8"/><path d="M16 6h4v4"/></symbol>
+    <symbol id="i-news" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16"/><path d="M6.5 8h11M6.5 12h5M6.5 16h5"/><rect x="13.5" y="11.5" width="4" height="4.5"/></symbol>
+    <symbol id="i-hansei" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4 3.5v4h4"/><path d="M12 8v4.5l3 2"/></symbol>
+    <symbol id="i-market" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.6 2.5 3.8 5.3 3.8 8.5s-1.2 6-3.8 8.5M12 3.5C9.4 6 8.2 8.8 8.2 12s1.2 6 3.8 8.5"/></symbol>
+    <symbol id="i-yogo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4.5h6.5A2.5 2.5 0 0 1 12 6v14a2 2 0 0 0-2-2H4z"/><path d="M20 4.5h-6.5A2.5 2.5 0 0 0 12 6v14a2 2 0 0 1 2-2h6z"/></symbol>
+    <symbol id="i-q" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2.5l8.2 4.75v9.5L12 21.5l-8.2-4.75v-9.5z"/><path d="M8.3 12.2l2.6 2.6 4.8-5.2"/></symbol>
+    <symbol id="i-price" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 12.5V3h9.5l8.5 8.5-9.5 9.5z"/><circle cx="7.5" cy="7.5" r="1.5"/></symbol>
+    <symbol id="i-supply" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3v18M7 21h10M4 7h16"/><path d="M4 7l-2.5 6h5zM20 7l-2.5 6h5z"/></symbol>
+    <symbol id="i-flow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 18l6-6 4 3 8-9"/><path d="M15 6h6v6"/></symbol>
+    <symbol id="st-d" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.5" fill="rgba(62,230,255,.2)" stroke="#3ee6ff" stroke-width="1.5"/><path d="M6.5 10.2l2.4 2.4 4.6-5" fill="none" stroke="#a6f3ff" stroke-width="1.8"/></symbol>
+    <symbol id="st-p" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.5" fill="none" stroke="rgba(62,230,255,.45)" stroke-width="1.5"/><path d="M10 2.5a7.5 7.5 0 0 1 0 15z" fill="rgba(62,230,255,.7)"/></symbol>
+    <symbol id="st-x" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.5" fill="none" stroke="#7f97a8" stroke-width="1.3" stroke-dasharray="2.5 2.2"/></symbol>
+    <symbol id="ret" viewBox="0 0 58 58" fill="none"><circle cx="29" cy="29" r="20" stroke="#3ee6ff" stroke-width="1.4" opacity=".6"/><circle cx="29" cy="29" r="12" stroke="#3ee6ff" stroke-width="1.4" stroke-dasharray="3 3" opacity=".5"/><circle cx="29" cy="29" r="3" fill="#3ee6ff"/><path d="M29 2v10M29 46v10M2 29h10M46 29h10" stroke="#3ee6ff" stroke-width="2"/><path d="M8 8l5 5M50 8l-5 5M8 50l5-5M50 50l-5-5" stroke="#3ee6ff" stroke-width="1.4" opacity=".5"/></symbol>
+  </defs>
+</svg>
+
+<!-- ===== 細いアイコンレール ===== -->
+<aside class="rail" aria-label="ナビゲーション">
+  <div class="logo" title="KABU LAB">
+    <svg viewBox="0 0 46 52" fill="none" aria-hidden="true"><path d="M23 2l20 11.5v25L23 50 3 38.5v-25z" stroke="#3ee6ff" stroke-width="1.6" opacity=".85"/><path d="M23 9l14 8v17.6L23 43 9 34.6V17z" stroke="#3ee6ff" stroke-width="1" opacity=".35"/></svg>
+    <b>KL</b>
+  </div>
+  <button class="rl" data-go="home" aria-label="ホーム（銘柄ライブラリ）"><svg><use href="#i-home"/></svg><span>HOME</span></button>
+  <button class="rl on" data-go="stock" aria-label="日立製作所 6501"><svg><use href="#i-stock"/></svg><span>6501</span></button>
+  <div class="sep"></div>
+  <div class="foot"><i></i>SYS<br>OK</div>
+</aside>
+
+<!-- ===== 上部バー ===== -->
+<header class="top">
+  <div class="brand"><b>KABU LAB</b><span>銘柄分析 × 学習ノート</span></div>
+  <div class="cmdw">
+    <div class="cmdbox" aria-label="コマンド入力（見た目のみ）">
+      <span class="lbl">CMD</span><span class="pr">&gt;</span>
+      <span id="cmd-stock">/kabu 日立 <span id="cmd-word">クイック</span><i class="cur"></i></span>
+      <span id="cmd-home" hidden><i class="cur"></i><span class="hint">/kabu 日立 決算</span></span>
+      <kbd>ENTER</kbd>
+    </div>
+  </div>
+  <div class="meta"><span>VIEW <b id="meta-view">6501 日立製作所</b></span><span>DATE <b>2026-10-01</b></span><span>MODE <b>LEARN</b></span></div>
+</header>
+
+<div class="main">
+<!-- ================= 銘柄ページ ================= -->
+<section class="view on" id="v-stock" aria-label="銘柄ページ">
+  <div class="sh">
+    <div class="sh-id">
+      <div class="ticker">6501</div>
+      <div><h1>日立製作所</h1><div class="tags"><span>東証プライム</span><span>電気機器</span><span>日経225採用</span></div></div>
+    </div>
+    <div class="sh-price">
+      <svg class="ret" aria-hidden="true"><use href="#ret"/></svg>
+      <div>
+        <div class="lbl"><span>株価 ／ 10月1日終値</span></div>
+        <div class="pxrow"><span class="px"><span class="num" data-count="5510">5,510</span><small>円</small></span><span class="chg up">▲ <span>前日比</span> +21<span>円</span> / +0.38%</span></div>
+      </div>
+    </div>
+    <div class="sh-kv"><span>時価総額</span><b>24<span>兆</span>9,909<span>億円</span></b></div>
+    <div class="sh-kv"><span>最低購入額</span><b>55<span>万</span>1,000<span>円</span></b></div>
+    <div class="sh-fill"><svg viewBox="0 0 150 26" aria-hidden="true" fill="none" stroke="#3ee6ff"><path d="M0 13h40" stroke-opacity=".35"/><path d="M46 5v16M52 9v8M58 3v20M64 9v8M70 7v12" stroke-opacity=".5"/><path d="M78 13h30" stroke-dasharray="2 3" stroke-opacity=".45"/><rect x="114" y="4" width="18" height="18" stroke-opacity=".6" transform="rotate(45 123 13)"/><circle cx="123" cy="13" r="2.5" fill="#3ee6ff" stroke="none"/><path d="M138 13h12" stroke-opacity=".35"/></svg></div>
+  </div>
+
+  <nav class="tabs" aria-label="分析の型">
+    <button class="tab on" data-tab="クイック診断" data-cmd="クイック"><i>T-01</i>クイック診断<span class="dot"></span></button>
+    <button class="tab" data-tab="決算" data-cmd="決算"><i>T-02</i>決算</button>
+    <button class="tab" data-tab="チャート" data-cmd="チャート"><i>T-03</i>チャート</button>
+    <button class="tab" data-tab="ニュース" data-cmd="ニュース"><i>T-04</i>ニュース</button>
+    <button class="tab" data-tab="反省" data-cmd="反省"><i>T-05</i>反省</button>
+    <div class="rt">
+      <span class="lgd"><i style="background:var(--cy)"></i>上昇</span>
+      <span class="lgd"><i style="background:var(--mag)"></i>下落</span>
+      <span class="lgd"><i style="background:var(--amber)"></i>警告・注目</span>
+      <span class="note">ANALYSIS <b id="an-st">QUICK</b> ／ 10/01</span>
+    </div>
+  </nav>
+
+  <div id="quick">
+    <div class="rowA">
+      <!-- ② 株価チャート -->
+      <section class="panel">
+        <div class="pi">
+          <div class="ph"><span class="code">SYS-02 / PRICE</span><h2>株価チャート（日足）</h2><div class="pm"><span>2026.04.02 – 10.01</span><span>122本</span></div></div>
+          <div class="pb">
+            <div class="legend">
+              <span><i class="sw cu"></i>陽線（上昇）</span>
+              <span><i class="sw cd"></i>陰線（下落）</span>
+              <span><i class="sw l25"></i>25日線 <b>5,387円</b></span>
+              <span><i class="sw l75"></i>75日線 <b>5,117円</b></span>
+              <span><i class="sw bd"></i>レジスタンス帯 <b>5,830円</b>（8月14日高値）</span>
+              <span><i class="sw bd"></i>サポート帯 <b>5,040円</b>（9月11日安値）</span>
+            </div>
+            <div class="host" id="chart"></div>
+            <div class="dev" aria-label="移動平均線からの乖離率">
+              <div class="dv"><div class="dvh"><span>乖離率 5日線</span><b>+0.12%</b></div><div class="dvt"><i class="a-gx" style="--v:.12"></i></div><div class="dvs"><span>−10%</span><span>0</span><span>+10%</span></div></div>
+              <div class="dv"><div class="dvh"><span>25日線</span><b>+2.29%</b></div><div class="dvt"><i class="a-gx" style="--v:2.29"></i></div><div class="dvs"><span>−10%</span><span>0</span><span>+10%</span></div></div>
+              <div class="dv"><div class="dvh"><span>75日線</span><b>+7.68%</b></div><div class="dvt"><i class="a-gx" style="--v:7.68"></i></div><div class="dvs"><span>−10%</span><span>0</span><span>+10%</span></div></div>
+              <div class="dv"><div class="dvh"><span>200日線</span><b>+9.13%</b></div><div class="dvt"><i class="a-gx" style="--v:9.13"></i></div><div class="dvs"><span>−10%</span><span>0</span><span>+10%</span></div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="rcol">
+        <!-- ① 4点診断 -->
+        <section class="panel">
+          <div class="pi">
+            <div class="ph"><span class="code">SYS-01 / DIAG</span><h2>4点診断</h2><div class="pm"><span class="jp">評価メーター</span></div></div>
+            <div class="diag">
+              <div class="dg">
+                <div class="dgh"><svg><use href="#i-q"/></svg>会社の質<b class="vd">高</b></div>
+                <div class="mt" data-v=".86" data-l="低" data-r="高"></div>
+                <p>3期連続の増収増益</p>
+              </div>
+              <div class="dg">
+                <div class="dgh"><svg><use href="#i-price"/></svg>値段<b class="vd">やや高い</b></div>
+                <div class="mt" data-v=".7" data-l="安い" data-r="高い"></div>
+                <p><span class="nw"><span class="mono">PER 27.3</span>倍・</span><span class="nw"><span class="mono">PBR 3.73</span>倍。</span>成長を先に織り込んだ水準</p>
+              </div>
+              <div class="dg">
+                <div class="dgh"><svg><use href="#i-supply"/></svg>需給<b class="vd">中立</b></div>
+                <div class="mt" data-v=".5" data-l="売り優勢" data-r="買い優勢"></div>
+                <p>信用倍率 <span class="mono">7.56</span>倍。買い残は2週間で<span class="mono">60</span>万株減</p>
+              </div>
+              <div class="dg">
+                <div class="dgh"><svg><use href="#i-flow"/></svg>流れ<b class="vd">上昇トレンド</b></div>
+                <div class="mt" data-v=".88" data-l="下降" data-r="上昇"></div>
+                <p>株価は5日・25日・75日・200日線すべての上</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ④ 割高・割安ゲージ -->
+        <section class="panel">
+          <div class="pi">
+            <div class="ph"><span class="code">SYS-04 / VALUE</span><h2>割高・割安ゲージ</h2><div class="pm"><span class="jp">◀ 割安寄り ｜ 割高寄り ▶</span></div></div>
+            <div class="vals">
+              <div class="vg">
+                <div class="hd"><span class="nm">PER</span><span class="vl">27.3<small>倍</small></span></div>
+                <span class="ref">日経平均 16.95倍と比較</span>
+                <div class="gtr"><span>0</span><div class="gt" data-max="40" data-ticks="0,10,20,30,40"><span class="rf" style="left:42.375%"></span><span class="gmk a-fade" style="left:68.25%"></span></div><span>40</span></div>
+              </div>
+              <div class="vg">
+                <div class="hd"><span class="nm">PBR</span><span class="vl">3.73<small>倍</small></span></div>
+                <span class="ref">1倍＝解散価値</span>
+                <div class="gtr"><span>0</span><div class="gt" data-max="5" data-ticks="0,1,2,3,4,5"><span class="rf" style="left:20%"></span><span class="gmk a-fade" style="left:74.6%"></span></div><span>5</span></div>
+              </div>
+              <div class="vg">
+                <div class="hd"><span class="nm">PSR</span><span class="vl">2.10<small>倍</small></span></div>
+                <span class="ref"></span>
+                <div class="gtr"><span>0</span><div class="gt" data-max="5" data-ticks="0,1,2,3,4,5"><span class="gmk a-fade" style="left:42%"></span></div><span>5</span></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div class="pair">
+          <!-- ③ 業績推移 -->
+          <section class="panel">
+            <div class="pi">
+              <div class="ph"><span class="code">SYS-03 / PERF</span><h2>業績推移</h2></div>
+              <div class="pb">
+                <div class="legend"><span><i class="sw" style="background:rgba(62,230,255,.4);border-top:2px solid #3ee6ff"></i>売上高</span><span><i class="sw l25"></i>最終利益</span><span><i class="sw" style="border:1px dashed #3ee6ff;background:repeating-linear-gradient(135deg,rgba(62,230,255,.5) 0 1px,transparent 1px 3px)"></i>予想</span></div>
+                <div class="host" id="perf"></div>
+                <table class="tbl">
+                  <thead><tr><th>決算期</th><th>売上高<small>(億円)</small></th><th>最終利益<small>(億円)</small></th><th>1株利益<small>(円)</small></th><th>1株配当<small>(円)</small></th></tr></thead>
+                  <tbody>
+                    <tr><td>2025.3</td><td>97,833</td><td>6,157</td><td>133.9</td><td>43</td></tr>
+                    <tr><td>2026.3</td><td>105,867</td><td>8,023</td><td>176.8</td><td>50</td></tr>
+                    <tr class="fc"><td>2027.3予</td><td>117,000</td><td>9,000</td><td>202.2</td><td class="jp">中間28・期末未定</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+          <!-- ⑤ 稼ぎ頭マップ -->
+          <section class="panel">
+            <div class="pi">
+              <div class="ph"><span class="code">SYS-07 / SEGMENT</span><h2>稼ぎ頭マップ</h2></div>
+              <div class="pb">
+                <div class="sg-top"><svg id="donut" viewBox="0 0 64 64" role="img" aria-label="事業別の利益の構成"></svg><div class="t"><span class="code">PROFIT</span>円＝事業別の利益<br>バー＝利益率（0〜20%）</div></div>
+                <div class="sg-rows">
+                  <div class="srow" style="--k:#3ee6ff"><div class="srh"><i></i><span class="sn">デジタルシステム＆サービス</span><span class="pf">4,501<small>億円</small></span></div><div class="mbar"><span class="tr"><u class="a-gx" style="--m:16.3"></u></span><b>16.3%</b></div></div>
+                  <div class="srow" style="--k:#8ff0ff"><div class="srh"><i></i><span class="sn">エナジー</span><span class="yoy">前年比 +65%</span><span class="pf">4,160<small>億円</small></span></div><div class="mbar"><span class="tr"><u class="a-gx" style="--m:13.0"></u></span><b>13.0%</b></div></div>
+                  <div class="srow" style="--k:#2a9fc4"><div class="srh"><i></i><span class="sn">コネクティブインダストリーズ</span><span class="pf">3,674<small>億円</small></span></div><div class="mbar"><span class="tr"><u class="a-gx" style="--m:12.2"></u></span><b>12.2%</b></div></div>
+                  <div class="srow" style="--k:#5d7f93"><div class="srh"><i></i><span class="sn">モビリティ</span><span class="pf">1,081<small>億円</small></span></div><div class="mbar"><span class="tr"><u class="a-gx" style="--m:8.2"></u></span><b>8.2%</b></div></div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <div class="rowB">
+      <!-- ⑥ 3つのシナリオ -->
+      <section class="panel">
+        <div class="pi">
+          <div class="ph"><span class="code">SYS-06 / SCENARIO</span><h2>3つのシナリオ</h2><div class="pm"><span class="jp">起点 現在値 <span class="mono">5,510</span>円</span></div></div>
+          <div class="pb">
+            <div class="scn">
+              <div class="host" id="fan"></div>
+              <div class="scards">
+                <div class="sc bull">
+                  <div class="sch"><span class="scode">SCN-A</span><b>強気</b><span class="tgt">目安 <em>5,830円</em>の高値更新</span></div>
+                  <p>送電とAI需要が続き上方修正が重なる。</p>
+                  <div class="inv"><span>崩れる条件</span>米IT大手のAI投資減速</div>
+                </div>
+                <div class="sc mid">
+                  <div class="sch"><span class="scode">SCN-B</span><b>中立</b><span class="tgt"><em>5,040〜5,830円</em>のレンジ</span></div>
+                  <div class="inv"><span>崩れる条件</span>円高が進み想定レート160円を大きく下回る</div>
+                </div>
+                <div class="sc bear">
+                  <div class="sch"><span class="scode">SCN-C</span><b>弱気</b><span class="tgt">目安 75日線 <em>5,117円</em>割れ</span></div>
+                  <p>中東情勢の悪化で大型案件が遅れる。</p>
+                  <div class="inv"><span>崩れる条件</span>受注の伸びが決算で確認され続ける</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ⑦ 需給 -->
+      <section class="panel">
+        <div class="pi">
+          <div class="ph"><span class="code">SYS-05 / MARGIN</span><h2>需給（信用残）</h2><div class="pm"><span class="jp">単位：千株</span></div></div>
+          <div class="pb">
+            <div class="legend"><span><i class="sw" style="background:rgba(62,230,255,.55)"></i>買い残</span><span><i class="sw" style="background:repeating-linear-gradient(135deg,#9db3c2 0 2px,transparent 2px 4px)"></i>売り残</span><span><i class="sw l25"></i>倍率</span></div>
+            <div class="host" id="supply"></div>
+            <table class="tbl sm">
+              <thead><tr><th>日付</th><th>08/28</th><th>09/04</th><th>09/11</th><th>09/18</th><th class="fc" style="color:var(--cy2)">09/25</th></tr></thead>
+              <tbody>
+                <tr><td>売り残</td><td>703.6</td><td>511.5</td><td>362.2</td><td>442.3</td><td style="color:var(--cy2)">465.5</td></tr>
+                <tr><td>買い残</td><td>3,824.2</td><td>3,945.4</td><td>4,101.6</td><td>3,678.2</td><td style="color:var(--cy2)">3,518.8</td></tr>
+                <tr><td>倍率</td><td>5.44</td><td>7.71</td><td>11.32</td><td>8.32</td><td style="color:var(--cy2)">7.56</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ⑧ チェックリスト -->
+      <section class="panel">
+        <div class="pi">
+          <div class="ph"><span class="code">SYS-08 / PATTERN</span><h2>チャート型チェックリスト</h2><div class="pm"><span class="jp">10項目</span></div></div>
+          <div class="pb">
+            <div class="ck-sum">
+              <div class="ck-bar" aria-hidden="true"><i class="d"></i><i class="d"></i><i class="d"></i><i class="d"></i><i class="d"></i><i class="p"></i><i class="p"></i><i class="x"></i><i class="x"></i><i class="x"></i></div>
+              <div class="ck-cnt"><span class="d"><svg><use href="#st-d"/></svg>完成済み<b>5</b></span><span><svg><use href="#st-p"/></svg>進行中<b>2</b></span><span><svg><use href="#st-x"/></svg>なし<b>3</b></span></div>
+            </div>
+            <div class="ckg" id="ckg"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ⑨ 学びノート -->
+    <div class="rowC">
+      <section class="panel">
+        <div class="pi">
+          <div class="ph"><span class="code">SYS-09 / NOTE</span><h2>学びノート</h2><div class="pm"><span class="jp">用語 3 ・ 気づき 1</span></div></div>
+          <div class="notes">
+            <div class="term"><span class="chip">PER</span><div><p>株価が1年分の利益の何倍か</p><div class="fx"><b>株価</b>÷<b>1株利益</b>=<b class="eq">PER</b></div></div></div>
+            <div class="term"><span class="chip">信用倍率</span><div><p>借金して買っている株数 ÷ 空売りの株数。高いと将来の売り圧力</p><div class="fx"><b>買い残</b>÷<b>売り残</b>=<b class="eq">信用倍率</b></div></div></div>
+            <div class="term"><span class="chip">乖離率</span><div><p>移動平均線からどれだけ離れているか。±10%超は過熱の目安</p><div class="fx"><b class="m">−10%</b><span style="flex:1;max-width:120px;height:6px;background:linear-gradient(90deg,rgba(255,179,64,.55),rgba(62,230,255,.12) 20% 80%,rgba(255,179,64,.55))"></span><b class="m">+10%</b><span style="color:var(--amber);font-family:var(--jp)">過熱</span></div></div></div>
+            <div class="insight"><span class="code">INSIGHT / 今回の気づき</span><p>「PER 27倍は割高ではなく、成長を先に織り込んだ値段。成長が鈍ると下がりやすい」</p></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="empty" id="empty" hidden>
+    <section class="panel">
+      <div class="pi">
+        <div class="ph"><span class="code" id="emp-code">SYS-T-02 / STANDBY</span><h2 id="emp-h">決算</h2><div class="pm"><span>STATUS: <span class="jp">未実行</span></span></div></div>
+        <div class="emp">
+          <svg viewBox="0 0 220 220" fill="none" aria-hidden="true">
+            <circle cx="110" cy="110" r="100" stroke="rgba(62,230,255,.25)"/>
+            <circle cx="110" cy="110" r="72" stroke="rgba(62,230,255,.4)" stroke-dasharray="4 6"/>
+            <circle cx="110" cy="110" r="40" stroke="rgba(62,230,255,.25)"/>
+            <path d="M110 0v36M110 184v36M0 110h36M184 110h36" stroke="#3ee6ff" stroke-width="1.5"/>
+            <path d="M110 110L171 61" stroke="#3ee6ff" stroke-width="1.2" opacity=".7"/>
+            <path d="M110 38A72 72 0 0 1 171 61" stroke="#3ee6ff" stroke-width="3" opacity=".8"/>
+            <circle cx="110" cy="110" r="4" fill="#3ee6ff"/>
+            <text x="110" y="150" text-anchor="middle" font-family="Orbitron" font-size="12" letter-spacing="2" fill="#9db3c2">NO SIGNAL</text>
+          </svg>
+          <div>
+            <span class="code">MODULE STANDBY</span>
+            <h3><span id="emp-name">決算</span>は未実行です</h3>
+            <p>この型の分析はまだ走らせていません。実行すると、ここに図解つきの結果が並びます。</p>
+            <div class="cmdl"><em>&gt;</em>/kabu 日立 <span id="emp-cmd">決算</span><i class="cur"></i></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="foot-b">
+    <span>出典：株探・Yahoo!ファイナンス・日立IR</span>
+    <span class="warn">本ツールは学習用の分析であり、売買の推奨ではありません</span>
+  </footer>
+</section>
+
+<!-- ================= ホーム ================= -->
+<section class="view" id="v-home" aria-label="ホーム（銘柄ライブラリ）">
+  <div class="h-strip">
+    <div class="h-brand">
+      <svg aria-hidden="true"><use href="#ret"/></svg>
+      <b>KABU LAB</b><span class="h-div"></span>
+      <div class="sub">銘柄分析 × 学習ノート<em>2026-10-01</em></div>
+    </div>
+    <div class="h-stat">
+      <span><i>LIBRARY</i><b>5<small>銘柄</small></b></span>
+      <span><i>LAST RUN</i><b>10/01</b></span>
+      <span><i>MODE</i><b>LEARN</b></span>
+    </div>
+  </div>
+
+  <div class="h-a">
+    <section class="panel">
+      <div class="pi">
+        <div class="ph"><span class="code">LIB-01 / LIBRARY</span><h2>銘柄ライブラリ</h2><div class="pm"><span class="jp">分析済み 5銘柄</span><span class="jp"><span class="up">▲ 上昇</span>　<span class="dn">▼ 下落</span></span></div></div>
+        <div style="flex:1;min-height:0;padding:0 4px">
+          <table class="h-tbl">
+            <thead><tr><th>コード</th><th>社名</th><th class="r">株価</th><th class="r">前日比</th><th>実施済みの型</th><th>最終分析日</th><th>推移（40日）</th></tr></thead>
+            <tbody id="lib"></tbody>
+          </table>
+        </div>
+        <div class="h-tf"><span>行を選ぶと銘柄ページを開く（6501）</span><span class="mono">LIB 5 / 5</span></div>
+      </div>
+    </section>
+    <div class="h-rc">
+      <section class="panel">
+        <div class="pi">
+          <div class="ph"><span class="code">MKT-01 / MARKET</span><h2>市場パネル</h2><div class="pm"><span>2026-10-01</span></div></div>
+          <div class="h-mk" id="mkt"></div>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="pi">
+          <div class="ph"><span class="code">MKT-02 / GEO-RISK</span><h2>地政学リスク</h2><div class="pm"><span class="jp">影響度 5段階</span></div></div>
+          <div class="h-geo" id="geo"></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="h-b">
+    <section class="panel">
+      <div class="pi">
+        <div class="ph"><span class="code">OPS-01 / MENU</span><h2>分析メニュー</h2><div class="pm"><span class="jp">型 7種 ・ 重さ　□ 極軽 ─ ■■■■ 重</span></div></div>
+        <div class="h-menu" id="menu"></div>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="pi">
+        <div class="ph"><span class="code">EDU-01 / TERM</span><h2>今日の用語カード</h2></div>
+        <div class="h-term">
+          <div class="w">PER</div>
+          <p>株価が1年分の利益の何倍か。高いほど成長を先に織り込んで買われている</p>
+          <div class="perviz" aria-hidden="true">
+            <div class="row"><span>1年分の利益</span><i class="unit"></i></div>
+            <div class="row"><span>株価</span><i class="px2"></i><span class="x">×N</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="foot-b">
+    <span>出典：株探・Yahoo!ファイナンス・日立IR</span>
+    <span class="warn">本ツールは学習用の分析であり、売買の推奨ではありません</span>
+  </footer>
+</section>
+</div>
+
+<!-- ===== 下部バー ===== -->
+<footer class="bot">
+  <div class="tape" aria-label="ティッカー">
+    <span class="lb">MKT</span>
+    <span class="it">日経平均 <b>68,956.72</b><em class="up">▲ +2,203.00 / +3.30%</em></span>
+    <span class="it">TOPIX <b>4,111.65</b><em class="up">▲ +0.07%</em></span>
+    <span class="it">ドル円 <b>158.40</b><span>円安方向</span></span>
+    <span class="it">予想PER <b>16.95倍</b><span>5年平均 15.47倍</span></span>
+    <span class="it">米10年金利 <b>5.28%</b></span>
+    <span class="it">ブレント原油 <b>98ドル</b></span>
+    <span class="it">6501 日立製作所 <b>5,510</b><em class="up">▲ +0.38%</em></span>
+    <span class="it">8001 伊藤忠商事 <b>2,202.5</b><em class="dn">▼ −0.23%</em></span>
+    <span class="it">8058 三菱商事 <b>4,769</b><em class="up">▲ +2.85%</em></span>
+    <span class="it">6594 ニデック <b>2,355</b><em class="up">▲ +4.67%</em></span>
+    <span class="it">4666 パーク24 <b>1,864</b><em class="up">▲ +0.27%</em></span>
+  </div>
+  <nav class="fk" aria-label="ビュー切替">
+    <button class="k" data-go="home"><i>F1</i>HOME 銘柄ライブラリ</button>
+    <button class="k on" data-go="stock"><i>F2</i>STOCK 6501</button>
+    <span class="k off"><i>F3</i>決算</span>
+    <span class="k off"><i>F4</i>チャート</span>
+    <span class="k off"><i>F5</i>ニュース</span>
+    <span class="k off"><i>F6</i>反省</span>
+    <span class="k off"><i>F7</i>市場</span>
+    <span class="k off"><i>F8</i>用語</span>
+    <span class="st"><b>学習用 ・ 売買推奨なし</b><span>CLOSE BASIS</span></span>
+  </nav>
+</footer>
+
+<script>
+(function(){
+'use strict';
+const D = JSON.parse(document.getElementById('ohlc').textContent);
+const NS = 'http://www.w3.org/2000/svg';
+const RM = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const fmt = (v,d=0) => v.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+function el(tag, at, p){ const e=document.createElementNS(NS,tag); if(at) for(const k in at) e.setAttribute(k, at[k]); if(p) p.appendChild(e); return e; }
+/* SVG文字は fill をインライン style で確定させ、CSSの汎用セレクタに上書きされないようにする */
+function tx(p, x, y, s, at){ at=Object.assign({}, at||{}); const f=at.fill; delete at.fill; const t=el('text', Object.assign({x, y}, at), p); if(f) t.style.fill=f; t.textContent=s; return t; }
+const C = {cy:'#3ee6ff', cy2:'#a6f3ff', mag:'#ff5ca3', amb:'#ffb340', tx:'#d8e7ef', tx2:'#9db3c2', tx3:'#7f97a8', w:'#f4fbff', bg:'#05080d'};
+const animOn = () => !RM && document.body.classList.contains('anim');
+
+function sma(arr, n){ return arr.map((_, i) => i < n-1 ? null : arr.slice(i-n+1, i+1).reduce((a,b)=>a+b,0)/n); }
+const closes = D.map(r=>r.c);
+const ma25 = sma(closes, 25), ma75 = sma(closes, 75);
+function pathOf(vals, X, Y){ let d='', on=false; vals.forEach((v,i)=>{ if(v==null) return; d += (on?'L':'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); on=true; }); return d; }
+function dashify(p){ const L=p.getTotalLength(); p.style.setProperty('--len', L.toFixed(1)); p.classList.add('a-dash'); }
+function box(host){ host.innerHTML=''; return [host.clientWidth, host.clientHeight]; }
+
+/* ---------- 株価チャート ---------- */
+function drawChart(){
+  const host=$('#chart'); const [W,H]=box(host); if(!W||!H) return;
+  const padL=4, padR=84, padT=28, padB=19, gap=8;
+  const volH=Math.round((H-padT-padB)*.16), mainH=H-padT-padB-volH-gap, vTop=padT+mainH+gap;
+  const svg=el('svg',{width:W,height:H,viewBox:`0 0 ${W} ${H}`,role:'img','aria-label':'日立製作所 日足チャート 2026年4月2日から10月1日'},host);
+  const defs=el('defs',null,svg);
+  const hp=el('pattern',{id:'hatch',width:6,height:6,patternUnits:'userSpaceOnUse',patternTransform:'rotate(45)'},defs);
+  el('rect',{width:6,height:6,fill:'rgba(216,231,239,.05)'},hp); el('line',{x1:0,y1:0,x2:0,y2:6,stroke:'rgba(216,231,239,.22)','stroke-width':1},hp);
+  const gf=el('filter',{id:'glow',x:'-20%',y:'-20%',width:'140%',height:'140%'},defs);
+  el('feGaussianBlur',{stdDeviation:2,result:'b'},gf); const fm=el('feMerge',null,gf); el('feMergeNode',{in:'b'},fm); el('feMergeNode',{in:'SourceGraphic'},fm);
+
+  const n=D.length, pw=W-padL-padR, st=pw/n, bw=Math.max(2,Math.min(7,st*.6));
+  const X=i=>padL+st*(i+.5);
+  const P0=4350, P1=5950, Y=p=>padT+(P1-p)/(P1-P0)*mainH;
+  const VMAX=30e6, VY=v=>vTop+volH-v/VMAX*volH;
+  const ax=W-padR;
+
+  const g=el('g',null,svg);
+  el('rect',{x:padL,y:padT,width:pw,height:mainH,fill:'none',stroke:'rgba(62,230,255,.16)'},g);
+  el('rect',{x:padL,y:vTop,width:pw,height:volH,fill:'none',stroke:'rgba(62,230,255,.12)'},g);
+  const tagPrices=[5830,5040,5510];
+  for(let p=4400;p<=5800;p+=100){
+    const y=Y(p), major=p%200===0;
+    el('line',{x1:padL,x2:ax,y1:y,y2:y,stroke:major?'rgba(62,230,255,.085)':'rgba(62,230,255,.035)'},g);
+    el('line',{x1:ax,x2:ax+(major?5:3),y1:y,y2:y,stroke:C.tx3},g);
+    if(major && tagPrices.every(t=>Math.abs(Y(t)-y)>16)) tx(g,ax+10,y+4,fmt(p),{class:'st-t',fill:C.tx2});
+  }
+  el('line',{x1:ax,x2:ax,y1:padT,y2:vTop+volH,stroke:'rgba(62,230,255,.3)'},g);
+  D.forEach((r,i)=>{
+    if(i===0 || r.d.slice(5,7)!==D[i-1].d.slice(5,7)){
+      const x=X(i)-st/2;
+      el('line',{x1:x,x2:x,y1:padT,y2:vTop+volH+4,stroke:'rgba(62,230,255,.10)','stroke-dasharray':'2 4'},g);
+      if(x<ax-48) tx(g,x+4,H-5,(i===0?'2026年 ':'')+(+r.d.slice(5,7))+'月',{class:'st-j',fill:C.tx2});
+    }
+  });
+  tx(g,ax-2,H-5,'10/01',{class:'st-t','text-anchor':'end',fill:C.cy2});
+  tx(g,padL+6,vTop+13,'出来高',{class:'st-j',fill:C.tx2});
+  tx(g,ax+10,vTop+5,'3,000万',{class:'st-t',fill:C.tx3});
+  el('line',{x1:ax,x2:ax+5,y1:vTop,y2:vTop,stroke:C.tx3},g);
+  tx(g,ax+10,padT-10,'円',{class:'st-j',fill:C.tx3});
+
+  [[5830,'RES'],[5040,'SUP']].forEach(([p,k])=>{
+    el('rect',{x:padL,y:Y(p+18),width:pw,height:Y(p-18)-Y(p+18),fill:'url(#hatch)'},g);
+    el('line',{x1:padL,x2:ax,y1:Y(p),y2:Y(p),stroke:'rgba(216,231,239,.55)','stroke-dasharray':'5 4'},g);
+    const y=Y(p);
+    el('path',{d:`M${ax+2} ${y} l6 -9 h${padR-10} v18 h-${padR-10} z`,fill:'#0b1824',stroke:'rgba(216,231,239,.6)'},g);
+    tx(g,ax+12,y+4,k+' '+fmt(p),{class:'st-t',fill:C.tx});
+  });
+
+  const vg=el('g',{class:'a-rv'},svg);
+  D.forEach((r,i)=>{
+    const upb=r.c>=r.o, y=VY(r.v);
+    el('rect',{x:(X(i)-bw/2).toFixed(1),y:y.toFixed(1),width:bw.toFixed(1),height:(vTop+volH-y).toFixed(1),fill:upb?'rgba(62,230,255,.42)':'rgba(255,92,163,.5)'},vg);
+  });
+  const cg=el('g',{class:'a-rv'},svg);
+  D.forEach((r,i)=>{
+    const upb=r.c>=r.o, x=X(i), col=upb?C.cy:C.mag;
+    el('line',{x1:x.toFixed(1),x2:x.toFixed(1),y1:Y(r.h).toFixed(1),y2:Y(r.l).toFixed(1),stroke:col,'stroke-width':1},cg);
+    const yt=Y(Math.max(r.o,r.c)), hh=Math.max(1,Math.abs(Y(r.o)-Y(r.c)));
+    el('rect',{x:(x-bw/2).toFixed(1),y:yt.toFixed(1),width:bw.toFixed(1),height:hh.toFixed(1),fill:upb?'rgba(62,230,255,.22)':C.mag,stroke:col,'stroke-width':1},cg);
+  });
+  const p75=el('path',{d:pathOf(ma75,X,Y),fill:'none',stroke:C.amb,'stroke-width':1.6,'stroke-linejoin':'round'},svg);
+  const p25=el('path',{d:pathOf(ma25,X,Y),fill:'none',stroke:C.w,'stroke-width':1.6,'stroke-linejoin':'round',filter:'url(#glow)'},svg);
+  if(animOn()){ dashify(p75); dashify(p25); }
+
+  const li=n-1, lx=X(li), ly=Y(D[li].c);
+  el('line',{x1:lx+8,x2:ax,y1:ly,y2:ly,stroke:C.cy,'stroke-dasharray':'2 3',opacity:.8},svg);
+  el('path',{d:`M${ax+2} ${ly} l6 -10 h${padR-8} v20 h-${padR-8} z`,fill:C.cy,filter:'url(#glow)'},svg);
+  tx(svg,ax+12,ly+4.5,fmt(D[li].c),{class:'st-t',fill:C.bg,style:'font-weight:700'});
+  const rt=el('g',{stroke:C.cy,fill:'none','stroke-width':1.2},svg);
+  el('circle',{cx:lx,cy:ly,r:8},rt); el('circle',{cx:lx,cy:ly,r:2,fill:C.cy},rt);
+  el('path',{d:`M${lx} ${ly-14}v5M${lx} ${ly+9}v5M${lx-14} ${ly}h5`},rt);
+
+  const idx=ds=>D.findIndex(r=>r.d===ds);
+  function pin(ds, anchor, labelY, label){
+    const i=idx(ds); if(i<0) return;
+    const x=X(i), ya=Y(anchor);
+    const pg=el('g',{class:'a-fade'},svg);
+    el('path',{d:`M${x} ${ya} V${labelY} H${x-12}`,stroke:C.cy2,'stroke-width':1,fill:'none',opacity:.85},pg);
+    el('path',{d:`M${x} ${ya-4} l4 4 -4 4 -4 -4z`,fill:C.bg,stroke:C.cy,'stroke-width':1.5},pg);
+    const t=tx(pg,0,labelY+4.5,label,{class:'st-j',fill:C.tx,'text-anchor':'end'});
+    const tw=t.getComputedTextLength();
+    const bx=x-12-tw-18, bwid=tw+18;
+    t.setAttribute('x',x-20);
+    const b=el('path',{d:`M${bx+5} ${labelY-10} H${bx+bwid} V${labelY+10} H${bx} V${labelY-5} Z`,fill:'#071019',stroke:C.cy,'stroke-width':1},pg);
+    pg.insertBefore(b,t);
+    el('rect',{x:bx,y:labelY-10,width:3,height:20,fill:C.cy},pg);
+  }
+  pin('2026-07-29',4993,Y(5620),'7/29 決算・上方修正');
+  pin('2026-08-14',5830,padT-14,'8/14 高値 5,830');
+  pin('2026-09-11',5040,Y(4850),'9/11 安値 5,040');
+}
+
+/* ---------- 小型円弧メーター ---------- */
+function drawMeters(){
+  $$('.mt').forEach(h=>{
+    h.innerHTML='';
+    const v=+h.dataset.v;
+    const s=el('svg',{viewBox:'0 0 140 66',preserveAspectRatio:'xMidYMax meet','aria-hidden':'true'},h);
+    /* 目盛の両端ラベルを円弧の端の真下に置く */
+    const W=h.clientWidth, Hs=h.clientHeight-15, sc=Math.min(W/140, Hs/66), off=(W-140*sc)/2;
+    [[h.dataset.l,0],[h.dataset.r,1]].forEach(([lab,side])=>{
+      const sp=document.createElement('span'); sp.className='ml'; sp.textContent=lab; h.appendChild(sp);
+      const x=off+(side?116:24)*sc, w=sp.offsetWidth;
+      sp.style.left=Math.max(w/2, Math.min(W-w/2, x))+'px';
+    });
+    const cx=70, cy=62, r=46;
+    const pt=(t,rr)=>[cx-rr*Math.cos(Math.PI*t), cy-rr*Math.sin(Math.PI*t)];
+    const arc=(t0,t1,rr)=>{ const a=pt(t0,rr), b=pt(t1,rr); return `M${a[0].toFixed(2)} ${a[1].toFixed(2)} A${rr} ${rr} 0 0 1 ${b[0].toFixed(2)} ${b[1].toFixed(2)}`; };
+    for(let k=0;k<5;k++) el('path',{d:arc(k/5+.01,(k+1)/5-.01,r),stroke:'rgba(62,230,255,.15)','stroke-width':8,fill:'none'},s);
+    const va=el('path',{d:arc(.001,v,r),stroke:C.cy,'stroke-width':3.5,fill:'none',filter:'url(#mglow)'},s);
+    for(let k=0;k<=10;k++){ const a=pt(k/10,r+7), b=pt(k/10,r+(k%5===0?13:10)); el('line',{x1:a[0],y1:a[1],x2:b[0],y2:b[1],stroke:C.tx3,'stroke-width':1},s); }
+    el('path',{d:arc(.001,.999,r-12),stroke:'rgba(62,230,255,.2)','stroke-width':1,fill:'none','stroke-dasharray':'1 4'},s);
+    const ng=el('g',null,s);
+    const tip=pt(v,r+1), base=pt(v,14);
+    el('line',{x1:base[0],y1:base[1],x2:tip[0],y2:tip[1],stroke:'#effcff','stroke-width':1.8},ng);
+    el('circle',{cx:tip[0],cy:tip[1],r:3.4,fill:C.bg,stroke:'#effcff','stroke-width':1.8},ng);
+    el('circle',{cx,cy,r:4,fill:'none',stroke:C.cy,'stroke-width':1.4},s);
+    if(animOn()){
+      dashify(va);
+      ng.style.transformOrigin=`${cx}px ${cy}px`;
+      ng.animate([{transform:`rotate(${-180*v}deg)`},{transform:'rotate(0deg)'}],{duration:1300,delay:300,easing:'cubic-bezier(.3,.7,.2,1)',fill:'backwards'});
+    }
+  });
+}
+
+/* ---------- 業績推移 ---------- */
+function drawPerf(){
+  const host=$('#perf'); const [W,H]=box(host); if(!W||!H) return;
+  const pl=6, pr=6, pt=22, pb=2, ch=H-pt-pb;
+  const svg=el('svg',{width:W,height:H,viewBox:`0 0 ${W} ${H}`,role:'img','aria-label':'売上高と最終利益の推移'},host);
+  const defs=el('defs',null,svg);
+  const hp=el('pattern',{id:'fch',width:6,height:6,patternUnits:'userSpaceOnUse',patternTransform:'rotate(45)'},defs);
+  el('line',{x1:0,y1:0,x2:0,y2:6,stroke:'rgba(62,230,255,.55)','stroke-width':2},hp);
+  const rows=[['2025.3',97833,6157,false],['2026.3',105867,8023,false],['2027.3予',117000,9000,true]];
+  const gw=(W-pl-pr)/3, bwid=Math.min(64,gw*.44);
+  const RY=v=>pt+ch-v/125000*ch, PY=v=>pt+ch-v/12500*ch;
+  [.25,.5,.75].forEach(f=>el('line',{x1:pl,x2:W-pr,y1:pt+ch*f,y2:pt+ch*f,stroke:'rgba(62,230,255,.06)'},svg));
+  const pts=[];
+  rows.forEach((r,i)=>{
+    const cx=pl+gw*(i+.5), y=RY(r[1]);
+    const b=el('rect',{x:cx-bwid/2,y,width:bwid,height:pt+ch-y,fill:r[3]?'url(#fch)':'rgba(62,230,255,.22)',stroke:r[3]?C.cy:'none','stroke-dasharray':r[3]?'4 3':'',class:'a-grow'},svg);
+    b.style.animationDelay=(i*.12)+'s';
+    if(!r[3]) el('rect',{x:cx-bwid/2,y,width:bwid,height:2,fill:C.cy,filter:'url(#mglow)'},svg);
+    const rl=fmt(r[1]), rw=rl.length*7.3+8;
+    el('rect',{x:cx-rw/2,y:pt+ch-18,width:rw,height:16,fill:'rgba(5,10,16,.82)'},svg);
+    tx(svg,cx,pt+ch-5.5,rl,{class:'st-t','text-anchor':'middle',fill:r[3]?C.cy2:C.tx});
+    pts.push([cx,PY(r[2]),r[2],r[3]]);
+  });
+  el('line',{x1:pl,x2:W-pr,y1:pt+ch,y2:pt+ch,stroke:'rgba(62,230,255,.35)'},svg);
+  const lp=el('path',{d:'M'+pts.map(p=>p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' L'),fill:'none',stroke:C.w,'stroke-width':1.8},svg);
+  if(animOn()) dashify(lp);
+  pts.forEach(p=>{
+    el('circle',{cx:p[0],cy:p[1],r:3.6,fill:C.bg,stroke:C.w,'stroke-width':2},svg);
+    const lab=fmt(p[2]), w=lab.length*7.4+12;
+    el('rect',{x:p[0]-w/2,y:p[1]-24,width:w,height:17,fill:'#071019',stroke:'rgba(244,251,255,.45)'},svg);
+    tx(svg,p[0],p[1]-11.5,lab,{class:'st-t','text-anchor':'middle',fill:C.w});
+  });
+}
+
+/* ---------- 需給 ---------- */
+function drawSupply(){
+  const host=$('#supply'); const [W,H]=box(host); if(!W||!H) return;
+  const rows=[['08/28',703.6,3824.2,5.44],['09/04',511.5,3945.4,7.71],['09/11',362.2,4101.6,11.32],['09/18',442.3,3678.2,8.32],['09/25',465.5,3518.8,7.56]];
+  const pt=6, pb=4, ch=H-pt-pb, pl=40, pr=4;
+  const svg=el('svg',{width:W,height:H,viewBox:`0 0 ${W} ${H}`,role:'img','aria-label':'信用残と信用倍率の推移'},host);
+  const defs=el('defs',null,svg);
+  const hp=el('pattern',{id:'sh',width:4,height:4,patternUnits:'userSpaceOnUse',patternTransform:'rotate(45)'},defs);
+  el('line',{x1:0,y1:0,x2:0,y2:4,stroke:'#9db3c2','stroke-width':1.6},hp);
+  const gw=(W-pl-pr)/rows.length, bw=Math.min(16,gw*.28);
+  const BY=v=>pt+ch-v/8000*ch, RY=v=>pt+16+(12-v)/(12-5)*(ch*.38);
+  [0,2000,4000].forEach(v=>{ el('line',{x1:pl,x2:W-pr,y1:BY(v),y2:BY(v),stroke:v?'rgba(62,230,255,.07)':'rgba(62,230,255,.35)'},svg); tx(svg,pl-6,BY(v)+4,v?fmt(v):'0',{class:'st-t','text-anchor':'end',fill:C.tx3}); });
+  const pts=[];
+  rows.forEach((r,i)=>{
+    const cx=pl+gw*(i+.5), last=i===4;
+    const y1=BY(r[2]); const b1=el('rect',{x:cx-bw-1,y:y1,width:bw,height:pt+ch-y1,fill:last?'rgba(62,230,255,.8)':'rgba(62,230,255,.45)',class:'a-grow'},svg); b1.style.animationDelay=(i*.08)+'s';
+    const y2=BY(r[1]); const b2=el('rect',{x:cx+1,y:y2,width:bw,height:pt+ch-y2,fill:'url(#sh)',class:'a-grow'},svg); b2.style.animationDelay=(i*.08)+'s';
+    pts.push([cx,RY(r[3]),r[3]]);
+  });
+  const lp=el('path',{d:'M'+pts.map(p=>p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' L'),fill:'none',stroke:C.w,'stroke-width':1.5},svg);
+  if(animOn()) dashify(lp);
+  pts.forEach((p,i)=>{
+    el('rect',{x:p[0]-3.5,y:p[1]-3.5,width:7,height:7,fill:i===4?C.cy:C.bg,stroke:i===4?C.cy:C.w,'stroke-width':1.5,transform:`rotate(45 ${p[0]} ${p[1]})`},svg);
+    tx(svg,p[0],p[1]-8,p[2].toFixed(2),{class:'st-t','text-anchor':'middle',fill:i===4?C.cy:C.tx});
+  });
+  tx(svg,pl-6,pt+12,'倍率',{class:'st-j','text-anchor':'end',fill:C.tx3});
+}
+
+/* ---------- シナリオ扇 ---------- */
+function drawFan(){
+  const host=$('#fan'); const [W,H]=box(host); if(!W||!H) return;
+  const pl=44, pr=6, pt=12, pb=20, P0=4980, P1=5930;
+  const Y=p=>pt+(P1-p)/(P1-P0)*(H-pt-pb);
+  const svg=el('svg',{width:W,height:H,viewBox:`0 0 ${W} ${H}`,role:'img','aria-label':'現在値から3方向に分かれるシナリオ図'},host);
+  const defs=el('defs',null,svg);
+  const lg=el('linearGradient',{id:'fanG',x1:0,x2:1,y1:0,y2:0},defs);
+  el('stop',{offset:0,'stop-color':'#3ee6ff','stop-opacity':.22},lg); el('stop',{offset:1,'stop-color':'#3ee6ff','stop-opacity':.02},lg);
+  const mk=(id,col)=>{ const m=el('marker',{id,viewBox:'0 0 10 10',refX:8,refY:5,markerWidth:6,markerHeight:6,orient:'auto-start-reverse'},defs); el('path',{d:'M0 0L10 5L0 10z',fill:col},m); };
+  mk('arU',C.cy); mk('arD',C.mag); mk('arN','#cfdde6');
+  const hist=D.slice(-20), nowX=pl+(W-pl-pr)*.4, endX=W-pr-2;
+  const HX=i=>pl+(nowX-pl)*(i/(hist.length-1));
+  el('rect',{x:pl,y:pt,width:W-pl-pr,height:H-pt-pb,fill:'none',stroke:'rgba(62,230,255,.12)'},svg);
+  [[5830,'5,830'],[5510,'5,510'],[5117,'5,117'],[5040,'5,040']].forEach(([p,l])=>{
+    el('line',{x1:pl,x2:endX,y1:Y(p),y2:Y(p),stroke:p===5510?'rgba(62,230,255,.35)':'rgba(62,230,255,.12)','stroke-dasharray':'2 4'},svg);
+    tx(svg,pl-5,Y(p)+(p===5040?11:p===5117?-1:4),l,{class:'st-t','text-anchor':'end',fill:p===5510?C.cy:C.tx2});
+  });
+  el('rect',{x:nowX,y:Y(5830),width:endX-nowX,height:Y(5040)-Y(5830),fill:'rgba(216,231,239,.035)'},svg);
+  const nowY=Y(5510);
+  el('path',{d:`M${nowX} ${nowY} L${endX} ${Y(5830)-4} L${endX} ${Y(5117)+14} Z`,fill:'url(#fanG)',class:'a-fade'},svg);
+  el('path',{d:'M'+hist.map((r,i)=>HX(i).toFixed(1)+' '+Y(r.c).toFixed(1)).join(' L'),fill:'none',stroke:C.tx2,'stroke-width':1.3},svg);
+  tx(svg,pl+4,pt+13,'直近20日',{class:'st-j',fill:C.tx3});
+  const rays=[
+    [`M${nowX} ${nowY} C${nowX+40} ${nowY-5}, ${endX-50} ${Y(5830)+8}, ${endX-5} ${Y(5830)-3}`,C.cy,'arU'],
+    [`M${nowX} ${nowY} L${endX-5} ${nowY}`,'#cfdde6','arN'],
+    [`M${nowX} ${nowY} C${nowX+40} ${nowY+5}, ${endX-56} ${Y(5117)-12}, ${endX-5} ${Y(5117)+10}`,C.mag,'arD']];
+  rays.forEach(([d,col,m],k)=>{
+    const p=el('path',{d,fill:'none',stroke:col,'stroke-width':2,'marker-end':`url(#${m})`,'stroke-dasharray':k===1?'6 4':''},svg);
+    if(k!==1 && animOn()){ dashify(p); p.style.animationDelay=(.4+k*.15)+'s'; }
+  });
+  tx(svg,endX-6,Y(5830)-8,'強気',{class:'st-j','text-anchor':'end',fill:C.cy,style:'font-weight:700'});
+  tx(svg,endX-6,nowY-6,'中立',{class:'st-j','text-anchor':'end',fill:'#cfdde6',style:'font-weight:700'});
+  tx(svg,endX-6,Y(5117)+26,'弱気',{class:'st-j','text-anchor':'end',fill:C.mag,style:'font-weight:700'});
+  const rg=el('g',{fill:'none',stroke:C.cy,'stroke-width':1.2},svg);
+  el('circle',{cx:nowX,cy:nowY,r:8},rg); el('circle',{cx:nowX,cy:nowY,r:2.5,fill:C.cy},rg);
+  el('path',{d:`M${nowX} ${nowY-14}v5M${nowX} ${nowY+9}v5`},rg);
+  el('line',{x1:nowX,x2:nowX,y1:nowY+14,y2:H-pb,stroke:'rgba(62,230,255,.4)','stroke-dasharray':'2 3'},svg);
+  tx(svg,nowX,H-5,'NOW',{class:'st-t','text-anchor':'middle',fill:C.cy,style:'font-family:Orbitron;font-weight:700;letter-spacing:.12em'});
+}
+
+/* ---------- 小型ドーナツ ---------- */
+function drawDonut(){
+  const s=$('#donut'); s.innerHTML='';
+  const vals=[[4501,'#3ee6ff'],[4160,'#8ff0ff'],[3674,'#2a9fc4'],[1081,'#5d7f93']];
+  const tot=vals.reduce((a,b)=>a+b[0],0), cx=32, cy=32, r=23, sw=9, gapA=.03;
+  let a=-Math.PI/2;
+  el('circle',{cx,cy,r:r+8,fill:'none',stroke:'rgba(62,230,255,.3)','stroke-dasharray':'1 4'},s);
+  el('circle',{cx,cy,r:r-8,fill:'none',stroke:'rgba(62,230,255,.15)'},s);
+  vals.forEach(([v,col],i)=>{
+    const da=v/tot*Math.PI*2, a0=a+gapA, a1=a+da-gapA;
+    const p0=[cx+r*Math.cos(a0),cy+r*Math.sin(a0)], p1=[cx+r*Math.cos(a1),cy+r*Math.sin(a1)];
+    const p=el('path',{d:`M${p0[0].toFixed(2)} ${p0[1].toFixed(2)} A${r} ${r} 0 ${da>Math.PI?1:0} 1 ${p1[0].toFixed(2)} ${p1[1].toFixed(2)}`,fill:'none',stroke:col,'stroke-width':sw},s);
+    if(animOn()){ dashify(p); p.style.animationDelay=(i*.15)+'s'; }
+    a+=da;
+  });
+  el('circle',{cx,cy,r:2.2,fill:C.cy},s);
+}
+
+/* ---------- チェックリスト ---------- */
+function buildChecklist(){
+  const items=[['サポートラインへのタッチと反発','p'],['ダブルボトム','d'],['逆三尊','x'],['ボックス相場の下限での反発','x'],['底練りからのレジスタンスライン突破','d'],['サポレジ転換','p'],['三角持ち合いからの上抜け','x'],['ゴールデンクロス後の初押し','d'],['75日移動平均線のサポート・上抜け','d'],['200日移動平均線での押し','d']];
+  const lab={d:'完成済み',p:'進行中',x:'なし'};
+  $('#ckg').innerHTML=items.map((it,i)=>`<div class="ck ${it[1]}"><div class="n"><span>C-${String(i+1).padStart(2,'0')}</span><svg><use href="#st-${it[1]}"/></svg></div><p>${it[0]}</p><div class="s">${lab[it[1]]}</div></div>`).join('');
+}
+
+/* ---------- ホーム ---------- */
+function synth(seed,n,drift,vol,endUp){
+  let x=seed, v=100, out=[];
+  const rnd=()=>{ x=(x*16807)%2147483647; return x/2147483647-.5; };
+  for(let i=0;i<n;i++){ v+=drift+rnd()*vol; out.push(v); }
+  out[n-1]=out[n-2]*(endUp?1.012:0.994);
+  return out;
+}
+function spark(vals,up){
+  const n=vals.length, mn=Math.min(...vals), mx=Math.max(...vals);
+  const X=i=>2+i/(n-1)*188, Y=v=>40-(v-mn)/(mx-mn||1)*34;
+  const d='M'+vals.map((v,i)=>X(i).toFixed(1)+' '+Y(v).toFixed(1)).join(' L');
+  const col=up?C.cy:C.mag, ex=X(n-1), ey=Y(vals[n-1]);
+  return `<svg class="h-sp" viewBox="0 0 200 46" aria-hidden="true"><line x1="0" x2="200" y1="${Y(vals[0]).toFixed(1)}" y2="${Y(vals[0]).toFixed(1)}" stroke="rgba(127,151,168,.4)" stroke-dasharray="2 3"/><path d="${d} L${ex.toFixed(1)} 46 L2 46Z" fill="${up?'rgba(62,230,255,.08)':'rgba(255,92,163,.08)'}"/><path d="${d}" fill="none" stroke="${col}" stroke-width="1.6"/><circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="5" fill="none" stroke="${col}" stroke-width="1"/><circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="1.8" fill="${col}"/><line x1="0" x2="200" y1="45.5" y2="45.5" stroke="rgba(62,230,255,.2)"/></svg>`;
+}
+function buildHome(){
+  const lib=[
+    ['6501','日立製作所','5,510','+0.38%',true,['クイック','決算','3点読み'],'10/01',null,closes.slice(-40)],
+    ['8001','伊藤忠商事','2,202.5','−0.23%',false,['決算','サポレジ','チェックリスト'],'10/01',null,synth(11,40,.05,2.2,false)],
+    ['8058','三菱商事','4,769','+2.85%',true,['チャート','反省'],'09/30',null,synth(29,40,.12,2.0,true)],
+    ['6594','ニデック','2,355','+4.67%',true,['ニュース'],'09/30','監査意見不表明',synth(47,40,-.08,2.8,true)],
+    ['4666','パーク24','1,864','+0.27%',true,['ニュース'],'09/30',null,synth(83,40,.02,1.6,true)]];
+  $('#lib').innerHTML=lib.map(c=>{
+    const go=c[0]==='6501';
+    return `<tr${go?' class="go" data-go="stock" tabindex="0" aria-label="日立製作所の分析を開く"':''}>
+      <td><span class="h-cd">${c[0]}</span></td>
+      <td><span class="h-nm">${c[1]}</span>${go?'<span class="h-op">OPEN ›</span>':''}</td>
+      <td class="r"><span class="h-px">${c[2]}<small>円</small></span></td>
+      <td class="r"><span class="h-ch ${c[4]?'up':'dn'}">${c[4]?'▲':'▼'} ${c[3]}</span></td>
+      <td><div class="h-bd">${c[7]?`<span class="w">⚠ ${c[7]}</span>`:''}${c[5].map(b=>`<span>${b}</span>`).join('')}</div></td>
+      <td><span class="h-dt">${c[6]}</span></td>
+      <td>${spark(c[8],c[4])}</td></tr>`;}).join('');
+
+  const mk=[
+    ['日経平均','N225','68,956.72','',`<span class="up">+2,203.00 / +3.30%</span>`,'',`<div class="zt"><u class="a-gx" style="--p:3.30"></u></div><div class="vz-s"><span>−4%</span><span>0</span><span>+4%</span></div>`],
+    ['TOPIX','TPX','4,111.65','',`<span class="up">+0.07%</span>`,'',`<div class="zt"><u class="a-gx" style="--p:.07"></u></div><div class="vz-s"><span>−4%</span><span>0</span><span>+4%</span></div>`],
+    ['ドル円','USDJPY','158.40','','円安方向','n',`<div class="dir"><span>円高</span><span class="ax"><i></i></span><b>円安</b></div>`],
+    ['予想PER','N225','16.95','倍','5年平均 15.47倍','n',`<div class="cmpb"><span class="b"><u class="a-gx" style="--p:84.75%"></u></span><em>16.95</em><span class="b avg"><u class="a-gx" style="--p:77.35%"></u></span><em>15.47</em></div>`],
+    ['米10年金利','US10Y','5.28','%','','n',`<div class="lv"><u class="a-gx" style="--p:88%"></u></div><div class="vz-s"><span>0%</span><span>3%</span><span>6%</span></div>`],
+    ['ブレント原油','BRENT','98','ドル','','n',`<div class="lv"><u class="a-gx" style="--p:81.7%"></u></div><div class="vz-s"><span>0</span><span>60</span><span>120</span></div>`]];
+  $('#mkt').innerHTML=mk.map(m=>`<div class="h-mr"><span class="nm">${m[0]}<i>${m[1]}</i></span><span class="vl">${m[2]}${m[3]?`<small>${m[3]}</small>`:''}</span><span class="cg ${m[5]}">${m[4]}</span><div>${m[6]}</div></div>`).join('');
+
+  const geo=[['米イラン戦争・ホルムズ海峡封鎖',5],['日中関係の悪化（レアアース・渡航）',4],['米中対立（半導体・AI規制）',4],['トランプ関税・日米合意',2],['ロシア・ウクライナ戦争',2]];
+  $('#geo').innerHTML=geo.map((g,i)=>`<div class="gr"><span class="r">${String(i+1).padStart(2,'0')}</span><span class="nm">${g[0]}</span><span class="lvl" aria-label="影響度 5段階中${g[1]}"><b>${'★'.repeat(g[1])}</b>${'☆'.repeat(5-g[1])}</span><span class="segs">${[1,2,3,4,5].map(k=>`<i class="${k<=g[1]?'on':''}"></i>`).join('')}</span></div>`).join('')
+    + `<div class="geo-lg"><span>影響度</span><span>小 ◀ ━━ ▶ 大</span></div>`;
+
+  const menu=[['i-quick','クイック診断','4点で全体像','軽',2],['i-kessan','決算','業績と予想を読む','重',4],['i-chart','チャート','形と節目を確認','中',3],['i-news','ニュース','材料の影響を整理','中',3],['i-hansei','反省','過去の読みを検証','軽',2],['i-market','市場','地合いとリスク','中',3],['i-yogo','用語','言葉を1つ覚える','極軽',1]];
+  $('#menu').innerHTML=menu.map((m,i)=>`<div class="mi"><div class="ic"><svg><use href="#${m[0]}"/></svg><i>M-${String(i+1).padStart(2,'0')}</i></div><b>${m[1]}</b><p>${m[2]}</p><div class="wt"><span>${[1,2,3,4].map(k=>`<u class="${k<=m[4]?'on':''}"></u>`).join('')}</span>${m[3]}</div></div>`).join('');
+}
+
+/* ---------- ゲージ目盛 ---------- */
+function buildGaugeTicks(){
+  $$('.gt').forEach(g=>{
+    const max=+g.dataset.max; g.dataset.ticks.split(',').map(Number).forEach(t=>{
+      const l=(t/max*100)+'%';
+      g.insertAdjacentHTML('beforeend',`<span class="tk" style="left:${l}"></span>`);
+    });
+  });
+}
+
+/* ---------- 数値カウントアップ（初回のみ） ---------- */
+function countUp(root){
+  if(RM) return;
+  root.querySelectorAll('[data-count]').forEach(e=>{
+    const end=+e.dataset.count, t0=performance.now(), dur=1100, start=end*.94;
+    const step=t=>{ const k=Math.min(1,(t-t0)/dur), ev=1-Math.pow(1-k,3); e.textContent=fmt(start+(end-start)*ev); if(k<1) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+    setTimeout(()=>{ e.textContent=fmt(end); }, dur+150);
+  });
+}
+
+/* ---------- ビュー／タブ ---------- */
+const seen={};
+function renderStock(){ if(!$('#quick').hidden){ drawChart(); drawMeters(); drawPerf(); drawSupply(); drawFan(); drawDonut(); } }
+function show(v){
+  $$('.view').forEach(x=>x.classList.toggle('on', x.id==='v-'+v));
+  $$('[data-go]').forEach(x=>{ if(x.classList.contains('rl')||x.classList.contains('k')) x.classList.toggle('on', x.dataset.go===v); });
+  $('#meta-view').textContent = v==='stock' ? '6501 日立製作所' : 'HOME 銘柄ライブラリ';
+  $('#cmd-stock').hidden = v!=='stock'; $('#cmd-home').hidden = v==='stock';
+  const first=!seen[v]; seen[v]=true;
+  document.body.classList.toggle('anim', first && !RM);
+  if(v==='stock') renderStock();
+  if(first) countUp($('#v-'+v));
+  window.scrollTo(0,0);
+}
+function selectTab(t){
+  $$('.tab').forEach(x=>{ const on=x===t; x.classList.toggle('on',on); const d=x.querySelector('.dot'); if(on&&!d) x.insertAdjacentHTML('beforeend','<span class="dot"></span>'); if(!on&&d) d.remove(); });
+  const name=t.dataset.tab, q=name==='クイック診断';
+  $('#quick').hidden=!q; $('#empty').hidden=q;
+  $('#cmd-word').textContent=t.dataset.cmd;
+  $('#an-st').textContent=q?'QUICK':'STANDBY';
+  if(!q){ $('#emp-h').textContent=name; $('#emp-name').textContent=name; $('#emp-cmd').textContent=name; $('#emp-code').textContent='SYS-'+t.querySelector('i').textContent+' / STANDBY'; }
+  else { document.body.classList.remove('anim'); renderStock(); }
+}
+document.addEventListener('click',e=>{
+  const g=e.target.closest('[data-go]'); if(g){ show(g.dataset.go); return; }
+  const t=e.target.closest('.tab'); if(t) selectTab(t);
+});
+document.addEventListener('keydown',e=>{
+  const g=e.target.closest && e.target.closest('tr[data-go]');
+  if(g && (e.key==='Enter'||e.key===' ')){ e.preventDefault(); show(g.dataset.go); }
+});
+/* メーター用の発光フィルタ（共通） */
+(function(){ const s=el('svg',{width:0,height:0,style:'position:absolute','aria-hidden':'true'},document.body); const d=el('defs',null,s);
+  const f=el('filter',{id:'mglow',x:'-30%',y:'-30%',width:'160%',height:'160%'},d); el('feGaussianBlur',{stdDeviation:2,result:'b'},f); const m=el('feMerge',null,f); el('feMergeNode',{in:'b'},m); el('feMergeNode',{in:'SourceGraphic'},m); })();
+
+buildChecklist(); buildHome(); buildGaugeTicks();
+show('stock');
+let rt; window.addEventListener('resize',()=>{ clearTimeout(rt); rt=setTimeout(()=>{ document.body.classList.remove('anim'); if($('#v-stock').classList.contains('on')) renderStock(); },150); });
+if(document.fonts && document.fonts.ready) document.fonts.ready.then(()=>{
+  if(!$('#v-stock').classList.contains('on')) return;
+  /* フォント確定後に寸法だけ取り直す（初回アニメ中なら終わってから） */
+  if(document.body.classList.contains('anim')) setTimeout(()=>{ document.body.classList.remove('anim'); renderStock(); }, 1900);
+  else renderStock();
+});
+})();
+</script>
+</body>
+</html>
