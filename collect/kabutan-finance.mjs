@@ -145,9 +145,10 @@ const EXTRACT = {
   docs(html) {
     // 決算短信PDF（株探の開示ページへのリンク）。日付の新しい順・重複なし
     const seen = new Map();
-    for (const m of html.matchAll(/<a href="(https:\/\/kabutan\.jp\/disclosures\/pdf\/(\d{8})\/[^"]+)"[^>]*>/g)) {
+    // url は株探の閲覧ページ（HTML）。pdf はその中で参照される PDF 本体（tdnet-pdf.kabutan.jp）で、fetch-doc に渡せる
+    for (const m of html.matchAll(/<a href="(https:\/\/kabutan\.jp\/disclosures\/pdf\/(\d{8})\/(\d+)\/?)"[^>]*>/g)) {
       const d = `${m[2].slice(0, 4)}-${m[2].slice(4, 6)}-${m[2].slice(6, 8)}`;
-      if (!seen.has(m[1])) seen.set(m[1], { date: d, url: m[1] });
+      if (!seen.has(m[1])) seen.set(m[1], { date: d, url: m[1], pdf: `https://tdnet-pdf.kabutan.jp/${m[2]}/${m[3]}.pdf` });
     }
     const out = [...seen.values()].sort((a, b) => (a.date < b.date ? 1 : -1));
     if (!out.length) throw new Error('none');

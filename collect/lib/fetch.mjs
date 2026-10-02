@@ -75,6 +75,24 @@ export function createFetcher(options = {}) {
         throw new Error(`JSONとして読めない応答: ${url} 先頭=${t.slice(0, 80)}`);
       }
     },
+    /** バイナリ取得。maxBytes を超えたら例外。返り値 { buffer, contentType, url } */
+    async binary(url, { maxBytes = 20 * 1024 * 1024, accept = '*/*' } = {}) {
+      const res = await request(url, { accept });
+      const contentType = res.headers.get('content-type') ?? '';
+      const len = Number(res.headers.get('content-length') ?? NaN);
+      if (Number.isFinite(len) && len > maxBytes) {
+        await res.body?.cancel().catch(() => {});
+        throw new Error(`サイズ上限超過: ${(len / 1048576).toFixed(1)}MB > ${(maxBytes / 1048576).toFixed(0)}MB（${url}）`);
+      }
+      const chunks = [];
+      let total = 0;
+      for await (const chunk of res.body ?? []) {
+        total += chunk.byteLength;
+        if (total > maxBytes) throw new Error(`サイズ上限超過: ${(maxBytes / 1048576).toFixed(0)}MB を超えました（${url}）`);
+        chunks.push(chunk);
+      }
+      return { buffer: Buffer.concat(chunks.map((c) => Buffer.from(c))), contentType, url: res.url || url };
+    },
     count(host) {
       return hosts.get(host)?.count ?? 0;
     },

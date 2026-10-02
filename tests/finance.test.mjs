@@ -44,7 +44,8 @@ test('日立: 修正履歴（直近は上方）・収益性・財務・CF・PDF�
   assert.deepEqual(f.balance.at(-1), { period: '26.04-06', forecast: false, bps: 1470.31, equityRatio: 43.7, totalAssets: 15041410, equity: 6573758, retainedEarnings: 4833670, deRatio: 0.16, announced: '26/07/29' });
   assert.deepEqual(f.cashflow.at(-1), { period: '2026.03', forecast: false, fcf: 1326508, operating: 1668061, investing: -341553, financing: -971037, cash: 1323480, cashRatio: 8.8 });
   assert.equal(f.docs[0].date, '2026-07-29');
-  assert.match(f.docs[0].url, /^https:\/\/kabutan\.jp\/disclosures\/pdf\/20260729\//);
+  assert.equal(f.docs[0].url, 'https://kabutan.jp/disclosures/pdf/20260729/140120260729501771/');
+  assert.equal(f.docs[0].pdf, 'https://tdnet-pdf.kabutan.jp/20260729/140120260729501771.pdf');
   assert.deepEqual(f.missing, ['通期 2027.03予 1株配']);
 });
 

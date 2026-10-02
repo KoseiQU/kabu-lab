@@ -97,9 +97,9 @@ export function buildKessanDigest({ code, fin, generatedAt = new Date().toISOStr
     minKeep: 2,
   });
   S.push({
-    title: '決算短信PDF（株探の開示リンク、新しい順。tools/fetch-doc.mjs で取得）',
+    title: '決算短信PDF（新しい順。node tools/fetch-doc.mjs <code> <PDFのURL> --name <名前> で取得）',
     head: f.docs ? [] : ['未取得'],
-    items: (f.docs ?? []).map((d) => `- ${d.date} ${d.url}`),
+    items: (f.docs ?? []).map((d) => `- ${d.date} ${d.pdf ?? d.url}`),
     order: 'new-first',
     minKeep: 1,
   });
