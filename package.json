@@ -1,0 +1,12 @@
+{
+  "name": "kabu-lab",
+  "version": "0.1.0",
+  "private": true,
+  "description": "日本株の銘柄分析 兼 勉強ツール（収集スクリプト・検証・ビルド）",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/",
+    "collect": "node collect/run.mjs",
+    "build": "node build.mjs"
+  }
+}
