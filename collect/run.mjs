@@ -1,6 +1,7 @@
 // 入口: node collect/run.mjs <code> [--type quick]
 // 株価(Yahoo)と株探を取得し、指標を計算して data/stocks/<code>/ に prices.json・profile.json・digest.md を書く。
 import { join } from 'node:path';
+import { mkdirSync } from 'node:fs';
 import { fetchPrices, pricesPath } from './prices.mjs';
 import { fetchKabutan, profilePath } from './kabutan.mjs';
 import { computeAll } from './lib/indicators.mjs';
@@ -75,6 +76,8 @@ if (prices || profile) {
   const p = join(dir, 'digest.md');
   writeText(p, digest);
   written.push(`${p} (${Buffer.byteLength(digest)} bytes / 上限 ${DIGEST_LIMIT})`);
+  // 分析JSONの保存先を先に用意しておく（スキル実行時に書き込みで失敗しないように）
+  mkdirSync(join(dir, 'analyses'), { recursive: true });
 }
 
 console.log(`書いたファイル（${code} ${profile?.name ?? ''}）:`);
