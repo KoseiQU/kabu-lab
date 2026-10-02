@@ -265,7 +265,7 @@
     const nm = esc(st.name || st.code);
     return `<tr class="${go ? 'go' : 'lk'}" data-href="${hrefStock(st.code)}" tabindex="0" aria-label="${nm}の${go ? '分析' : '銘柄ページ'}を開く">`
       + `<td><span class="h-cd">${esc(st.code)}</span></td>`
-      + `<td><span class="h-nm">${nm}</span>${go ? '<span class="h-op">OPEN ›</span>' : '<span class="h-op na">未分析 ›</span>'}</td>`
+      + `<td><span class="h-nm" title="${nm}">${nm}</span>${go ? '<span class="h-op">OPEN ›</span>' : '<span class="h-op na">未分析 ›</span>'}</td>`
       + `<td class="r"><span class="h-px">${fmt(q.price, dec)}<small>円</small></span></td>`
       + `<td class="r"><span class="h-ch ${isNum(q.pct) ? (up ? 'up' : 'dn') : ''}">${isNum(q.pct) ? (up ? '▲ ' : '▼ ') + fmtS(q.pct, 2) + '%' : '—'}</span></td>`
       + `<td><div class="h-bd">${warn}${types || '<span class="na">未分析</span>'}</div></td>`

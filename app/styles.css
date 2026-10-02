@@ -463,6 +463,8 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:poin
   .tbl td.jp{white-space:normal; line-height:1.3}
   .rowB{grid-template-columns:minmax(0,1.32fr) minmax(0,1.18fr) minmax(0,1.5fr)}
   .tbl.sm th,.tbl.sm td{padding:2px 0 2px 6px}
+  .h-mr{grid-template-columns:86px 100px minmax(0,1fr) 92px}
+  .h-sp{width:136px}
 }
 
 /* ===== 動き（初回のみ・控えめ） ===== */
@@ -586,3 +588,5 @@ a.rl,a.tab,a.k{text-decoration:none}
 /* チェックリストのセル：3行の項目名＋状態が1440×900の242pxに収まるよう余白を1pxずつ詰める（モックは2px欠けていた） */
 .ck{padding-top:3px; padding-bottom:3px}
 .ck p{margin-top:2px}
+/* 銘柄ライブラリ：長い社名は2行まで（全文は title） */
+.h-nm{display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; min-width:7em}

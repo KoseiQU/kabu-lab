@@ -65,8 +65,9 @@
       if (over) add('① 見出しがはみ出している', (ph.querySelector('h2') || {}).textContent || '');
     });
     // 文字の切れ（はみ出しを隠す枠の中で内容が収まっていない）
-    main.querySelectorAll('.ck, .sc, .vg, .term, .dg, .insight, .srow, .mi').forEach((el) => {
-      if (el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1) add('① 文字が切れている', el.textContent.trim().slice(0, 24));
+    main.querySelectorAll('.ck, .sc, .vg, .term, .dg, .insight, .srow, .mi, .h-mr .cg, .h-mr .vl').forEach((el) => {
+      const tol = getComputedStyle(el).overflowY === 'visible' ? 4 : 1; /* 見える枠は字形のはみ出し（行高1）を許す */
+      if (el.scrollHeight > el.clientHeight + tol || el.scrollWidth > el.clientWidth + 1) add('① 文字が切れている', el.textContent.trim().slice(0, 24));
     });
     main.querySelectorAll('table').forEach((t) => {
       const box = t.parentElement.getBoundingClientRect(), r = t.getBoundingClientRect();
