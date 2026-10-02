@@ -1,0 +1,156 @@
+# KABU LAB 設計書（契約）
+
+実装・改修はすべて本書に従う。**変更は必ず本書を先に更新してから行う。** 本書と `docs/` の編集権はメインセッションのみ。
+
+作成日: 2026-10-03
+
+## 1. 目的
+
+日本株専門の「銘柄分析 兼 勉強ツール」。PC専用。
+AIは売買の正解を当てる装置ではない。複数のシナリオと根拠を示し、利用者が自分で次の展開を考える「相場観」と「変動感覚」を養うための分析・学習ツールである。
+
+## 2. 絶対条件
+
+1. **運用費$0。** 有料API・Claude API従量課金を使わない。Claude Code の中で完結する。
+2. **売買の断定をしない。** 「買い」「売り」「推奨」を画面にも分析文にも出さない。出すのはシナリオ・根拠・崩れる条件・確認すべき点。
+3. **数字には出典を付ける。** 分析ごとに `sources` を必ず持つ。取得できなかった資料は `missing` に書き、画面に「未取得」と明示する。数字の捏造・推測での穴埋めは禁止。
+4. **収集はスクリプト、分析はClaude、表示はアプリ。** Claude は生HTMLを読まず、スクリプトが作る要約（digest）を読む。digest は1銘柄8KB以内。
+5. **グラフ・図解を主役にする。** 数値は図に変換して見せる。文章だけのブロックを作らない。
+6. **file:// で動く。** アプリは `fetch` を使わず、`<script src>` でデータを読む。サーバー不要。
+7. **外部サイトへの配慮。** 1回の実行で1サイト最大4リクエスト、間隔1秒以上、タイムアウト15秒、リトライ1回、User-Agent明示。
+
+## 3. 使い方
+
+```
+/kabu <銘柄名 or コード> [型]
+```
+
+| 型 | 引数 | 中身 | 重さ |
+|---|---|---|---|
+| クイック診断（既定） | 省略 / `クイック` | 4点診断・株価チャート・業績推移・割高割安・シナリオ・需給・チェックリスト・学びノート | 軽 |
+| 決算 | `決算` | 決算短信の5点解説。`決算 3点` で有報・中計も読む | 重 |
+| チャート | `チャート` | サポート／レジスタンス・10項目チェックリストの理由・売買タイミングの考え方 | 中 |
+| ニュース | `ニュース <出来事>` | 出来事の影響度・一時的か長期か・過去事例との比較 | 中 |
+| 反省 | `反省 <購入日> <購入価格>` | 買いタイミングの振り返りと次回のチェックポイント | 軽 |
+| 市場 | `/kabu 市場` | 相場の高い安い・為替・金利・地政学ランキング・今日のニュース5本 | 中 |
+| 用語 | `/kabu 用語 <言葉>` | 用語解説。用語帳に追加 | 極軽 |
+
+実行すると分析結果が保存され、アプリ（`app/index.html`）がその銘柄ページを開く。
+
+## 4. アーキテクチャ
+
+```
+/kabu 日立 →（スキル）
+  ① node collect/run.mjs 6501 --type quick   収集と指標計算（トークン0）
+       → data/stocks/6501/prices.json, profile.json, digest.md
+  ② Claude が digest.md と Web検索で分析 → data/stocks/6501/analyses/2026-10-03-quick.json
+  ③ node tools/validate.mjs <その JSON>      スキーマ検証（不合格なら②を直す）
+  ④ node build.mjs                           data/ 全体 → app/data.js（window.KABU）
+  ⑤ open app/index.html#/stock/6501/quick
+```
+
+### ディレクトリ
+
+```
+kabu-lab/
+├── DESIGN.md
+├── docs/                 正文・スキーマの説明・モック指示書
+├── mocks/                デザインモック（mock-6-final.html が見た目の正）
+├── collect/              収集スクリプト（Node、依存パッケージなし）
+│   ├── run.mjs           入口。型に応じて下を呼び digest.md を書く
+│   ├── prices.mjs        Yahoo chart API（query1.finance.yahoo.com/v8/finance/chart/<code>.T、日足2年）
+│   ├── kabutan.mjs       株探 基本情報（PER・PBR・利回り・時価総額・信用残・業績推移・業種・テーマ）
+│   ├── market.mjs        指数・為替・金利・原油（Yahoo chart API のシンボル）
+│   └── lib/              fetch共通（UA・タイムアウト・リトライ）、indicators.mjs
+├── tools/
+│   ├── validate.mjs      分析JSONのスキーマ検証
+│   └── pdf2text.py       決算PDF → テキスト（pypdf）
+├── schemas/              型ごとの JSON スキーマ
+├── build.mjs             data/ → app/data.js
+├── app/
+│   ├── index.html        アプリ本体
+│   ├── styles.css
+│   ├── app.js            ルーティングと画面
+│   ├── charts.js         SVG描画部品（ローソク足・立体棒・円弧メーター・ゲージ・ドーナツ・扇）
+│   └── data.js           build.mjs の生成物（コミットしない）
+├── data/                 収集・分析結果（コミットする。学習ノートの本体）
+│   ├── stocks/<code>/{profile.json, prices.json, digest.md, analyses/<date>-<type>.json}
+│   ├── market/<date>.json
+│   ├── glossary.json     用語帳
+│   └── notes.json        気づきノート
+├── tests/                node --test
+└── skill/SKILL.md        /kabu スキルの正文（~/.claude/skills/kabu/ へ設置）
+```
+
+### 指標計算（collect/lib/indicators.mjs。機械テスト必須）
+
+移動平均（5・25・75・200日）と乖離率、RSI(14)、出来高の20日平均比、スイング高値・安値（前後8日）、価格帯別出来高（直近250日）、窓（1.5%以上）、ゴールデンクロス／デッドクロスの日付、終値が75日線・200日線を跨いだ日付、52週高値・安値。
+digest.md にはこれらの結果と直近20日の四本値を載せる。チェックリスト10項目の判定はClaudeが digest の数値を根拠に行い、根拠を1文で書く。
+
+## 5. 分析JSON（共通の骨格）
+
+```json
+{
+  "schema": "kabu-analysis@1",
+  "type": "quick",
+  "code": "6501",
+  "name": "日立製作所",
+  "date": "2026-10-01",
+  "price": { "close": 5510, "change": 21, "changePct": 0.38, "asOf": "2026-10-01" },
+  "summary": "一言の要約（60字以内）",
+  "sections": { },
+  "terms": [ { "term": "PER", "def": "株価が1年分の利益の何倍か" } ],
+  "insight": "今回の気づき（1〜2文）",
+  "sources": [ { "title": "株探 日立製作所", "url": "https://kabutan.jp/stock/?code=6501" } ],
+  "missing": [ "事業別利益（決算資料を未取得）" ]
+}
+```
+
+`sections` の中身が型ごとに異なる。quick 型の `sections`：
+
+| キー | 中身 |
+|---|---|
+| `diagnosis` | 4件。`{key: quality/value/supply/trend, label, level(0〜1), verdict, reason}` |
+| `chart` | `{resistance:[{price,label}], support:[{price,label}], pins:[{date,label}]}`。足と移動平均は prices.json から描く |
+| `performance` | `[{period, sales, profit, eps, dividend, forecast}]` 3期分 |
+| `valuation` | `[{key, value, unit, ref, refLabel, max}]`（PER・PBR・PSR） |
+| `segments` | `[{name, profit, margin, note}]`。未取得なら省き `missing` に書く |
+| `scenarios` | 3件。`{kind: bull/base/bear, title, text, target, breakIf}`。基準価格と日付は `price` を使う |
+| `margin` | `[{date, sell, buy, ratio}]` 直近5週 |
+| `checklist` | 10件固定順。`{id, status: done/progress/none, reason}` |
+
+他の型のスキーマは各フェーズの冒頭で本書に追記する。
+
+## 6. 画面
+
+見た目の正は `mocks/mock-6-final.html`（案4の高密度HUD＋業績推移と需給の立体棒グラフ。メーター・株価チャート・ゲージは平面）。配色・フォント・枠・文言の調子はこれに従う。
+
+- **ホーム**（`#/`）：銘柄ライブラリ（表）、市場パネル、地政学、分析メニュー、今日の用語。データがない欄は「未実行」。
+- **銘柄ページ**（`#/stock/<code>/<type>`）：型タブ。同じ型を複数回実行したら日付の切替で履歴を見られる。
+- **用語帳**（`#/glossary`）と**気づきノート**（`#/notes`）：P3。
+- **シナリオの答え合わせ**：過去のシナリオの基準価格・目安と、その後の実際の株価を重ねて表示する。P3。
+- 対応幅 1280〜1920px。横スクロール禁止。最小文字12px、本文コントラスト比4.5:1以上、本文は発光させない。
+
+## 7. フェーズ
+
+| フェーズ | 内容 | 完了条件 | 担当 |
+|---|---|---|---|
+| P1a | データ基盤：収集・指標計算・quickスキーマと検証・build・機械テスト。日立のサンプル分析JSON（モックと同じ中身） | `node --test` 全通過。`node collect/run.mjs 6501` が実データで digest を作る | Opus |
+| P1b | アプリ：ホームと銘柄ページ（quick）を data.js から描画。確定版モックと同じ見た目 | 日立のサンプルで確定版モックと見た目が一致。別銘柄のデータでも崩れない | Opus |
+| P1c | スキル v0 と通し運転。`/kabu` を実銘柄で1本通す | 利用者が実際に `/kabu` を打って触る（縦切りゲート） | メイン |
+| P2 | チャート型・決算型 | 触って確認 | Opus |
+| P3 | ニュース・市場・反省・用語、用語帳・気づきノート・答え合わせ | 触って確認 | Opus |
+| P4 | スキル仕上げ（skill-forge で監査と発動テスト）、起動の入口 | 完成 | メイン |
+
+## 8. 運用ルール
+
+- コミットは小さく。メッセージは `P1a: …` の形。`app/data.js` と `data/**/raw/` はコミットしない。
+- 機械テスト（`node --test`）全通過を全フェーズの品質要件にする。バグを直したら同類を検出するテストを足す。
+- アプリには `window.__KABU_TEST.runAll()` を用意する（全セクションが描画され、SVGパスに NaN がなく、実行後に初期状態へ戻る）。
+- 依存パッケージを増やさない（Node 標準と pypdf のみ）。チャートライブラリ禁止。外部読み込みは Google Fonts のみ。
+
+## 9. 決定の経緯
+
+- 2026-10-02 方式＝Claude Code コマンド型＋専用スキル。出力＝メニュー型（型を省くとクイック診断）。
+- 2026-10-02 モック5案を比較。2026-10-03 デザイン確定＝案4＋立体棒グラフ（`mock-6-final.html`）。
+- 2026-10-03 学習機能（用語帳・気づきノート・シナリオの答え合わせ）を採用。朝のニュースは市場型に含め、定時実行はしない。

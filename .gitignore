@@ -1,0 +1,4 @@
+app/data.js
+data/**/raw/
+.DS_Store
+node_modules/
