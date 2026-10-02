@@ -1127,7 +1127,7 @@ a.rl,a.tab,a.k{text-decoration:none}
 /* P2b：見出し・ラベルの1文字だけの折り返しを避ける */
 .krg .kpl,.krl,.kpt b,.kdr b,.kpmc b,.kih b,.ll b,.crt b,.plh b,.plh .plt,.lsx h3,.kfl,.kbl,.kft td,.kdh b,.tf p,.hnote,.kicc b,.kvl b,.kpd b,.kdoc{text-wrap:pretty}
 /* 学びノート：長い用語（最大20字）でも説明文の列を潰さない（チップは10字前後で折り返す） */
-.chip{white-space:normal; max-width:10.5em; line-height:1.35; padding:4px 8px}
+.chip{white-space:normal; max-width:10.5em; line-height:1.2; padding:4.75px 8px}
 /* チャート型：サポレジ一覧の枠がメインチャートの高さまで伸びたとき、内側も一緒に伸ばす */
 .cv-r2>[data-sec="levels"]{display:flex; flex-direction:column}
 .cv-r2>[data-sec="levels"]>.pi{flex:1; height:auto}
@@ -1135,6 +1135,5 @@ a.rl,a.tab,a.k{text-decoration:none}
 .host.krch.sm{height:96px}
 /* 稼ぎ頭マップ（quick と共通）：長い注記は事業名の下へ回し、事業名を1文字ずつの折り返しにしない */
 .srh{flex-wrap:wrap; row-gap:2px}
-.srh .sn{min-width:min(7em,100%)}
-.srh .yoy{white-space:normal; max-width:100%; line-height:16px}
+.srh .yoy{white-space:normal; max-width:100%}
 .lsn small{text-wrap:balance}
