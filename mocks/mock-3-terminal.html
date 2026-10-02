@@ -1,0 +1,867 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KABU LAB — 案3 トレーディング端末</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+:root{
+  --bg:#0a0a08; --bg2:#121210; --bg3:#1b1a15;
+  --ln:#2c2a23; --ln2:#48453b;
+  --amb:#ffb000; --amb2:#d9981c; --amb3:rgba(255,176,0,.13);
+  --up:#3ddc84; --dn:#ff5b4f;
+  --t1:#e6e2d5; --t2:#aba79b; --t3:#8c897f;
+  --f:"IBM Plex Mono","IBM Plex Sans JP",ui-monospace,Menlo,monospace;
+}
+html{background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--t1);font:400 12.5px/1.5 var(--f);overflow-x:hidden;padding-bottom:50px;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:left}
+p{margin:0;text-wrap:pretty;line-break:strict}
+h3{margin:0}
+.up{color:var(--up)}.dn{color:var(--dn)}.am{color:var(--amb)}.t2{color:var(--t2)}.t3{color:var(--t3)}
+:focus-visible{outline:1px solid var(--amb);outline-offset:-1px}
+.sw{display:inline-block;width:9px;height:9px;margin-right:5px;vertical-align:-1px}
+.ln-sw{display:inline-block;width:16px;height:2px;margin-right:5px;vertical-align:3px}
+.cur{display:inline-block;width:8px;height:15px;background:var(--amb);vertical-align:-3px;animation:blink 1.06s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.cur{animation:none}}
+svg text{font-family:"IBM Plex Mono","IBM Plex Sans JP",monospace;font-size:12px}
+
+/* ===== top command bar ===== */
+.top{position:sticky;top:0;z-index:20;display:flex;height:32px;background:var(--bg);border-bottom:1px solid var(--ln2)}
+.brand{display:flex;align-items:center;gap:12px;padding:0 14px;background:var(--amb);color:#0a0a08;white-space:nowrap}
+.brand b{font-weight:700;letter-spacing:.14em;font-size:13px}
+.brand span{font-size:12px;font-weight:500}
+.cmd{flex:1;min-width:0;display:flex;align-items:center;gap:8px;padding:0 14px;font-size:13px;white-space:nowrap;overflow:hidden}
+.cmd .pr{color:var(--amb);font-weight:600}
+.cmd .hint{color:var(--t3)}
+.cmd .lbl{color:var(--t3);font-size:12px;border:1px solid var(--ln2);padding:0 6px;line-height:18px;margin-right:4px}
+.meta{display:flex;align-items:stretch;font-size:12px;color:var(--t2);white-space:nowrap}
+.meta span{display:flex;align-items:center;gap:8px;padding:0 12px;border-left:1px solid var(--ln)}
+.meta b{color:var(--t1);font-weight:500}
+
+/* ===== bottom: tape + fkeys ===== */
+.bot{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--bg)}
+.tape{height:22px;display:flex;align-items:stretch;overflow:hidden;white-space:nowrap;border-top:1px solid var(--ln2);font-size:12px}
+.tape .lb{flex:none;display:flex;align-items:center;padding:0 10px;background:var(--bg3);color:var(--amb);font-weight:600;border-right:1px solid var(--ln2)}
+.tape .it{display:flex;align-items:center;gap:8px;padding:0 14px;border-right:1px solid var(--ln);color:var(--t2)}
+.tape .it b{color:var(--t1);font-weight:500}
+.fk{height:27px;display:flex;align-items:stretch;border-top:1px solid var(--ln);font-size:12px;white-space:nowrap;overflow:hidden}
+.fk .k{display:flex;align-items:center;gap:7px;padding:0 14px 0 6px;border-right:1px solid var(--ln);color:var(--t2)}
+.fk .k i{font-style:normal;background:var(--bg3);color:var(--amb);padding:0 5px;line-height:17px;font-weight:600;border:1px solid var(--ln2)}
+.fk button.k:hover{color:var(--t1);background:var(--bg2)}
+.fk .k.on{background:var(--amb);color:#0a0a08;font-weight:600}
+.fk .k.on i{background:#0a0a08;color:var(--amb);border-color:#0a0a08}
+.fk .k.off{color:var(--t3)}
+.fk .st{margin-left:auto;display:flex;align-items:center;gap:14px;padding:0 14px;color:var(--t3);border-left:1px solid var(--ln)}
+
+/* ===== panes ===== */
+.view{display:none}.view.on{display:block}
+.g{display:grid;gap:1px;background:var(--ln);border-bottom:1px solid var(--ln)}
+.pn{background:var(--bg);min-width:0;display:flex;flex-direction:column}
+.bh{flex:none;height:19px;display:flex;align-items:center;gap:10px;padding:0 8px;background:var(--amb);color:#0a0a08;font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;line-height:1}
+.bh .k{font-weight:700;letter-spacing:.03em}
+.bh .r{margin-left:auto;font-weight:500}
+.bb{flex:1;min-height:0;padding:8px 10px;display:flex;flex-direction:column}
+.host{position:relative;flex:1;min-height:0}
+.host>svg{position:absolute;left:0;top:0;display:block}
+.lg{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--t2);line-height:18px}
+.lg .rt{margin-left:auto;color:var(--t3)}
+.foot{display:flex;justify-content:space-between;gap:20px;padding:8px 12px 10px;font-size:12px;color:var(--t3);border-bottom:1px solid var(--ln)}
+.foot b{color:var(--t2);font-weight:500}
+
+/* ===== stock: header ===== */
+.s-hd{display:flex;align-items:stretch;border-bottom:1px solid var(--ln);height:54px;white-space:nowrap}
+.s-hd>div{display:flex;flex-direction:column;justify-content:center;padding:0 16px;border-right:1px solid var(--ln)}
+.s-id{flex-direction:row!important;align-items:center;gap:12px;justify-content:flex-start!important}
+.s-code{background:var(--amb);color:#0a0a08;font-weight:700;font-size:15px;padding:3px 7px;line-height:1.2;letter-spacing:.04em}
+.s-nm{font-size:19px;font-weight:700;line-height:1.2}
+.s-mk{font-size:12px;color:var(--t2)}
+.s-lb{font-size:12px;color:var(--t3);line-height:1.3}
+.s-px .vv{display:flex;align-items:baseline;gap:10px;line-height:1.25}
+.s-px .vv b{font-size:22px;font-weight:600;color:var(--amb)}
+.s-px .vv small{font-size:12px;color:var(--t2);margin-left:-8px}
+.s-px .ch{font-size:13px;font-weight:500}
+.s-kv b{font-size:14px;font-weight:500;line-height:1.35}
+.s-hd .fill{flex:1;border-right:0;padding:0}
+.s-tb{display:flex;align-items:stretch;height:27px;border-bottom:1px solid var(--ln);white-space:nowrap}
+.tab{display:flex;align-items:center;gap:7px;padding:0 16px;border-right:1px solid var(--ln);color:var(--t2);font-size:12.5px}
+.tab i{font-style:normal;color:var(--t3);font-size:12px}
+.tab:hover{background:var(--bg2);color:var(--t1)}
+.tab.on{background:var(--amb3);color:var(--amb);box-shadow:inset 0 -2px 0 var(--amb);font-weight:600}
+.tab.on i{color:var(--amb)}
+.s-tb .lg{margin-left:auto;align-items:center;padding:0 14px}
+
+/* ===== stock: grid A ===== */
+.s-ga{grid-template-columns:minmax(0,1.45fr) minmax(0,1fr)}
+.s-rc{display:grid;gap:1px;background:var(--ln);grid-template-rows:auto auto 1fr;min-width:0}
+.s-pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1px;background:var(--ln);min-width:0}
+#chart{min-height:360px;margin:4px 0 6px}
+.s-dv{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--ln);border:1px solid var(--ln)}
+.s-dv>div{background:var(--bg);padding:5px 8px 6px}
+.s-dv .h{display:flex;justify-content:space-between;font-size:12px;color:var(--t2)}
+.s-dv .h b{color:var(--up);font-weight:600}
+.s-dv .tr{position:relative;height:6px;margin-top:4px;background:var(--bg3)}
+.s-dv .tr::before{content:"";position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:var(--t3)}
+.s-dv .tr i{position:absolute;left:50%;top:0;bottom:0;background:var(--up)}
+.s-dv .sc{display:flex;justify-content:space-between;font-size:12px;color:var(--t3);line-height:1.2;margin-top:3px}
+
+/* diag */
+.s-dg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--ln);flex:1}
+.s-dc{background:var(--bg);padding:6px 10px 7px;display:flex;flex-direction:column;min-width:0}
+.s-dt{display:flex;align-items:center;gap:6px;color:var(--t2);font-size:12px}
+.s-dt svg{width:16px;height:16px;color:var(--amb);flex:none}
+.s-dv2{font-size:16px;font-weight:700;color:var(--amb);line-height:1.35;margin-top:2px;white-space:nowrap}
+.s-mt{position:relative;display:grid;grid-template-columns:repeat(10,1fr);gap:2px;height:10px;margin-top:8px}
+.s-mt i{background:var(--bg3);border:1px solid var(--ln2)}
+.s-mt i.f{background:var(--amb);border-color:var(--amb)}
+.s-mt b{position:absolute;top:-7px;width:0;height:0;border:4px solid transparent;border-top:5px solid var(--t1);transform:translateX(-50%)}
+.s-ru{display:block;width:100%;height:5px;margin-top:2px}
+.s-me{display:flex;justify-content:space-between;font-size:12px;color:var(--t3);line-height:1.4}
+.s-dc p{margin-top:4px;font-size:12px;line-height:1.45;color:var(--t1)}
+
+/* value gauges */
+.s-gs{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));column-gap:22px;padding:7px 14px 4px!important}
+.s-gg{display:flex;flex-direction:column;min-width:0}
+.s-gg .hd{display:flex;align-items:baseline;gap:10px}
+.s-gg .ref{font-size:12px;color:var(--t2);line-height:1.4;min-height:17px;white-space:nowrap}
+.s-gg .nm{color:var(--t2);font-weight:600;font-size:12px}
+.s-gg .vl{font-size:16px;font-weight:600;color:var(--amb);white-space:nowrap}
+.s-gg .vl small{font-size:12px;color:var(--t2);font-weight:400;margin-left:1px}
+.s-gt{position:relative;height:40px;margin:0 6px 0 4px}
+.s-gt .tr{position:absolute;left:0;right:0;top:15px;height:8px;background:var(--bg3);border:1px solid var(--ln2)}
+.s-gt .fl{position:absolute;left:0;top:15px;height:8px;background:linear-gradient(90deg,rgba(255,176,0,.25),var(--amb))}
+.s-gt .mk{position:absolute;top:11px;width:3px;height:16px;background:var(--amb);transform:translateX(-50%)}
+.s-gt .rf{position:absolute;top:2px;height:25px;border-left:1px dashed var(--t1)}
+.s-gt .rf b{position:absolute;left:5px;top:-2px;font-size:12px;font-weight:400;color:var(--t1);white-space:nowrap;line-height:1.2;background:var(--bg);padding-right:3px}
+.s-gt .tk{position:absolute;top:24px;width:1px;height:4px;background:var(--t3)}
+.s-gt .tl{position:absolute;top:27px;font-size:12px;line-height:1.2;color:var(--t3);transform:translateX(-50%)}
+
+/* perf / seg */
+#perf{min-height:96px;margin:0 0 4px}
+.s-tbl{width:100%;border-collapse:collapse;font-size:12px;line-height:1.3}
+.s-tbl th,.s-tbl td{padding:1px 4px;border-top:1px solid var(--ln);text-align:right;white-space:nowrap}
+.s-tbl th{color:var(--t3);font-weight:500}
+.s-tbl th:first-child,.s-tbl td:first-child{text-align:left;color:var(--t2)}
+.s-tbl td.wr{white-space:normal;line-height:1.3}
+.s-tbl .fc{color:var(--amb)}
+.s-strip{display:flex;height:12px;gap:1px;margin:2px 0 6px}
+.s-strip i{display:flex;align-items:center;justify-content:center;font-style:normal;font-size:12px;color:#0a0a08;font-weight:700;line-height:1}
+.s-sg{display:flex;flex-direction:column;gap:5px}
+.s-sgh{display:grid;grid-template-columns:minmax(0,1fr) 72px 50px;font-size:12px;color:var(--t3);border-bottom:1px solid var(--ln);padding-bottom:2px}
+.s-sgh span{text-align:right}
+.s-sr .nm{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--t1);line-height:1.35;white-space:nowrap;overflow:hidden}
+.s-sr .nm em{font-style:normal;flex:none;width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;color:#0a0a08;font-weight:700}
+.s-sr .nm .yoy{margin-left:auto;color:var(--up);border:1px solid rgba(61,220,132,.5);padding:0 4px;line-height:15px}
+.s-sr .rw{display:grid;grid-template-columns:minmax(0,1fr) 72px 50px;align-items:center;margin-top:2px}
+.s-sr .br{height:9px;background:var(--bg3);position:relative}
+.s-sr .br i{position:absolute;left:0;top:0;bottom:0}
+.s-sr .v{text-align:right;font-size:12.5px;font-weight:500;white-space:nowrap}
+.s-sr .v small{font-size:12px;color:var(--t2)}
+.s-sr .mg{text-align:right;font-size:12.5px;color:var(--amb);position:relative;padding-bottom:3px}
+.s-sr .mg::after{content:"";position:absolute;right:0;bottom:0;height:2px;width:calc(var(--m)*100%);background:var(--amb2)}
+
+/* ===== stock: grid B ===== */
+.s-gb{grid-template-columns:minmax(0,1.85fr) minmax(0,1.1fr) minmax(0,1.45fr)}
+.s-scw{display:grid;grid-template-columns:minmax(210px,.82fr) minmax(0,1.18fr);gap:12px;flex:1;min-height:236px}
+#fan{min-height:220px}
+.s-scl{display:flex;flex-direction:column;gap:1px;background:var(--ln)}
+.s-sc{background:var(--bg);flex:1;padding:6px 10px 6px 12px;border-left:3px solid;display:flex;flex-direction:column;justify-content:center;gap:2px}
+.s-sc.u{border-left-color:var(--up)}.s-sc.m{border-left-color:var(--t2)}.s-sc.d{border-left-color:var(--dn)}
+.s-sc .tg{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--t3)}
+.s-sc .tg b{font-size:12.5px;padding:0 6px;line-height:18px;color:#0a0a08}
+.s-sc.u .tg b{background:var(--up)}.s-sc.m .tg b{background:var(--t2)}.s-sc.d .tg b{background:var(--dn)}
+.s-sc p{font-size:12.5px;line-height:1.45}
+.s-sc p.bk{font-size:12px;color:var(--t2)}
+.s-sc p.bk em{font-style:normal;color:var(--t1);border-bottom:1px dotted var(--t3)}
+#supply{min-height:128px;margin:2px 0 4px}
+.s-tbl.sm td,.s-tbl.sm th{padding:1px 2px}
+.s-cks{display:flex;align-items:center;gap:12px;font-size:12px;color:var(--t2);margin-bottom:8px;flex-wrap:wrap}
+.s-cks .bar{display:flex;gap:2px}
+.s-cks .bar i{width:12px;height:12px}
+.s-cks b{font-weight:600}
+.ico{display:inline-block;width:10px;height:10px;flex:none}
+.ico.d{background:var(--up)}
+.ico.p{width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:10px solid var(--amb)}
+.ico.x{border:1.5px solid var(--t3)}
+.s-ckg{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;background:var(--ln);border:1px solid var(--ln);flex:1}
+.s-ck{background:var(--bg);padding:6px 7px 6px;display:flex;flex-direction:column;gap:3px;border-top:2px solid var(--ln2);min-width:0}
+.s-ck .hh{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--t3)}
+.s-ck p{font-size:12px;line-height:1.4;flex:1}
+.s-ck .st{font-size:12px;font-weight:600}
+.s-ck.d{border-top-color:var(--up);background:linear-gradient(rgba(61,220,132,.07),rgba(61,220,132,0) 70%)}
+.s-ck.d .st{color:var(--up)}
+.s-ck.p{border-top-color:var(--amb);background:linear-gradient(rgba(255,176,0,.07),rgba(255,176,0,0) 70%)}
+.s-ck.p .st{color:var(--amb)}
+.s-ck.x p,.s-ck.x .st{color:var(--t3)}
+
+/* notes */
+.s-nt{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) minmax(0,1.5fr);gap:1px;background:var(--ln)}
+.s-nt>div{background:var(--bg);padding:9px 12px;display:flex;gap:10px;align-items:flex-start}
+.chip{flex:none;border:1px solid var(--amb);color:var(--amb);font-weight:600;font-size:12px;padding:0 6px;line-height:19px;white-space:nowrap}
+.s-nt p{font-size:12.5px;line-height:1.5}
+.s-nt .aha{background:var(--bg2)}
+.s-nt .aha .chip{background:var(--amb);color:#0a0a08}
+.s-nt .aha p{color:var(--t1);font-size:13px}
+
+/* empty */
+.s-emp{flex-direction:row!important;align-items:center;gap:40px;padding:40px 48px!important;min-height:560px}
+.s-emp svg{width:380px;flex:none}
+.s-emp h3{font-size:20px;font-weight:700;margin:6px 0 8px}
+.s-emp h3 span{color:var(--amb)}
+.s-emp p{font-size:13px;color:var(--t2);max-width:520px}
+.s-cmdl{margin-top:16px;border:1px solid var(--ln2);padding:7px 12px;font-size:13px;display:inline-flex;gap:8px;align-items:center;background:var(--bg2)}
+
+/* ===== home ===== */
+.h-ga{grid-template-columns:minmax(0,1.55fr) minmax(0,1fr)}
+.h-rc{display:grid;gap:1px;background:var(--ln);grid-template-rows:auto 1fr;min-width:0}
+.h-tbl{width:100%;border-collapse:collapse}
+.h-tbl th{font-size:12px;color:var(--t3);font-weight:500;text-align:left;padding:6px 10px;border-bottom:1px solid var(--ln2);white-space:nowrap}
+.h-tbl th.r,.h-tbl td.r{text-align:right}
+.h-tbl td{padding:0 10px;height:85px;border-bottom:1px solid var(--ln);vertical-align:middle}
+.h-tbl tr.go{cursor:pointer}
+.h-tbl tr.go:hover td{background:var(--bg2)}
+.h-tbl tr.go td:first-child{box-shadow:inset 3px 0 0 var(--amb)}
+.h-cd{color:var(--amb);font-weight:600;font-size:13px}
+.h-nm{font-size:14px;font-weight:700;white-space:nowrap}
+.h-op{display:block;font-size:12px;color:var(--amb);font-weight:500}
+.h-px{font-size:15px;font-weight:600;white-space:nowrap}
+.h-px small{font-size:12px;color:var(--t2);font-weight:400;margin-left:2px}
+.h-ch{font-size:13px;font-weight:500;white-space:nowrap}
+.h-bd{display:flex;flex-wrap:wrap;gap:4px;max-width:270px}
+.h-bd span{border:1px solid var(--ln2);color:var(--t1);padding:0 6px;font-size:12px;line-height:19px;white-space:nowrap}
+.h-bd span.w{border-color:var(--dn);color:var(--dn);font-weight:600}
+.h-bd span.w i{font-style:normal;background:var(--dn);color:#0a0a08;padding:0 4px;margin-right:5px;margin-left:-3px}
+.h-dt{font-size:13px;color:var(--t1)}
+.h-sp{display:block;width:150px;height:38px}
+.h-tf{display:flex;justify-content:space-between;padding:8px 10px;font-size:12px;color:var(--t3);margin-top:auto;border-top:1px solid var(--ln)}
+.h-mk{display:flex;flex-direction:column}
+.h-mr{display:grid;grid-template-columns:96px 96px minmax(0,1fr) 120px;align-items:center;column-gap:10px;padding:0 2px;height:42px;border-bottom:1px solid var(--ln)}
+.h-mr:last-child{border-bottom:0}
+.h-mr .nm{color:var(--t2);font-size:12.5px;white-space:nowrap}
+.h-mr .vl{text-align:right;font-size:15px;font-weight:600;white-space:nowrap}
+.h-mr .vl small{font-size:12px;color:var(--t2);font-weight:400}
+.h-mr .cg{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.h-pm{position:relative;height:8px;background:var(--bg3)}
+.h-pm::before{content:"";position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:var(--t3)}
+.h-pm i{position:absolute;left:50%;top:0;bottom:0;min-width:2px}
+.h-fx{position:relative;height:16px;font-size:12px;color:var(--t3);display:flex;justify-content:space-between;align-items:center;line-height:1}
+.h-fx::before{content:"";position:absolute;left:30px;right:30px;top:50%;height:1px;background:var(--ln2)}
+.h-fx i{position:absolute;top:50%;width:8px;height:8px;background:var(--amb);transform:translate(-50%,-50%) rotate(45deg)}
+.h-pg{position:relative;height:16px}
+.h-pg .tr{position:absolute;left:0;right:0;top:5px;height:6px;background:var(--bg3)}
+.h-pg .fl{position:absolute;left:0;top:5px;height:6px;background:var(--amb)}
+.h-pg .av{position:absolute;top:1px;height:14px;border-left:1px dashed var(--t1)}
+.h-geo{display:flex;flex-direction:column}
+.h-gr{display:grid;grid-template-columns:22px minmax(0,1fr) 78px 80px;align-items:center;column-gap:10px;height:38px;border-bottom:1px solid var(--ln)}
+.h-gr:last-child{border-bottom:0}
+.h-gr .rk{color:var(--t3);font-size:12px}
+.h-gr .nm{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.h-gr .st{color:var(--amb);letter-spacing:1px;font-size:12.5px;white-space:nowrap}
+.h-gr .st s{text-decoration:none;color:var(--ln2)}
+.h-gr .sg{display:grid;grid-template-columns:repeat(5,1fr);gap:2px;height:10px}
+.h-gr .sg i{background:var(--bg3);border:1px solid var(--ln2)}
+.h-gr .sg i.on{background:var(--amb);border-color:var(--amb)}
+.h-gr .sg.hi i.on{background:var(--dn);border-color:var(--dn)}
+.h-gb{grid-template-columns:minmax(0,2.7fr) minmax(0,1fr)}
+.h-mn{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px;background:var(--ln);border:1px solid var(--ln);flex:1}
+.h-mi{background:var(--bg);padding:16px 12px 14px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.h-mi svg{width:28px;height:28px;color:var(--amb)}
+.h-mi b{font-size:14.5px;font-weight:700;margin-top:10px}
+.h-mi p{font-size:12.5px;color:var(--t2);flex:1;min-height:40px}
+.h-wt{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--t1);margin-top:6px}
+.h-wt u{display:flex;gap:2px}
+.h-wt u i{width:9px;height:9px;border:1px solid var(--ln2);background:var(--bg3)}
+.h-wt u i.on{background:var(--amb);border-color:var(--amb)}
+.h-tm{display:flex;flex-direction:column;gap:10px;justify-content:center;flex:1;padding:4px 4px}
+.h-tm .big{font-size:30px;font-weight:700;color:var(--amb);line-height:1;letter-spacing:.04em}
+.h-tm p{font-size:13.5px;line-height:1.6}
+.h-tm .tl{font-size:12px;color:var(--t3)}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-q" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 21h18M5 21V10l5-3v14M10 21V4l8 4v13M14 11h1M14 14h1M14 17h1"/></symbol>
+    <symbol id="i-p" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12.5L12.5 3H21v8.5L11.5 21z"/><rect x="15" y="6" width="3" height="3"/></symbol>
+    <symbol id="i-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3v17M6 21h12M4 7h16M4 7l-2.5 6h5zM20 7l-2.5 6h5z"/></symbol>
+    <symbol id="i-t" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 18l6-6 4 4 8-8M15 8h6v6"/></symbol>
+    <symbol id="i-quick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></symbol>
+    <symbol id="i-kessan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 3h10l4 4v14H5zM15 3v4h4M8.5 18v-3M12 18v-6M15.5 18v-4"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M7 3v18M5 8h4v7H5zM17 3v16M15 6h4v8h-4z"/></symbol>
+    <symbol id="i-news" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 5h14v15H5a2 2 0 0 1-2-2zM17 9h4v9a2 2 0 0 1-4 0M6.5 9h7M6.5 12.5h7M6.5 16h4"/></symbol>
+    <symbol id="i-hansei" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 3v5h5M12 8v4l3 2"/></symbol>
+    <symbol id="i-market" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.3 3 14.7 0 18M12 3c-3 3.3-3 14.7 0 18"/></symbol>
+    <symbol id="i-yogo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H20v15H5.5A1.5 1.5 0 0 0 4 19.5zM4 19.5A1.5 1.5 0 0 0 5.5 21H20v-3M8 7h8M8 10.5h6"/></symbol>
+  </defs>
+</svg>
+
+<header class="top">
+  <div class="brand"><b>KABU LAB</b><span>銘柄分析 × 学習ノート</span></div>
+  <div class="cmd" aria-label="コマンド入力（見た目のみ）">
+    <span class="lbl">CMD</span><span class="pr">&gt;</span>
+    <span id="cmd-stock">/kabu 日立 <span id="cmd-word">クイック</span><i class="cur"></i></span>
+    <span id="cmd-home" hidden><i class="cur"></i><span class="hint">/kabu 日立 決算</span></span>
+  </div>
+  <div class="meta"><span>VIEW <b id="meta-view">6501 日立製作所</b></span><span>DATE <b>2026-10-01</b></span></div>
+</header>
+
+<main>
+<!-- ================= STOCK ================= -->
+<section class="view on" id="v-stock" aria-label="銘柄ページ">
+  <div class="s-hd">
+    <div class="s-id"><span class="s-code">6501</span><div><div class="s-nm">日立製作所</div><div class="s-mk">東証プライム・電気機器・日経225採用</div></div></div>
+    <div class="s-px"><div class="s-lb">株価 · 10月1日終値</div><div class="vv"><b>5,510</b><small>円</small><span class="ch up">前日比 ▲ +21円 / +0.38%</span></div></div>
+    <div class="s-kv"><span class="s-lb">時価総額</span><b>24兆9,909億円</b></div>
+    <div class="s-kv"><span class="s-lb">最低購入額</span><b>55万1,000円</b></div>
+    <div class="fill"></div>
+  </div>
+  <nav class="s-tb" aria-label="分析の型">
+    <button class="tab on" data-tab="クイック診断"><i>T1</i>クイック診断</button>
+    <button class="tab" data-tab="決算"><i>T2</i>決算</button>
+    <button class="tab" data-tab="チャート"><i>T3</i>チャート</button>
+    <button class="tab" data-tab="ニュース"><i>T4</i>ニュース</button>
+    <button class="tab" data-tab="反省"><i>T5</i>反省</button>
+    <div class="lg"><span>凡例</span><span><i class="sw" style="background:var(--up)"></i>上昇</span><span><i class="sw" style="background:var(--dn)"></i>下落</span><span><i class="sw" style="background:var(--amb)"></i>評価・注目値</span></div>
+  </nav>
+
+  <div id="quick">
+    <div class="g s-ga">
+      <!-- ② chart -->
+      <section class="pn">
+        <div class="bh"><span class="k">[02] PRICE&nbsp; 6501.T</span><span>株価チャート · 日足</span><span class="r">2026/04/02–10/01 · 122本</span></div>
+        <div class="bb">
+          <div class="lg">
+            <span><i class="ln-sw" style="background:var(--amb)"></i>25日線 <b class="am">5,387</b></span>
+            <span><i class="ln-sw" style="background:#cfc9b6"></i>75日線 <b>5,117</b></span>
+            <span><i class="sw" style="background:repeating-linear-gradient(45deg,#8c897f 0 1px,transparent 1px 3px);border:1px solid #8c897f"></i>レジスタンス帯 5,830円（8月14日高値）</span>
+            <span><i class="sw" style="background:repeating-linear-gradient(45deg,#8c897f 0 1px,transparent 1px 3px);border:1px solid #8c897f"></i>サポート帯 5,040円（9月11日安値）</span>
+          </div>
+          <div class="host" id="chart"></div>
+          <div class="s-dv" aria-label="乖離率">
+            <div><div class="h"><span>乖離率 5日線</span><b>+0.12%</b></div><div class="tr"><i style="width:0.6%"></i></div><div class="sc"><span>−10%</span><span>0</span><span>+10%</span></div></div>
+            <div><div class="h"><span>乖離率 25日線</span><b>+2.29%</b></div><div class="tr"><i style="width:11.45%"></i></div><div class="sc"><span>−10%</span><span>0</span><span>+10%</span></div></div>
+            <div><div class="h"><span>乖離率 75日線</span><b>+7.68%</b></div><div class="tr"><i style="width:38.4%"></i></div><div class="sc"><span>−10%</span><span>0</span><span>+10%</span></div></div>
+            <div><div class="h"><span>乖離率 200日線</span><b>+9.13%</b></div><div class="tr"><i style="width:45.65%"></i></div><div class="sc"><span>−10%</span><span>0</span><span>+10%</span></div></div>
+          </div>
+        </div>
+      </section>
+
+      <div class="s-rc">
+        <!-- ① diag -->
+        <section class="pn">
+          <div class="bh"><span class="k">[01] DIAG</span><span>4点診断</span><span class="r">評価メーター</span></div>
+          <div class="s-dg">
+            <div class="s-dc"><div class="s-dt"><svg><use href="#i-q"/></svg>会社の質</div><div class="s-dv2">高</div><div class="s-mt" data-v=".86"></div><svg class="s-ru"></svg><div class="s-me"><span>低</span><span>高</span></div><p>3期連続の増収増益</p></div>
+            <div class="s-dc"><div class="s-dt"><svg><use href="#i-p"/></svg>値段</div><div class="s-dv2">やや高い</div><div class="s-mt" data-v=".7"></div><svg class="s-ru"></svg><div class="s-me"><span>安い</span><span>高い</span></div><p>PER 27.3倍・PBR 3.73倍。成長を先に織り込んだ水準</p></div>
+            <div class="s-dc"><div class="s-dt"><svg><use href="#i-s"/></svg>需給</div><div class="s-dv2">中立</div><div class="s-mt" data-v=".5"></div><svg class="s-ru"></svg><div class="s-me"><span>売り優勢</span><span>買い優勢</span></div><p>信用倍率 7.56倍。買い残は2週間で60万株減</p></div>
+            <div class="s-dc"><div class="s-dt"><svg><use href="#i-t"/></svg>流れ</div><div class="s-dv2">上昇トレンド</div><div class="s-mt" data-v=".88"></div><svg class="s-ru"></svg><div class="s-me"><span>下降</span><span>上昇</span></div><p>株価は5日・25日・75日・200日線すべての上</p></div>
+          </div>
+        </section>
+        <!-- ④ value -->
+        <section class="pn">
+          <div class="bh"><span class="k">[04] VALUE</span><span>割高・割安ゲージ</span><span class="r">◀ 割安寄り ｜ 割高寄り ▶</span></div>
+          <div class="bb s-gs">
+            <div class="s-gg"><div class="hd"><span class="nm">PER</span><span class="vl">27.3<small>倍</small></span></div><span class="ref">日経平均 16.95倍と比較</span>
+              <div class="s-gt" data-max="40" data-ticks="0,10,20,30,40"><span class="tr"></span><span class="fl" style="width:68.25%"></span><span class="rf" style="left:42.375%"><b>16.95</b></span><span class="mk" style="left:68.25%"></span></div></div>
+            <div class="s-gg"><div class="hd"><span class="nm">PBR</span><span class="vl">3.73<small>倍</small></span></div><span class="ref">1倍＝解散価値</span>
+              <div class="s-gt" data-max="5" data-ticks="0,1,2,3,4,5"><span class="tr"></span><span class="fl" style="width:74.6%"></span><span class="rf" style="left:20%"><b>1</b></span><span class="mk" style="left:74.6%"></span></div></div>
+            <div class="s-gg"><div class="hd"><span class="nm">PSR</span><span class="vl">2.10<small>倍</small></span></div><span class="ref"></span>
+              <div class="s-gt" data-max="5" data-ticks="0,1,2,3,4,5"><span class="tr"></span><span class="fl" style="width:42%"></span><span class="mk" style="left:42%"></span></div></div>
+                      </div>
+        </section>
+        <div class="s-pair">
+          <!-- ③ perf -->
+          <section class="pn">
+            <div class="bh"><span class="k">[03] PERF</span><span>業績推移</span><span class="r">億円</span></div>
+            <div class="bb">
+              <div class="lg"><span><i class="sw" style="background:#5c5a52"></i>売上高</span><span><i class="ln-sw" style="background:var(--amb)"></i>最終利益</span><span><i class="sw" style="border:1px dashed var(--amb)"></i>予想</span></div>
+              <div class="host" id="perf"></div>
+              <table class="s-tbl">
+                <tr><th>決算期</th><th>2025.3</th><th>2026.3</th><th class="fc">2027.3予</th></tr>
+                <tr><td>売上高(億円)</td><td>97,833</td><td>105,867</td><td class="fc">117,000</td></tr>
+                <tr><td>最終利益(億円)</td><td>6,157</td><td>8,023</td><td class="fc">9,000</td></tr>
+                <tr><td>1株利益(円)</td><td>133.9</td><td>176.8</td><td class="fc">202.2</td></tr>
+                <tr><td>1株配当(円)</td><td>43</td><td>50</td><td class="fc wr">中間28・<wbr>期末未定</td></tr>
+              </table>
+            </div>
+          </section>
+          <!-- ⑤ segments -->
+          <section class="pn">
+            <div class="bh"><span class="k">[05] SEGMENT</span><span>稼ぎ頭マップ</span><span class="r">事業別</span></div>
+            <div class="bb">
+              <div class="s-strip" id="strip" aria-hidden="true"></div>
+              <div class="s-sgh"><span style="text-align:left">事業 / 利益額</span><span>利益(億円)</span><span>利益率</span></div>
+              <div class="s-sg" id="seg"></div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <div class="g s-gb">
+      <!-- ⑥ scenario -->
+      <section class="pn">
+        <div class="bh"><span class="k">[06] SCENARIO</span><span>3つのシナリオ</span><span class="r">起点 5,510円</span></div>
+        <div class="bb">
+          <div class="s-scw">
+            <div class="host" id="fan"></div>
+            <div class="s-scl">
+              <div class="s-sc u"><div class="tg"><b>強気</b><span>BULL</span></div><p>送電とAI需要が続き上方修正が重なる。目安 5,830円の高値更新。</p><p class="bk"><em>崩れる条件</em>＝米IT大手のAI投資減速</p></div>
+              <div class="s-sc m"><div class="tg"><b>中立</b><span>RANGE</span></div><p>5,040〜5,830円のレンジ。</p><p class="bk"><em>崩れる条件</em>＝円高が進み想定レート160円を大きく下回る</p></div>
+              <div class="s-sc d"><div class="tg"><b>弱気</b><span>BEAR</span></div><p>中東情勢の悪化で大型案件が遅れる。目安 75日線 5,117円割れ。</p><p class="bk"><em>崩れる条件</em>＝受注の伸びが決算で確認され続ける</p></div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <!-- ⑦ supply -->
+      <section class="pn">
+        <div class="bh"><span class="k">[07] SUPPLY</span><span>需給 · 信用残</span><span class="r">千株</span></div>
+        <div class="bb">
+          <div class="lg"><span><i class="sw" style="background:rgba(255,176,0,.6)"></i>買い残</span><span><i class="sw" style="background:repeating-linear-gradient(45deg,#aba79b 0 1.5px,transparent 1.5px 3px)"></i>売り残</span><span><i class="ln-sw" style="background:var(--t1)"></i>倍率</span></div>
+          <div class="host" id="supply"></div>
+          <table class="s-tbl sm">
+            <tr><th>日付</th><th>08/28</th><th>09/04</th><th>09/11</th><th>09/18</th><th class="fc">09/25</th></tr>
+            <tr><td>売り残</td><td>703.6</td><td>511.5</td><td>362.2</td><td>442.3</td><td class="fc">465.5</td></tr>
+            <tr><td>買い残</td><td>3,824.2</td><td>3,945.4</td><td>4,101.6</td><td>3,678.2</td><td class="fc">3,518.8</td></tr>
+            <tr><td>倍率</td><td>5.44</td><td>7.71</td><td>11.32</td><td>8.32</td><td class="fc">7.56</td></tr>
+          </table>
+        </div>
+      </section>
+      <!-- ⑧ checklist -->
+      <section class="pn">
+        <div class="bh"><span class="k">[08] CHECK</span><span>チャート型チェックリスト</span><span class="r">10項目</span></div>
+        <div class="bb">
+          <div class="s-cks"><span class="bar" id="ckbar"></span><span><i class="ico d"></i> 完成済み<b class="up">5</b></span><span><i class="ico p"></i> 進行中<b class="am">2</b></span><span><i class="ico x"></i> なし<b>3</b></span></div>
+          <div class="s-ckg" id="ckg"></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ⑨ notes -->
+    <div class="g">
+      <section class="pn">
+        <div class="bh"><span class="k">[09] NOTE</span><span>学びノート</span><span class="r">用語 3 · 気づき 1</span></div>
+        <div class="s-nt">
+          <div><span class="chip">PER</span><p>株価が1年分の利益の何倍か</p></div>
+          <div><span class="chip">信用倍率</span><p>借金して買っている株数 ÷ 空売りの株数。高いと将来の売り圧力</p></div>
+          <div><span class="chip">乖離率</span><p>移動平均線からどれだけ離れているか。±10%超は過熱の目安</p></div>
+          <div class="aha"><span class="chip">今回の気づき</span><p>「PER 27倍は割高ではなく、成長を先に織り込んだ値段。成長が鈍ると下がりやすい」</p></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div id="empty" hidden>
+    <div class="g">
+      <section class="pn">
+        <div class="bh"><span class="k">[<span id="emp-k">T2</span>] STANDBY</span><span id="emp-h">決算</span><span class="r">STATUS: 未実行</span></div>
+        <div class="bb s-emp">
+          <svg viewBox="0 0 380 240" aria-hidden="true">
+            <g fill="none" stroke="#48453b" stroke-dasharray="3 4">
+              <rect x="1" y="1" width="220" height="150"/><rect x="229" y="1" width="150" height="46"/><rect x="229" y="55" width="150" height="40"/><rect x="229" y="103" width="72" height="48"/><rect x="307" y="103" width="72" height="48"/>
+              <rect x="1" y="159" width="170" height="54"/><rect x="179" y="159" width="80" height="54"/><rect x="267" y="159" width="112" height="54"/><rect x="1" y="221" width="378" height="18"/>
+            </g>
+            <rect x="1" y="1" width="220" height="12" fill="#ffb000"/>
+            <text x="111" y="82" text-anchor="middle" style="fill:#8c897f;font-size:12px;letter-spacing:.2em">NO DATA</text>
+          </svg>
+          <div>
+            <span class="t3">MODULE STANDBY</span>
+            <h3><span id="emp-name">決算</span>は未実行です</h3>
+            <p>この型の分析はまだ走らせていません。実行すると、ここに図解つきの結果が並びます。</p>
+            <div class="s-cmdl"><span class="am">&gt;</span>/kabu 日立 <span id="emp-cmd">決算</span><i class="cur"></i></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+  <div class="foot"><span>出典：<b>株探・Yahoo!ファイナンス・日立IR</b></span><span>本ツールは学習用の分析であり、売買の推奨ではありません</span></div>
+</section>
+
+<!-- ================= HOME ================= -->
+<section class="view" id="v-home" aria-label="ホーム（銘柄ライブラリ）">
+  <div class="g h-ga">
+    <section class="pn">
+      <div class="bh"><span class="k">[H1] LIBRARY</span><span>銘柄ライブラリ · 分析済み</span><span class="r">5 銘柄</span></div>
+      <table class="h-tbl">
+        <thead><tr><th>コード</th><th>社名</th><th class="r">株価</th><th class="r">前日比</th><th>実施済みの型</th><th>最終分析日</th><th>推移</th></tr></thead>
+        <tbody id="lib"></tbody>
+      </table>
+      <div class="h-tf"><span>行を選ぶと銘柄ページを開く（6501）</span><span>上昇 <b class="up">■</b> 下落 <b class="dn">■</b></span></div>
+    </section>
+    <div class="h-rc">
+      <section class="pn">
+        <div class="bh"><span class="k">[H2] MARKET</span><span>市場パネル</span><span class="r">2026-10-01</span></div>
+        <div class="bb h-mk" id="mkt"></div>
+      </section>
+      <section class="pn">
+        <div class="bh"><span class="k">[H3] GEO RISK</span><span>地政学リスク</span><span class="r">影響度 ★5段階</span></div>
+        <div class="bb h-geo" id="geo"></div>
+      </section>
+    </div>
+  </div>
+  <div class="g h-gb">
+    <section class="pn">
+      <div class="bh"><span class="k">[H4] MENU</span><span>分析メニュー</span><span class="r">型 7種 · 重さ</span></div>
+      <div class="bb"><div class="h-mn" id="menu"></div></div>
+    </section>
+    <section class="pn">
+      <div class="bh"><span class="k">[H5] TERM</span><span>今日の用語</span><span class="r">極軽</span></div>
+      <div class="bb"><div class="h-tm"><span class="tl">TERM OF THE DAY</span><span class="big">PER</span><p>株価が1年分の利益の何倍か。高いほど成長を先に織り込んで買われている</p></div></div>
+    </section>
+  </div>
+  <div class="foot"><span>出典：<b>株探・Yahoo!ファイナンス・日立IR</b></span><span>本ツールは学習用の分析であり、売買の推奨ではありません</span></div>
+</section>
+</main>
+
+<footer class="bot">
+  <div class="tape" aria-label="ティッカー">
+    <span class="lb">MKT</span>
+    <span class="it">日経平均 <b>68,956.72</b><span class="up">▲ +2,203.00 / +3.30%</span></span>
+    <span class="it">TOPIX <b>4,111.65</b><span class="up">▲ +0.07%</span></span>
+    <span class="it">ドル円 <b>158.40</b><span>円安方向</span></span>
+    <span class="it">予想PER <b>16.95倍</b><span>5年平均 15.47倍</span></span>
+    <span class="it">米10年金利 <b>5.28%</b></span>
+    <span class="it">ブレント原油 <b>98ドル</b></span>
+    <span class="it">6501 日立製作所 <b>5,510</b><span class="up">▲ +0.38%</span></span>
+    <span class="it">8001 伊藤忠商事 <b>2,202.5</b><span class="dn">▼ −0.23%</span></span>
+    <span class="it">8058 三菱商事 <b>4,769</b><span class="up">▲ +2.85%</span></span>
+    <span class="it">6594 ニデック <b>2,355</b><span class="up">▲ +4.67%</span></span>
+    <span class="it">4666 パーク24 <b>1,864</b><span class="up">▲ +0.27%</span></span>
+  </div>
+  <nav class="fk" aria-label="ビュー切替">
+    <button class="k" data-go="home"><i>F1</i>HOME 銘柄ライブラリ</button>
+    <button class="k on" data-go="stock"><i>F2</i>STOCK 6501</button>
+    <span class="k off"><i>F3</i>決算</span>
+    <span class="k off"><i>F4</i>チャート</span>
+    <span class="k off"><i>F5</i>ニュース</span>
+    <span class="k off"><i>F6</i>反省</span>
+    <span class="k off"><i>F7</i>市場</span>
+    <span class="k off"><i>F8</i>用語</span>
+    <span class="st"><span>学習用 · 売買推奨なし</span><span>終値ベース</span></span>
+  </nav>
+</footer>
+
+<script type="application/json" id="ohlc">[{"d":"2026-04-02","o":4802,"h":4844,"l":4639,"c":4675,"v":12344100},{"d":"2026-04-03","o":4800,"h":4840,"l":4780,"c":4811,"v":7658200},{"d":"2026-04-06","o":4805,"h":4811,"l":4719,"c":4719,"v":7853200},{"d":"2026-04-07","o":4718,"h":4787,"l":4712,"c":4764,"v":7102400},{"d":"2026-04-08","o":4954,"h":4955,"l":4850,"c":4915,"v":13616600},{"d":"2026-04-09","o":4945,"h":4946,"l":4818,"c":4843,"v":13677900},{"d":"2026-04-10","o":4830,"h":4859,"l":4770,"c":4810,"v":11797600},{"d":"2026-04-13","o":4880,"h":4945,"l":4826,"c":4848,"v":12164800},{"d":"2026-04-14","o":4930,"h":4957,"l":4855,"c":4957,"v":12203300},{"d":"2026-04-15","o":5060,"h":5233,"l":5025,"c":5220,"v":22050700},{"d":"2026-04-16","o":5210,"h":5274,"l":5157,"c":5220,"v":15083400},{"d":"2026-04-17","o":5167,"h":5210,"l":5109,"c":5157,"v":10437400},{"d":"2026-04-20","o":5193,"h":5257,"l":5117,"c":5153,"v":8848200},{"d":"2026-04-21","o":5110,"h":5189,"l":5097,"c":5189,"v":8784900},{"d":"2026-04-22","o":5129,"h":5138,"l":5034,"c":5034,"v":11183900},{"d":"2026-04-23","o":5185,"h":5298,"l":5130,"c":5203,"v":18639900},{"d":"2026-04-24","o":5230,"h":5235,"l":5095,"c":5229,"v":10572600},{"d":"2026-04-27","o":5333,"h":5422,"l":5258,"c":5356,"v":18121800},{"d":"2026-04-28","o":5200,"h":5202,"l":4990,"c":5047,"v":29820000},{"d":"2026-04-30","o":4947,"h":5018,"l":4828,"c":4882,"v":22771900},{"d":"2026-05-01","o":4800,"h":4861,"l":4775,"c":4795,"v":11393000},{"d":"2026-05-07","o":4900,"h":4981,"l":4850,"c":4850,"v":25537000},{"d":"2026-05-08","o":4844,"h":4973,"l":4806,"c":4938,"v":16696700},{"d":"2026-05-11","o":4920,"h":5012,"l":4795,"c":4887,"v":15801200},{"d":"2026-05-12","o":4892,"h":4959,"l":4812,"c":4868,"v":11607400},{"d":"2026-05-13","o":4775,"h":4844,"l":4702,"c":4750,"v":14259600},{"d":"2026-05-14","o":4700,"h":4736,"l":4646,"c":4671,"v":14167400},{"d":"2026-05-15","o":4690,"h":4845,"l":4683,"c":4812,"v":15316500},{"d":"2026-05-18","o":4755,"h":4818,"l":4723,"c":4808,"v":9951800},{"d":"2026-05-19","o":4900,"h":5019,"l":4863,"c":4944,"v":17371300},{"d":"2026-05-20","o":4883,"h":4934,"l":4814,"c":4908,"v":13438800},{"d":"2026-05-21","o":4907,"h":5123,"l":4882,"c":5123,"v":17823800},{"d":"2026-05-22","o":5105,"h":5153,"l":4995,"c":5002,"v":13406000},{"d":"2026-05-25","o":5050,"h":5102,"l":5000,"c":5054,"v":9871700},{"d":"2026-05-26","o":5095,"h":5134,"l":5024,"c":5056,"v":8934400},{"d":"2026-05-27","o":5100,"h":5108,"l":4955,"c":4960,"v":10796000},{"d":"2026-05-28","o":4963,"h":5194,"l":4962,"c":5174,"v":17942700},{"d":"2026-05-29","o":5374,"h":5375,"l":5166,"c":5166,"v":27362800},{"d":"2026-06-01","o":5200,"h":5274,"l":5076,"c":5126,"v":13201200},{"d":"2026-06-02","o":5126,"h":5140,"l":4987,"c":5083,"v":10393900},{"d":"2026-06-03","o":5139,"h":5375,"l":5129,"c":5270,"v":15132500},{"d":"2026-06-04","o":5180,"h":5215,"l":5131,"c":5183,"v":8401300},{"d":"2026-06-05","o":5146,"h":5369,"l":5141,"c":5300,"v":11799100},{"d":"2026-06-08","o":5095,"h":5148,"l":4968,"c":5031,"v":14584100},{"d":"2026-06-09","o":5113,"h":5113,"l":4864,"c":4882,"v":14980900},{"d":"2026-06-10","o":4906,"h":4924,"l":4782,"c":4784,"v":15252700},{"d":"2026-06-11","o":4641,"h":4679,"l":4579,"c":4655,"v":15175900},{"d":"2026-06-12","o":4682,"h":4740,"l":4585,"c":4657,"v":18882700},{"d":"2026-06-15","o":4704,"h":4828,"l":4703,"c":4737,"v":13258100},{"d":"2026-06-16","o":4741,"h":4798,"l":4646,"c":4747,"v":11238700},{"d":"2026-06-17","o":4692,"h":4736,"l":4670,"c":4701,"v":11385900},{"d":"2026-06-18","o":4680,"h":4805,"l":4680,"c":4800,"v":13329600},{"d":"2026-06-19","o":4805,"h":4854,"l":4690,"c":4764,"v":18577100},{"d":"2026-06-22","o":4702,"h":4914,"l":4702,"c":4864,"v":10220000},{"d":"2026-06-23","o":4930,"h":4948,"l":4750,"c":4750,"v":12304900},{"d":"2026-06-24","o":4719,"h":4747,"l":4632,"c":4691,"v":11616300},{"d":"2026-06-25","o":4714,"h":4717,"l":4554,"c":4554,"v":12236600},{"d":"2026-06-26","o":4484,"h":4547,"l":4478,"c":4478,"v":13899700},{"d":"2026-06-29","o":4530,"h":4541,"l":4435,"c":4486,"v":11492800},{"d":"2026-06-30","o":4494,"h":4499,"l":4422,"c":4471,"v":12297000},{"d":"2026-07-01","o":4550,"h":4555,"l":4476,"c":4496,"v":11138200},{"d":"2026-07-02","o":4595,"h":4719,"l":4520,"c":4669,"v":16571400},{"d":"2026-07-03","o":4711,"h":4713,"l":4571,"c":4615,"v":9892300},{"d":"2026-07-06","o":4699,"h":4805,"l":4682,"c":4805,"v":11352800},{"d":"2026-07-07","o":4822,"h":5004,"l":4790,"c":4942,"v":20014200},{"d":"2026-07-08","o":4872,"h":4890,"l":4769,"c":4778,"v":11272800},{"d":"2026-07-09","o":4750,"h":4810,"l":4703,"c":4758,"v":7238600},{"d":"2026-07-10","o":4725,"h":4768,"l":4686,"c":4700,"v":11624900},{"d":"2026-07-13","o":4700,"h":4775,"l":4686,"c":4716,"v":9347200},{"d":"2026-07-14","o":4724,"h":4817,"l":4714,"c":4802,"v":8776800},{"d":"2026-07-15","o":4795,"h":4812,"l":4651,"c":4796,"v":13914900},{"d":"2026-07-16","o":4771,"h":4894,"l":4726,"c":4828,"v":13955100},{"d":"2026-07-17","o":4688,"h":4779,"l":4616,"c":4717,"v":12028800},{"d":"2026-07-21","o":4696,"h":4832,"l":4675,"c":4792,"v":11059300},{"d":"2026-07-22","o":4789,"h":4872,"l":4762,"c":4807,"v":9137700},{"d":"2026-07-23","o":4827,"h":4889,"l":4813,"c":4854,"v":8471800},{"d":"2026-07-24","o":4840,"h":4873,"l":4795,"c":4850,"v":7130900},{"d":"2026-07-27","o":4920,"h":5034,"l":4910,"c":5023,"v":11712100},{"d":"2026-07-28","o":4923,"h":4946,"l":4797,"c":4890,"v":12339000},{"d":"2026-07-29","o":4911,"h":4993,"l":4885,"c":4957,"v":13881100},{"d":"2026-07-30","o":5200,"h":5267,"l":4990,"c":5255,"v":24607900},{"d":"2026-07-31","o":5299,"h":5362,"l":5170,"c":5267,"v":19901100},{"d":"2026-08-03","o":5181,"h":5336,"l":5167,"c":5301,"v":14071300},{"d":"2026-08-04","o":5390,"h":5527,"l":5312,"c":5412,"v":15277700},{"d":"2026-08-05","o":5425,"h":5498,"l":5314,"c":5476,"v":14031000},{"d":"2026-08-06","o":5425,"h":5595,"l":5424,"c":5500,"v":11584500},{"d":"2026-08-07","o":5503,"h":5620,"l":5475,"c":5620,"v":12076900},{"d":"2026-08-10","o":5590,"h":5689,"l":5575,"c":5620,"v":11815200},{"d":"2026-08-12","o":5589,"h":5697,"l":5537,"c":5669,"v":11575200},{"d":"2026-08-13","o":5677,"h":5764,"l":5657,"c":5702,"v":9441100},{"d":"2026-08-14","o":5670,"h":5830,"l":5670,"c":5767,"v":10672600},{"d":"2026-08-17","o":5668,"h":5688,"l":5568,"c":5571,"v":9693800},{"d":"2026-08-18","o":5500,"h":5552,"l":5472,"c":5514,"v":11545800},{"d":"2026-08-19","o":5322,"h":5376,"l":5216,"c":5225,"v":13005100},{"d":"2026-08-20","o":5273,"h":5354,"l":5233,"c":5263,"v":9035500},{"d":"2026-08-21","o":5263,"h":5298,"l":5186,"c":5196,"v":10673600},{"d":"2026-08-24","o":5278,"h":5336,"l":5248,"c":5266,"v":8736100},{"d":"2026-08-25","o":5243,"h":5300,"l":5166,"c":5300,"v":7142800},{"d":"2026-08-26","o":5320,"h":5396,"l":5306,"c":5307,"v":8709500},{"d":"2026-08-27","o":5361,"h":5465,"l":5314,"c":5433,"v":9614800},{"d":"2026-08-28","o":5512,"h":5645,"l":5486,"c":5550,"v":15398000},{"d":"2026-08-31","o":5452,"h":5480,"l":5395,"c":5438,"v":10725200},{"d":"2026-09-01","o":5420,"h":5573,"l":5407,"c":5541,"v":8838600},{"d":"2026-09-02","o":5453,"h":5478,"l":5312,"c":5335,"v":11452000},{"d":"2026-09-03","o":5377,"h":5428,"l":5319,"c":5352,"v":7544400},{"d":"2026-09-04","o":5425,"h":5426,"l":5330,"c":5377,"v":8019400},{"d":"2026-09-07","o":5418,"h":5445,"l":5350,"c":5358,"v":6868400},{"d":"2026-09-08","o":5300,"h":5312,"l":5187,"c":5187,"v":7749800},{"d":"2026-09-09","o":5150,"h":5233,"l":5121,"c":5173,"v":8454600},{"d":"2026-09-10","o":5130,"h":5182,"l":5130,"c":5182,"v":7143900},{"d":"2026-09-11","o":5044,"h":5200,"l":5040,"c":5199,"v":9761900},{"d":"2026-09-14","o":5219,"h":5387,"l":5167,"c":5325,"v":9012800},{"d":"2026-09-15","o":5281,"h":5301,"l":5196,"c":5221,"v":8785600},{"d":"2026-09-16","o":5263,"h":5410,"l":5250,"c":5372,"v":7394100},{"d":"2026-09-17","o":5399,"h":5510,"l":5390,"c":5475,"v":8733900},{"d":"2026-09-18","o":5497,"h":5530,"l":5425,"c":5524,"v":15940600},{"d":"2026-09-24","o":5582,"h":5590,"l":5452,"c":5497,"v":13495800},{"d":"2026-09-25","o":5512,"h":5578,"l":5485,"c":5536,"v":9858600},{"d":"2026-09-28","o":5490,"h":5621,"l":5490,"c":5518,"v":10745800},{"d":"2026-09-29","o":5504,"h":5572,"l":5441,"c":5465,"v":10745100},{"d":"2026-09-30","o":5465,"h":5514,"l":5393,"c":5489,"v":14102000},{"d":"2026-10-01","o":5460,"h":5520,"l":5443,"c":5510,"v":13032100}]</script>
+<script>
+(function(){
+'use strict';
+const D = JSON.parse(document.getElementById('ohlc').textContent);
+const NS = 'http://www.w3.org/2000/svg';
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const fmt = (v,d=0) => v.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+const C = {amb:'#ffb000', amb2:'#d9981c', up:'#3ddc84', dn:'#ff5b4f', t1:'#e6e2d5', t2:'#aba79b', t3:'#8c897f', ln:'#2c2a23', ln2:'#48453b', bg:'#0a0a08', bg3:'#1b1a15', ma75:'#cfc9b6', grid:'#1d1c17'};
+function el(tag, at, p){ const e=document.createElementNS(NS,tag); if(at) for(const k in at) e.setAttribute(k, at[k]); if(p) p.appendChild(e); return e; }
+function tx(p, x, y, s, at){ at=Object.assign({}, at||{}); const f=at.fill||C.t2; delete at.fill; const t=el('text', Object.assign({x, y}, at), p); t.style.fill=f; t.textContent=s; return t; }
+function sma(arr, n){ return arr.map((_, i) => i < n-1 ? null : arr.slice(i-n+1, i+1).reduce((a,b)=>a+b,0)/n); }
+const closes = D.map(r=>r.c);
+const ma25 = sma(closes, 25), ma75 = sma(closes, 75);
+function pathOf(vals, X, Y){ let d='', on=false; vals.forEach((v,i)=>{ if(v==null) return; d += (on?'L':'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); on=true; }); return d; }
+function box(host){ host.innerHTML=''; return [host.clientWidth, host.clientHeight]; }
+
+/* ---------- 株価チャート ---------- */
+function drawChart(){
+  const host=$('#chart'); const [W,H]=box(host); if(!W||!H) return;
+  const padL=4, padR=80, padT=30, padB=20, gap=10;
+  const volH=Math.round((H-padT-padB)*.17), mainH=H-padT-padB-volH-gap, vTop=padT+mainH+gap;
+  const svg=el('svg',{width:W,height:H,viewBox:`0 0 ${W} ${H}`,role:'img','aria-label':'日立製作所 日足チャート 2026年4月2日から10月1日'},host);
+  const defs=el('defs',null,svg);
+  const hp=el('pattern',{id:'hatch',width:5,height:5,patternUnits:'userSpaceOnUse',patternTransform:'rotate(45)'},defs);
+  el('line',{x1:0,y1:0,x2:0,y2:5,stroke:'rgba(171,167,155,.30)','stroke-width':1},hp);
+  const n=D.length, pw=W-padL-padR, st=pw/n, bw=Math.max(1.6, Math.min(7, st*.62));
+  const X=i=>padL+st*(i+.5);
+  const P0=4350, P1=5950, Y=p=>padT+(P1-p)/(P1-P0)*mainH;
+  const VMAX=30e6, VY=v=>vTop+volH-v/VMAX*volH;
+  const ax=W-padR;
+  const g=el('g',null,svg);
+  const tagPrices=[5830,5040,5510];
+  for(let p=4400;p<=5800;p+=100){
+    const y=Y(p), major=p%200===0;
+    el('line',{x1:padL,x2:ax,y1:y,y2:y,stroke:major?C.grid:'#141410'},g);
+    el('line',{x1:ax,x2:ax+(major?5:3),y1:y,y2:y,stroke:C.t3},g);
+    if(major && tagPrices.every(t=>Math.abs(Y(t)-y)>13)) tx(g,ax+9,y+4,fmt(p),{fill:C.t2});
+  }
+  D.forEach((r,i)=>{
+    if(i===0 || r.d.slice(5,7)!==D[i-1].d.slice(5,7)){
+      const x=X(i)-st/2;
+      el('line',{x1:x,x2:x,y1:padT,y2:vTop+volH+4,stroke:C.ln,'stroke-dasharray':'2 3'},g);
+      if(x<ax-40) tx(g,x+4,H-5,(i===0?'2026年 ':'')+(+r.d.slice(5,7))+'月',{fill:C.t2});
+    }
+  });
+  tx(g,ax-2,H-5,'10/01',{fill:C.amb,'text-anchor':'end'});
+  el('rect',{x:padL,y:padT,width:pw,height:mainH,fill:'none',stroke:C.ln2},g);
+  el('rect',{x:padL,y:vTop,width:pw,height:volH,fill:'none',stroke:C.ln2},g);
+  tx(g,padL+6,vTop+14,'出来高',{fill:C.t2});
+  tx(g,ax+9,vTop+9,'3,000万',{fill:C.t3});
+  el('line',{x1:ax,x2:ax+5,y1:vTop,y2:vTop,stroke:C.t3},g);
+  tx(g,ax+9,padT-12,'円',{fill:C.t3});
+
+  [[5830,'RES'],[5040,'SUP']].forEach(([p,k])=>{
+    el('rect',{x:padL,y:Y(p+18),width:pw,height:Y(p-18)-Y(p+18),fill:'url(#hatch)'},g);
+    el('line',{x1:padL,x2:ax,y1:Y(p),y2:Y(p),stroke:C.t2,'stroke-dasharray':'5 3'},g);
+    const y=Y(p);
+    el('rect',{x:ax+1,y:y-9,width:padR-2,height:18,fill:C.bg3,stroke:C.t2},g);
+    tx(g,ax+6,y+4,k+' '+fmt(p),{fill:C.t1});
+  });
+
+  const vg=el('g',null,svg);
+  D.forEach((r,i)=>{
+    const upb=r.c>=r.o, y=VY(r.v);
+    el('rect',{x:(X(i)-bw/2).toFixed(1),y:y.toFixed(1),width:bw.toFixed(1),height:(vTop+volH-y).toFixed(1),fill:upb?'rgba(61,220,132,.42)':'rgba(255,91,79,.48)'},vg);
+  });
+  const cg=el('g',null,svg);
+  D.forEach((r,i)=>{
+    const upb=r.c>=r.o, x=X(i), col=upb?C.up:C.dn;
+    el('line',{x1:x.toFixed(1),x2:x.toFixed(1),y1:Y(r.h).toFixed(1),y2:Y(r.l).toFixed(1),stroke:col,'stroke-width':1},cg);
+    const yt=Y(Math.max(r.o,r.c)), hh=Math.max(1,Math.abs(Y(r.o)-Y(r.c)));
+    el('rect',{x:(x-bw/2).toFixed(1),y:yt.toFixed(1),width:bw.toFixed(1),height:hh.toFixed(1),fill:col},cg);
+  });
+  el('path',{d:pathOf(ma75,X,Y),fill:'none',stroke:C.ma75,'stroke-width':1.3,'stroke-linejoin':'round'},svg);
+  el('path',{d:pathOf(ma25,X,Y),fill:'none',stroke:C.amb,'stroke-width':1.6,'stroke-linejoin':'round'},svg);
+
+  const li=n-1, lx=X(li), ly=Y(D[li].c);
+  el('line',{x1:lx+5,x2:ax,y1:ly,y2:ly,stroke:C.amb,'stroke-dasharray':'2 2'},svg);
+  el('rect',{x:ax+1,y:ly-10,width:padR-2,height:20,fill:C.amb},svg);
+  tx(svg,ax+6,ly+4.5,'▶'+fmt(D[li].c),{fill:C.bg,style:'font-weight:700'});
+
+  const idx=ds=>D.findIndex(r=>r.d===ds);
+  function pin(ds, anchor, labelY, label){
+    const i=idx(ds); if(i<0) return;
+    const x=X(i), ya=Y(anchor);
+    const pg=el('g',null,svg);
+    el('path',{d:`M${x} ${ya} V${labelY} H${x-12}`,stroke:C.amb,'stroke-width':1,fill:'none'},pg);
+    el('rect',{x:x-3.5,y:ya-3.5,width:7,height:7,fill:C.bg,stroke:C.amb,'stroke-width':1.5},pg);
+    const t=tx(pg,0,labelY+4,label,{fill:C.t1,'text-anchor':'end'});
+    const tw=t.getComputedTextLength(), bx=x-12-tw-17;
+    t.setAttribute('x',x-19);
+    const b=el('rect',{x:bx,y:labelY-10,width:tw+17,height:20,fill:C.bg,stroke:C.amb,'stroke-width':1},pg);
+    pg.insertBefore(b,t);
+    el('rect',{x:bx,y:labelY-10,width:3,height:20,fill:C.amb},pg);
+  }
+  pin('2026-07-29',4993,Y(5620),'7/29 決算・上方修正');
+  pin('2026-08-14',5830,padT-15,'8/14 高値 5,830');
+  pin('2026-09-11',5040,Y(4840),'9/11 安値 5,040');
+}
+
+/* ---------- 4点診断メーター ---------- */
+function buildMeters(){
+  $$('.s-mt').forEach(m=>{
+    const v=+m.dataset.v; let h='';
+    for(let k=0;k<10;k++) h+=`<i class="${(k+1)/10<=v+0.051?'f':''}"></i>`;
+    m.innerHTML=h+`<b style="left:${v*100}%"></b>`;
+  });
+  $$('.s-ru').forEach(s=>{
+    s.setAttribute('viewBox','0 0 100 5'); s.setAttribute('preserveAspectRatio','none'); s.setAttribute('aria-hidden','true');
+    let h=''; for(let k=0;k<=10;k++){ const x=k===0?.3:k===10?99.7:k*10; h+=`<line x1="${x}" x2="${x}" y1="0" y2="${k%5===0?5:2.5}" stroke="${C.t3}" vector-effect="non-scaling-stroke"/>`; }
+    s.innerHTML=h;
+  });
+}
+
+/* ---------- 割高割安 目盛 ---------- */
+function buildGaugeTicks(){
+  $$('.s-gt').forEach(g=>{
+    const max=+g.dataset.max;
+    g.dataset.ticks.split(',').map(Number).forEach(t=>{
+      const l=(t/max*100)+'%';
+      g.insertAdjacentHTML('beforeend',`<span class="tk" style="left:${l}"></span><span class="tl" style="left:${l}">${t}</span>`);
+    });
+  });
+}
+
+/* ---------- 業績 ---------- */
+function drawPerf(){
+  const host=$('#perf'); const [W,H]=box(host); if(!W||!H) return;
+  const pl=4, pr=4, pt=24, pb=2, ch=H-pt-pb;
+  const svg=el('svg',{width:W,height:H,viewBox:`0 0 ${W} ${H}`,role:'img','aria-label':'売上高と最終利益の推移'},host);
+  const defs=el('defs',null,svg);
+  const hp=el('pattern',{id:'fch',width:5,height:5,patternUnits:'userSpaceOnUse',patternTransform:'rotate(45)'},defs);
+  el('line',{x1:0,y1:0,x2:0,y2:5,stroke:'rgba(255,176,0,.45)','stroke-width':1.5},hp);
+  const rows=[['2025.3',97833,6157,false],['2026.3',105867,8023,false],['2027.3予',117000,9000,true]];
+  const gw=(W-pl-pr)/3, bwid=Math.min(56,gw*.46);
+  const RY=v=>pt+ch-v/125000*ch, PY=v=>pt+ch-v/12500*ch;
+  [.25,.5,.75].forEach(f=>el('line',{x1:pl,x2:W-pr,y1:pt+ch*f,y2:pt+ch*f,stroke:C.grid},svg));
+  const pts=[];
+  rows.forEach((r,i)=>{
+    const cx=pl+gw*(i+.5), y=RY(r[1]);
+    el('rect',{x:cx-bwid/2,y,width:bwid,height:pt+ch-y,fill:r[3]?'url(#fch)':'#3a3830',stroke:r[3]?C.amb:'none','stroke-dasharray':r[3]?'3 2':''},svg);
+    if(!r[3]) el('rect',{x:cx-bwid/2,y,width:bwid,height:2,fill:C.t2},svg);
+    tx(svg,cx,pt+ch-5,fmt(r[1]),{'text-anchor':'middle',fill:r[3]?C.amb:C.t1});
+    pts.push([cx,PY(r[2]),r[2],r[3]]);
+  });
+  el('line',{x1:pl,x2:W-pr,y1:pt+ch,y2:pt+ch,stroke:C.ln2},svg);
+  el('path',{d:'M'+pts.map(p=>p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' L'),fill:'none',stroke:C.amb,'stroke-width':1.8},svg);
+  pts.forEach(p=>{
+    el('rect',{x:p[0]-3.5,y:p[1]-3.5,width:7,height:7,fill:p[3]?C.bg:C.amb,stroke:C.amb,'stroke-width':1.5},svg);
+    const lab=fmt(p[2]), w=lab.length*7.3+10;
+    el('rect',{x:p[0]-w/2,y:p[1]-25,width:w,height:17,fill:C.bg,stroke:C.amb},svg);
+    tx(svg,p[0],p[1]-12.5,lab,{'text-anchor':'middle',fill:C.amb});
+  });
+}
+
+/* ---------- 稼ぎ頭 ---------- */
+function buildSeg(){
+  const seg=[['デジタルシステム＆サービス',4501,16.3,null,1],['エナジー',4160,13.0,'前年比 +65%',.78],['コネクティブインダストリーズ',3674,12.2,null,.58],['モビリティ',1081,8.2,null,.38]];
+  const tot=seg.reduce((a,b)=>a+b[1],0), mx=4501;
+  const col=a=>`rgba(255,176,0,${a})`;
+  $('#strip').innerHTML=seg.map((s,i)=>`<i style="flex:${s[1]};background:${col(s[4])}">${i+1}</i>`).join('');
+  $('#seg').innerHTML=seg.map((s,i)=>`<div class="s-sr"><div class="nm"><em style="background:${col(s[4])}">${i+1}</em>${s[0]}${s[3]?`<span class="yoy">${s[3]}</span>`:''}</div>
+    <div class="rw"><div class="br"><i style="width:${(s[1]/mx*100).toFixed(1)}%;background:${col(s[4])}"></i></div><span class="v">${fmt(s[1])}<small>億円</small></span><span class="mg" style="--m:${(s[2]/20).toFixed(3)}">${s[2].toFixed(1)}%</span></div></div>`).join('');
+}
+
+/* ---------- 需給 ---------- */
+function drawSupply(){
+  const host=$('#supply'); const [W,H]=box(host); if(!W||!H) return;
+  const rows=[['08/28',703.6,3824.2,5.44],['09/04',511.5,3945.4,7.71],['09/11',362.2,4101.6,11.32],['09/18',442.3,3678.2,8.32],['09/25',465.5,3518.8,7.56]];
+  const pt=8, pb=16, ch=H-pt-pb, pl=42, pr=4;
+  const svg=el('svg',{width:W,height:H,viewBox:`0 0 ${W} ${H}`,role:'img','aria-label':'信用残と信用倍率の推移'},host);
+  const defs=el('defs',null,svg);
+  const hp=el('pattern',{id:'sh',width:3,height:3,patternUnits:'userSpaceOnUse',patternTransform:'rotate(45)'},defs);
+  el('line',{x1:0,y1:0,x2:0,y2:3,stroke:C.t2,'stroke-width':1.4},hp);
+  const gw=(W-pl-pr)/rows.length, bw=Math.min(18,gw*.3);
+  const BY=v=>pt+ch-v/8000*ch, RY=v=>pt+12+(12-v)/(12-5)*ch*.36;
+  [0,2000,4000].forEach(v=>{ el('line',{x1:pl,x2:W-pr,y1:BY(v),y2:BY(v),stroke:v?C.grid:C.ln2},svg); tx(svg,pl-5,BY(v)+4,v?fmt(v):'0',{'text-anchor':'end',fill:C.t3}); });
+  const pts=[];
+  rows.forEach((r,i)=>{
+    const cx=pl+gw*(i+.5), last=i===4;
+    const y1=BY(r[2]); el('rect',{x:cx-bw-1,y:y1,width:bw,height:pt+ch-y1,fill:last?'rgba(255,176,0,.85)':'rgba(255,176,0,.5)'},svg);
+    const y2=BY(r[1]); el('rect',{x:cx+1,y:y2,width:bw,height:pt+ch-y2,fill:'url(#sh)',stroke:C.t2,'stroke-width':.8},svg);
+    tx(svg,cx,H-3,r[0],{'text-anchor':'middle',fill:last?C.amb:C.t2});
+    pts.push([cx,RY(r[3]),r[3]]);
+  });
+  el('path',{d:'M'+pts.map(p=>p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' L'),fill:'none',stroke:C.t1,'stroke-width':1.4},svg);
+  pts.forEach((p,i)=>{
+    el('rect',{x:p[0]-3,y:p[1]-3,width:6,height:6,fill:i===4?C.amb:C.bg,stroke:i===4?C.amb:C.t1,'stroke-width':1.4},svg);
+    tx(svg,p[0],p[1]-8,p[2].toFixed(2),{'text-anchor':'middle',fill:i===4?C.amb:C.t1});
+  });
+  tx(svg,pl-5,pt+10,'倍率',{'text-anchor':'end',fill:C.t3});
+}
+
+/* ---------- シナリオ扇 ---------- */
+function drawFan(){
+  const host=$('#fan'); const [W,H]=box(host); if(!W||!H) return;
+  const pl=46, pr=6, pt=14, pb=22, P0=4950, P1=5950;
+  const Y=p=>pt+(P1-p)/(P1-P0)*(H-pt-pb);
+  const svg=el('svg',{width:W,height:H,viewBox:`0 0 ${W} ${H}`,role:'img','aria-label':'現在値から3方向に分かれるシナリオ図'},host);
+  const defs=el('defs',null,svg);
+  const mk=(id,col)=>{ const m=el('marker',{id,viewBox:'0 0 10 10',refX:8,refY:5,markerWidth:7,markerHeight:7,orient:'auto-start-reverse'},defs); el('path',{d:'M0 0L10 5L0 10z',fill:col},m); };
+  mk('arU',C.up); mk('arD',C.dn); mk('arN',C.t2);
+  const hist=D.slice(-20), nowX=pl+(W-pl-pr)*.4, endX=W-pr-2;
+  const HX=i=>pl+(nowX-pl)*(i/(hist.length-1));
+  el('rect',{x:pl,y:pt,width:W-pl-pr,height:H-pt-pb,fill:'none',stroke:C.ln},svg);
+  [[5830,'5,830'],[5510,'5,510'],[5117,'5,117'],[5040,'5,040']].forEach(([p,l])=>{
+    el('line',{x1:pl,x2:endX,y1:Y(p),y2:Y(p),stroke:p===5510?'rgba(255,176,0,.35)':C.ln2,'stroke-dasharray':'2 3'},svg);
+    tx(svg,pl-6,Y(p)+(p===5040?11:p===5117?-1:4),l,{'text-anchor':'end',fill:p===5510?C.amb:C.t2});
+  });
+  el('rect',{x:nowX,y:Y(5830),width:endX-nowX,height:Y(5040)-Y(5830),fill:'rgba(171,167,155,.05)'},svg);
+  const nowY=Y(5510);
+  el('path',{d:'M'+hist.map((r,i)=>HX(i).toFixed(1)+' '+Y(r.c).toFixed(1)).join(' L'),fill:'none',stroke:C.t2,'stroke-width':1.3},svg);
+  tx(svg,pl+4,H-6,'直近20日',{fill:C.t3});
+  tx(svg,endX,H-6,'→ 先行き',{'text-anchor':'end',fill:C.t3});
+  const rays=[
+    [`M${nowX} ${nowY} C${nowX+50} ${nowY-6}, ${endX-70} ${Y(5830)+10}, ${endX-6} ${Y(5830)-3}`,C.up,'arU'],
+    [`M${nowX} ${nowY} L${endX-6} ${nowY}`,C.t2,'arN'],
+    [`M${nowX} ${nowY} C${nowX+50} ${nowY+6}, ${endX-80} ${Y(5117)-14}, ${endX-6} ${Y(5117)+12}`,C.dn,'arD']];
+  rays.forEach(([d,col,m],k)=>el('path',{d,fill:'none',stroke:col,'stroke-width':2,'marker-end':`url(#${m})`,'stroke-dasharray':k===1?'6 4':''},svg));
+  tx(svg,endX-6,Y(5830)-10,'強気',{'text-anchor':'end',fill:C.up,style:'font-weight:700'});
+  tx(svg,endX-6,nowY-7,'中立',{'text-anchor':'end',fill:C.t1,style:'font-weight:700'});
+  tx(svg,endX-6,Y(5117)+30,'弱気',{'text-anchor':'end',fill:C.dn,style:'font-weight:700'});
+  el('rect',{x:nowX-4,y:nowY-4,width:8,height:8,fill:C.amb},svg);
+}
+
+/* ---------- チェックリスト ---------- */
+function buildChecklist(){
+  const items=[['サポートラインへのタッチと反発','p'],['ダブルボトム','d'],['逆三尊','x'],['ボックス相場の下限での反発','x'],['底練りからのレジスタンスライン突破','d'],['サポレジ転換','p'],['三角持ち合いからの上抜け','x'],['ゴールデンクロス後の初押し','d'],['75日移動平均線のサポート・上抜け','d'],['200日移動平均線での押し','d']];
+  const lab={d:'完成済み',p:'進行中',x:'なし'};
+  $('#ckg').innerHTML=items.map((it,i)=>`<div class="s-ck ${it[1]}"><div class="hh"><span>C${String(i+1).padStart(2,'0')}</span><i class="ico ${it[1]}"></i></div><p>${it[0]}</p><span class="st">${lab[it[1]]}</span></div>`).join('');
+  const colr={d:'var(--up)',p:'var(--amb)',x:'transparent'};
+  $('#ckbar').innerHTML=['d','d','d','d','d','p','p','x','x','x'].map(s=>`<i style="background:${colr[s]};${s==='x'?'border:1.5px solid var(--t3)':''}"></i>`).join('');
+}
+
+/* ---------- ホーム ---------- */
+function synth(seed,n,drift,vol,endUp){
+  let x=seed, v=100, out=[];
+  const rnd=()=>{ x=(x*16807)%2147483647; return x/2147483647-.5; };
+  for(let i=0;i<n;i++){ v+=drift+rnd()*vol; out.push(v); }
+  out[n-1]=out[n-2]*(endUp?1.012:0.994);
+  return out;
+}
+function spark(vals,up){
+  const n=vals.length, mn=Math.min(...vals), mx=Math.max(...vals);
+  const X=i=>i/(n-1)*200, Y=v=>42-(v-mn)/(mx-mn||1)*36;
+  const d='M'+vals.map((v,i)=>X(i).toFixed(1)+' '+Y(v).toFixed(1)).join(' L');
+  const col=up?C.up:C.dn;
+  return `<svg class="h-sp" viewBox="0 0 200 46" preserveAspectRatio="none" aria-hidden="true"><line x1="0" x2="200" y1="${Y(vals[0]).toFixed(1)}" y2="${Y(vals[0]).toFixed(1)}" stroke="${C.ln2}" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/><path d="${d} L200 46 L0 46Z" fill="${up?'rgba(61,220,132,.07)':'rgba(255,91,79,.08)'}"/><path d="${d}" fill="none" stroke="${col}" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>`;
+}
+function buildHome(){
+  const lib=[
+    ['6501','日立製作所','5,510','+0.38%',true,['クイック','決算','3点読み'],'10/01',null,closes.slice(-40)],
+    ['8001','伊藤忠商事','2,202.5','−0.23%',false,['決算','サポレジ','チェックリスト'],'10/01',null,synth(11,40,.05,2.2,false)],
+    ['8058','三菱商事','4,769','+2.85%',true,['チャート','反省'],'09/30',null,synth(29,40,.12,2.0,true)],
+    ['6594','ニデック','2,355','+4.67%',true,['ニュース'],'09/30','監査意見不表明',synth(47,40,-.08,2.8,true)],
+    ['4666','パーク24','1,864','+0.27%',true,['ニュース'],'09/30',null,synth(83,40,.02,1.6,true)]];
+  $('#lib').innerHTML=lib.map(c=>{
+    const go=c[0]==='6501';
+    return `<tr${go?' class="go" data-go="stock" tabindex="0" aria-label="日立製作所の分析を開く"':''}>
+      <td><span class="h-cd">${c[0]}</span></td>
+      <td><span class="h-nm">${c[1]}</span>${go?'<span class="h-op">OPEN ▸</span>':''}</td>
+      <td class="r"><span class="h-px">${c[2]}<small>円</small></span></td>
+      <td class="r"><span class="h-ch ${c[4]?'up':'dn'}">${c[4]?'▲':'▼'} ${c[3]}</span></td>
+      <td><div class="h-bd">${c[7]?`<span class="w"><i>!</i>${c[7]}</span>`:''}${c[5].map(b=>`<span>${b}</span>`).join('')}</div></td>
+      <td><span class="h-dt">${c[6]}</span></td>
+      <td>${spark(c[8],c[4])}</td></tr>`;}).join('');
+
+  const pm=(v,max)=>`<div class="h-pm"><i style="width:${Math.min(50,Math.abs(v)/max*50).toFixed(1)}%;background:${v>=0?C.up:C.dn};${v<0?'transform:translateX(-100%)':''}"></i></div>`;
+  const mkt=[
+    ['日経平均','68,956.72','',`<span class="up">▲ +2,203.00 / +3.30%</span>`,pm(3.30,4)],
+    ['TOPIX','4,111.65','',`<span class="up">▲ +0.07%</span>`,pm(0.07,4)],
+    ['ドル円','158.40','',`<span class="t2">円安方向</span>`,`<div class="h-fx"><span>円高</span><i style="left:70%"></i><span>円安</span></div>`],
+    ['予想PER','16.95','倍',`<span class="t2">5年平均 15.47倍</span>`,`<div class="h-pg" title="10〜25倍"><span class="tr"></span><span class="fl" style="width:46.3%"></span><span class="av" style="left:36.5%"></span></div>`],
+    ['米10年金利','5.28','%','',''],
+    ['ブレント原油','98','ドル','','']];
+  $('#mkt').innerHTML=mkt.map(m=>`<div class="h-mr"><span class="nm">${m[0]}</span><span class="vl">${m[1]}<small>${m[2]}</small></span><span class="cg">${m[3]}</span>${m[4]||'<span></span>'}</div>`).join('');
+
+  const geo=[['米イラン戦争・ホルムズ海峡封鎖',5],['日中関係の悪化（レアアース・渡航）',4],['米中対立（半導体・AI規制）',4],['トランプ関税・日米合意',2],['ロシア・ウクライナ戦争',2]];
+  $('#geo').innerHTML=geo.map((g,i)=>`<div class="h-gr"><span class="rk">${String(i+1).padStart(2,'0')}</span><span class="nm">${g[0]}</span><span class="st" aria-label="影響度 5段階中${g[1]}">${'★'.repeat(g[1])}<s>${'☆'.repeat(5-g[1])}</s></span><span class="sg${g[1]===5?' hi':''}">${[1,2,3,4,5].map(k=>`<i class="${k<=g[1]?'on':''}"></i>`).join('')}</span></div>`).join('');
+
+  const menu=[['i-quick','クイック診断','4点で全体像','軽',1],['i-kessan','決算','業績と予想を読む','重',4],['i-chart','チャート','形と節目を確認','中',2],['i-news','ニュース','材料の影響を整理','中',2],['i-hansei','反省','過去の読みを検証','軽',1],['i-market','市場','地合いとリスク','中',2],['i-yogo','用語','言葉を1つ覚える','極軽',0]];
+  $('#menu').innerHTML=menu.map(m=>`<div class="h-mi"><svg><use href="#${m[0]}"/></svg><b>${m[1]}</b><p>${m[2]}</p><div class="h-wt"><u>${[1,2,3,4].map(k=>`<i class="${k<=m[4]?'on':''}"></i>`).join('')}</u>${m[3]}</div></div>`).join('');
+}
+
+/* ---------- views ---------- */
+function renderStock(){ drawChart(); drawPerf(); drawSupply(); drawFan(); }
+function show(v){
+  $$('.view').forEach(x=>x.classList.toggle('on', x.id==='v-'+v));
+  $$('.fk [data-go]').forEach(x=>x.classList.toggle('on', x.dataset.go===v));
+  $('#cmd-stock').hidden = v!=='stock'; $('#cmd-home').hidden = v!=='home';
+  $('#meta-view').textContent = v==='stock' ? '6501 日立製作所' : 'HOME 銘柄ライブラリ';
+  if(v==='stock') renderStock();
+  window.scrollTo(0,0);
+}
+document.addEventListener('click',e=>{
+  const g=e.target.closest('[data-go]'); if(g){ show(g.dataset.go); return; }
+  const t=e.target.closest('.tab'); if(t){
+    $$('.tab').forEach(x=>x.classList.toggle('on',x===t));
+    const name=t.dataset.tab, q=name==='クイック診断';
+    $('#quick').hidden=!q; $('#empty').hidden=q;
+    if(!q){ $('#emp-h').textContent=name; $('#emp-name').textContent=name; $('#emp-cmd').textContent=name; $('#emp-k').textContent=t.querySelector('i').textContent; }
+    $('#cmd-word').textContent = q ? 'クイック' : name;
+    if(q) renderStock();
+  }
+});
+document.addEventListener('keydown',e=>{ const r=e.target.closest && e.target.closest('tr[data-go]'); if(r && (e.key==='Enter'||e.key===' ')){ e.preventDefault(); show(r.dataset.go); } });
+
+buildMeters(); buildGaugeTicks(); buildSeg(); buildChecklist(); buildHome();
+show('stock');
+let rt; window.addEventListener('resize',()=>{ clearTimeout(rt); rt=setTimeout(()=>{ if($('#v-stock').classList.contains('on')) renderStock(); },120); });
+if(document.fonts && document.fonts.ready) document.fonts.ready.then(()=>{ if($('#v-stock').classList.contains('on')) renderStock(); });
+})();
+</script>
+</body>
+</html>
