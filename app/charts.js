@@ -797,10 +797,599 @@
     return s + '</span>';
   }
 
+
+  /* =====================================================================
+     P2b：チャート型・決算型の図
+     ===================================================================== */
+
+  /* ---------- 3つの時間軸の小チャート（月足・週足・日足） ----------
+     o = {bars:[{d,o,h,l,c,v}], ma:[]（bars と同じ長さ・任意）, W, H, label}
+     高値・安値に値の札を付ける。期間の文字は HTML 側（キャプション）に出す。 */
+  function miniCandles(o) {
+    const W = Math.round(o.W), H = Math.round(o.H);
+    if (!(W > 60 && H > 50)) return '';
+    const all = o.bars || [];
+    const idx = [];
+    all.forEach((r, i) => { if (validBar(r)) idx.push(i); });
+    const rows = idx.map((i) => all[i]);
+    const ma = Array.isArray(o.ma) ? idx.map((i) => (isNum(o.ma[i]) ? o.ma[i] : null)) : [];
+    let s = svgOpen(W, H, o.label || 'ローソク足');
+    if (!rows.length) return s + text(W / 2, H / 2 + 4, o.empty || '足のデータがありません', { cls: 'st-j', anchor: 'middle', fill: C.tx3 }) + '</svg>';
+    const n = rows.length, padL = 2, padR = 10, padT = 17, padB = 17;
+    let lo = Infinity, hi = -Infinity, iHi = 0, iLo = 0;
+    rows.forEach((r, i) => { if (r.h > hi) { hi = r.h; iHi = i; } if (r.l < lo) { lo = r.l; iLo = i; } });
+    let plo = lo, phi = hi;
+    ma.forEach((v) => { if (isNum(v)) { plo = Math.min(plo, v); phi = Math.max(phi, v); } });
+    const sp = phi - plo || Math.abs(phi) * 0.05 || 1;
+    const P1 = phi + sp * 0.04, P0 = plo - sp * 0.04;
+    const ph = H - padT - padB;
+    const Y = (p) => padT + (P1 - p) / (P1 - P0 || 1) * ph;
+    const st = (W - padL - padR) / n, bw = clamp(st * 0.62, 1, 9);
+    const X = (i) => padL + st * (i + 0.5);
+    s += tag('rect', { x: padL, y: padT, width: W - padL - padR, height: ph, fill: 'none', stroke: 'rgba(62,230,255,.12)' });
+    [0.25, 0.5, 0.75].forEach((q) => { const y = padT + ph * q; s += tag('line', { x1: padL, x2: W - padR, y1: y, y2: y, stroke: 'rgba(62,230,255,.05)' }); });
+    s += '<g class="cdl">';
+    rows.forEach((r, i) => {
+      const up = r.c >= r.o, x = X(i), col = up ? C.cy : C.mag;
+      s += tag('line', { x1: x, x2: x, y1: Y(r.h), y2: Y(r.l), stroke: col, 'stroke-width': 1 });
+      s += tag('rect', { x: x - bw / 2, y: Y(Math.max(r.o, r.c)), width: bw, height: Math.max(1, Math.abs(Y(r.o) - Y(r.c))), fill: up ? 'rgba(62,230,255,.22)' : C.mag, stroke: col, 'stroke-width': 1 });
+    });
+    s += '</g>';
+    const dm = seriesPath(ma, X, Y);
+    if (dm) s += tag('path', { d: dm, fill: 'none', stroke: C.w, 'stroke-width': 1.3, opacity: 0.85, class: 'ma' });
+    // 高値・安値の札（枠の中に収める）
+    const lab = (i, v, top) => {
+      const str = (top ? '高 ' : '安 ') + fmtP(v), tw = textW(str, 12, true) + 2;
+      const x = clamp(X(i), padL + tw / 2 + 1, W - padR - tw / 2);
+      const y = top ? Y(v) - 5 : Y(v) + 14;
+      return tag('circle', { cx: X(i), cy: Y(v), r: 2.2, fill: top ? C.cy : C.mag }) + text(x, y, str, { anchor: 'middle', fill: C.tx, cls: 'st-t mlab' });
+    };
+    s += lab(iHi, hi, true) + lab(iLo, lo, false);
+    // 最新の終値
+    const lc = rows[n - 1].c;
+    s += tag('line', { x1: X(n - 1), x2: W - 2, y1: Y(lc), y2: Y(lc), stroke: C.cy, 'stroke-dasharray': '2 2', opacity: 0.8 });
+    s += tag('circle', { cx: X(n - 1), cy: Y(lc), r: 3, fill: 'none', stroke: C.cy, 'stroke-width': 1.2 });
+    return s + '</svg>';
+  }
+
+  /* ---------- 価格帯別出来高の横棒（価格軸をチャートと共有） ----------
+     bins=[{from,to,volume,share}]、P0〜P1 を top〜top+h に写す（チャートの Y と同じ式）。範囲外の帯は除き、はみ出す帯は切る */
+  function vpLayout(bins, P0, P1, top, h) {
+    const Y = (p) => top + (P1 - p) / (P1 - P0 || 1) * h;
+    const vis = (bins || []).filter((b) => b && isNum(b.from) && isNum(b.to) && isNum(b.volume) && b.volume >= 0 && b.to > P0 && b.from < P1);
+    const vmax = Math.max(0, ...vis.map((b) => b.volume));
+    return vis.map((b) => {
+      const a = Math.max(b.from, P0), z = Math.min(b.to, P1);
+      return { from: b.from, to: b.to, volume: b.volume, share: isNum(b.share) ? b.share : null, y0: Y(z), y1: Y(a), w: vmax > 0 ? b.volume / vmax : 0, max: vmax > 0 && b.volume === vmax };
+    });
+  }
+
+  /* =====================================================================
+     チャート型のメインチャート：日足ローソク＋出来高＋25/75/200日線＋サポレジ（帯・線）＋右端の価格タグ＋価格帯別出来高
+     o = {rows, ma:{ma25:[],ma75:[],ma200:[]}（rows と同じ長さ）, levels:[{i,kind,low,high,strength}], vp:{bins}, dec, W, H, label}
+     各レベルは <g class="lvg" data-lv="i"> にまとめ、画面側で強調（.lvchart.hl .lvg.on）する
+     ===================================================================== */
+  const MA_STYLE = { ma25: [C.w, 1.6, '', 'url(#kl-glow)'], ma75: [C.amb, 1.6, '', ''], ma200: ['#9db3c2', 1.5, '7 3', ''] };
+  function levelTag(L) { return (L.kind === 'R' ? 'RES ' : 'SUP ') + (L.lo === L.hi ? fmtP(L.lo) : fmtP(L.lo) + '–' + fmtP(L.hi)); }
+  function levelChart(o) {
+    const W = Math.round(o.W), H = Math.round(o.H);
+    if (!(W > 200 && H > 160)) return '';
+    const all = o.rows || [];
+    const idx = [];
+    all.forEach((r, i) => { if (validBar(r)) idx.push(i); });
+    const rows = idx.map((i) => all[i]);
+    const head = svgOpen(W, H, o.label || '株価チャートとサポート・レジスタンス', 'lvchart');
+    if (!rows.length) return head + text(W / 2, H / 2, '株価データがありません', { cls: 'st-j', anchor: 'middle' }) + '</svg>';
+    const n = rows.length;
+    const ma = {};
+    ['ma25', 'ma75', 'ma200'].forEach((k) => { const a = o.ma && Array.isArray(o.ma[k]) ? o.ma[k] : null; ma[k] = a ? idx.map((i) => (isNum(a[i]) ? a[i] : null)) : []; });
+    let lo = Infinity, hi = -Infinity;
+    rows.forEach((r) => { lo = Math.min(lo, r.l); hi = Math.max(hi, r.h); });
+    Object.values(ma).forEach((a) => a.forEach((v) => { if (isNum(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v); } }));
+    const span0 = hi - lo || Math.abs(hi) * 0.05 || 1;
+    const levels = (o.levels || []).map((L, k) => {
+      if (!L || !isNum(L.low) || !isNum(L.high)) return null;
+      const a = Math.min(L.low, L.high), b = Math.max(L.low, L.high);
+      if (!(b > 0)) return null;
+      return { i: isNum(L.i) ? L.i : k, kind: L.kind === 'resistance' ? 'R' : 'S', lo: a, hi: b, str: clamp(Math.round(isNum(L.strength) ? L.strength : 1), 1, 5) };
+    }).filter(Boolean);
+    levels.forEach((L) => { L.in = L.hi >= lo - span0 * 0.35 && L.lo <= hi + span0 * 0.35; });
+    levels.forEach((L) => { if (L.in) { lo = Math.min(lo, L.lo); hi = Math.max(hi, L.hi); } });
+    const span = hi - lo || span0;
+    const P1 = hi + span * 0.07, P0 = Math.max(0, lo - span * 0.05);
+    const dec = isNum(o.dec) ? o.dec : priceDec(rows.map((r) => r.c));
+    void dec;
+    const lastC = rows[n - 1].c;
+    const tagMax = Math.max(textW(fmtP(lastC), 12, true) + 4, ...levels.map((L) => textW(levelTag(L), 12, true) + (L.in ? 0 : 16)));
+    const bins = o.vp && Array.isArray(o.vp.bins) ? o.vp.bins : [];
+    const padL = 4, padR = Math.max(84, Math.ceil(tagMax) + 20), padT = 28, padB = 19, gap = 8;
+    const vpW = bins.length ? Math.round(clamp(W * 0.1, 56, 110)) : 0, vpGap = vpW ? 6 : 0;
+    const ax = W - padR, plotR = ax - vpW - vpGap, pw = plotR - padL;
+    const volH = Math.round((H - padT - padB) * 0.15), mainH = H - padT - padB - volH - gap, vTop = padT + mainH + gap, mainB = padT + mainH;
+    const st = pw / n, bw = clamp(st * 0.6, 1, 7);
+    const X = (i) => padL + st * (i + 0.5);
+    const Y = (p) => padT + (P1 - p) / (P1 - P0 || 1) * mainH;
+    const vmax0 = rows.reduce((m, r) => (isNum(r.v) ? Math.max(m, r.v) : m), 0);
+    const VMAX = vmax0 > 0 ? niceCeil(vmax0) : 1;
+    const VY = (v) => vTop + volH - v / VMAX * volH;
+    // 右端のタグ：現在値＋各レベル（範囲外は上下の端に▲▼）
+    const tagList = [{ now: true, y: Y(lastC) }];
+    levels.forEach((L) => {
+      const yy = L.in ? Y(L.lo === L.hi ? L.lo : (L.lo + L.hi) / 2) : (L.hi > P1 ? padT + 9 : mainB - 9);
+      tagList.push({ L, y: yy });
+    });
+    const ty = spread(tagList.map((t) => t.y), 20, padT - 4, mainB + 2);
+    tagList.forEach((t, k) => { t.ty = ty[k]; });
+
+    let s = head;
+    s += tag('rect', { x: padL, y: padT, width: pw, height: mainH, fill: 'none', stroke: 'rgba(62,230,255,.16)' });
+    s += tag('rect', { x: padL, y: vTop, width: pw, height: volH, fill: 'none', stroke: 'rgba(62,230,255,.12)' });
+    if (vpW) s += tag('rect', { x: plotR + vpGap, y: padT, width: vpW, height: mainH, fill: 'rgba(62,230,255,.025)', stroke: 'rgba(62,230,255,.12)' });
+    // 目盛り
+    const major = niceStep((P1 - P0) / 8, [1, 2, 5, 10]), minor = major / 2, mdec = decOf(minor, 6);
+    for (let k = Math.ceil(P0 / minor - 1e-9), g = 0; k * minor <= P1 + 1e-9 && g < 80; k++, g++) {
+      const p = Number((k * minor).toFixed(mdec)), y = Y(p);
+      if (y < padT + 1 || y > mainB - 1) continue;
+      const isMajor = Math.abs(p / major - Math.round(p / major)) < 1e-6;
+      s += tag('line', { x1: padL, x2: ax, y1: y, y2: y, stroke: isMajor ? 'rgba(62,230,255,.085)' : 'rgba(62,230,255,.035)' });
+      s += tag('line', { x1: ax, x2: ax + (isMajor ? 5 : 3), y1: y, y2: y, stroke: C.tx3 });
+      if (isMajor && tagList.every((t) => Math.abs(t.ty - y) > 16)) s += text(ax + 10, y + 4, fmtP(p), { fill: C.tx2 });
+    }
+    s += tag('line', { x1: ax, x2: ax, y1: padT, y2: vTop + volH, stroke: 'rgba(62,230,255,.3)' });
+    let labEnd = -1e9;
+    rows.forEach((r, i) => {
+      const m = String(r.d).slice(5, 7), yr = String(r.d).slice(0, 4);
+      if (i === 0 || m !== String(rows[i - 1].d).slice(5, 7)) {
+        const x = X(i) - st / 2;
+        s += tag('line', { x1: x, x2: x, y1: padT, y2: vTop + volH + 4, stroke: 'rgba(62,230,255,.10)', 'stroke-dasharray': '2 4' });
+        const first = i === 0 || yr !== String(rows[i - 1].d).slice(0, 4);
+        const lab = (first ? yr + '年 ' : '') + +m + '月';
+        if (x < plotR - 48 && x + 4 > labEnd + 8) { s += text(x + 4, H - 5, lab, { cls: 'st-j', fill: C.tx2 }); labEnd = x + 4 + textW(lab); }
+      }
+    });
+    s += text(plotR - 2, H - 5, mmdd(rows[n - 1].d), { anchor: 'end', fill: C.cy2 });
+    s += text(padL + 6, vTop + 13, '出来高', { cls: 'st-j', fill: C.tx2 });
+    s += text(ax + 10, vTop + 5, fmtVol(VMAX), { fill: C.tx3 });
+    s += text(ax + 10, padT - 10, '円', { cls: 'st-j', fill: C.tx3 });
+    // サポレジ（帯・線・タグ）
+    tagList.forEach((t) => {
+      if (t.now) return;
+      const L = t.L, rr = L.kind === 'R';
+      const col = rr ? 'rgba(255,120,180,.9)' : 'rgba(166,243,255,.92)';
+      const fill = rr ? `rgba(255,92,163,${f(0.06 + L.str * 0.025)})` : `rgba(62,230,255,${f(0.05 + L.str * 0.022)})`;
+      const sw = 0.8 + L.str * 0.3;
+      s += `<g class="lvg ${rr ? 'r' : 's'}" data-lv="${L.i}">`;
+      if (L.in) {
+        if (L.hi > L.lo) {
+          const y0 = Y(L.hi), y1 = Y(L.lo);
+          s += tag('rect', { x: padL, y: y0, width: ax - padL, height: Math.max(2, y1 - y0), fill, class: 'lvband' });
+          s += tag('line', { x1: padL, x2: ax, y1: y0, y2: y0, stroke: col, 'stroke-width': 0.9, opacity: 0.7, class: 'lvline' });
+          s += tag('line', { x1: padL, x2: ax, y1: y1, y2: y1, stroke: col, 'stroke-width': 0.9, opacity: 0.7, class: 'lvline' });
+        } else {
+          s += tag('line', { x1: padL, x2: ax, y1: Y(L.lo), y2: Y(L.lo), stroke: col, 'stroke-width': sw, 'stroke-dasharray': rr ? '7 4' : '3 3', class: 'lvline' });
+        }
+      }
+      const yA = L.in ? Y(L.lo === L.hi ? L.lo : (L.lo + L.hi) / 2) : t.ty;
+      s += tag('path', { d: `M${f(ax + 2)} ${f(yA)} L${f(ax + 8)} ${f(t.ty - 9)} H${f(W - 2)} V${f(t.ty + 9)} H${f(ax + 8)} Z`, fill: '#0b1824', stroke: col, class: 'tagbox' });
+      s += text(ax + 12, t.ty + 4, levelTag(L) + (L.in ? '' : L.hi > P1 ? ' ▲' : ' ▼'), { fill: rr ? '#ffc2dc' : C.cy2, cls: 'st-t tagtxt' });
+      s += '</g>';
+    });
+    // 価格帯別出来高
+    if (vpW) {
+      const vx = plotR + vpGap;
+      const bars = vpLayout(bins, P0, P1, padT, mainH);
+      s += '<g class="vp">';
+      bars.forEach((b) => {
+        const inNow = lastC >= b.from && lastC < b.to;
+        const h = Math.max(1, b.y1 - b.y0 - (b.y1 - b.y0 > 3 ? 1 : 0));
+        s += tag('rect', { x: vx, y: b.y0, width: Math.max(1, b.w * (vpW - 4)), height: h, fill: inNow ? 'rgba(62,230,255,.75)' : b.max ? 'rgba(216,231,239,.62)' : 'rgba(157,179,194,.32)', class: 'vpbar', 'data-from': b.from, 'data-to': b.to });
+      });
+      const top = bars.find((b) => b.max);
+      if (top && isNum(top.share)) {
+        const yl = clamp((top.y0 + top.y1) / 2 + 4, padT + 12, mainB - 3);
+        s += text(vx + vpW - 3, yl, fmt(top.share, 1) + '%', { anchor: 'end', fill: C.wh, cls: 'st-t vplab', style: 'paint-order:stroke;stroke:#05080d;stroke-width:3px' });
+      }
+      s += text(vx + 2, padT - 10, '価格帯別', { cls: 'st-j', fill: C.tx3 });
+      s += '</g>';
+    }
+    // 出来高・ローソク足・移動平均
+    s += '<g class="a-rv">';
+    rows.forEach((r, i) => {
+      if (!isNum(r.v) || r.v <= 0) return;
+      const y = VY(r.v);
+      s += tag('rect', { x: X(i) - bw / 2, y, width: bw, height: vTop + volH - y, fill: r.c >= r.o ? 'rgba(62,230,255,.42)' : 'rgba(255,92,163,.5)' });
+    });
+    s += '</g><g class="a-rv candles">';
+    rows.forEach((r, i) => {
+      const up = r.c >= r.o, x = X(i), col = up ? C.cy : C.mag;
+      s += tag('line', { x1: x, x2: x, y1: Y(r.h), y2: Y(r.l), stroke: col, 'stroke-width': 1 });
+      s += tag('rect', { x: x - bw / 2, y: Y(Math.max(r.o, r.c)), width: bw, height: Math.max(1, Math.abs(Y(r.o) - Y(r.c))), fill: up ? 'rgba(62,230,255,.22)' : C.mag, stroke: col, 'stroke-width': 1 });
+    });
+    s += '</g>';
+    ['ma200', 'ma75', 'ma25'].forEach((k) => {
+      const d = seriesPath(ma[k], X, Y), m = MA_STYLE[k];
+      if (d) s += tag('path', { d, fill: 'none', stroke: m[0], 'stroke-width': m[1], 'stroke-dasharray': m[2], 'stroke-linejoin': 'round', filter: m[3], class: 'ma' });
+    });
+    // 現在値
+    const lt = tagList[0], lx = X(n - 1), ly = Y(lastC);
+    s += tag('line', { x1: lx + 8, x2: ax, y1: ly, y2: ly, stroke: C.cy, 'stroke-dasharray': '2 3', opacity: 0.8 });
+    s += tag('path', { d: `M${f(ax + 2)} ${f(ly)} L${f(ax + 8)} ${f(lt.ty - 10)} H${f(W)} V${f(lt.ty + 10)} H${f(ax + 8)} Z`, fill: C.cy, filter: 'url(#kl-glow)', class: 'tagbox now' });
+    s += text(ax + 12, lt.ty + 4.5, fmtP(lastC), { fill: C.bg, style: 'font-weight:700', cls: 'st-t tagtxt' });
+    s += `<g stroke="${C.cy}" fill="none" stroke-width="1.2">` + tag('circle', { cx: lx, cy: ly, r: 8 }) + tag('circle', { cx: lx, cy: ly, r: 2, fill: C.cy }) + '</g>';
+    return s + '</svg>';
+  }
+
+  /* ---------- 過熱の物差し（目安の閾値つきゲージ。HTML） ---------- */
+  const HEAT = {
+    ma25dev: { name: '25日線からの乖離', min: -20, max: 20, zones: [[-20, -10], [10, 20]], ticks: [-20, -10, 0, 10, 20], from: 0, unit: '%', sign: true, tk: (v) => (v ? fmtS(v) : '0') + '%', rule: '±10%超で過熱の目安' },
+    rsi: { name: 'RSI（14日）', min: 0, max: 100, zones: [[0, 30], [70, 100]], ticks: [0, 30, 50, 70, 100], from: null, unit: '', tk: (v) => String(v), rule: '70以上は買われすぎ・30以下は売られすぎの目安' },
+    change3d: { name: '直近3日の騰落率', min: -20, max: 20, zones: [[-20, -10], [10, 20]], ticks: [-20, -10, 0, 10, 20], from: 0, unit: '%', sign: true, tk: (v) => (v ? fmtS(v) : '0') + '%', rule: '±10%超で過熱の目安' },
+    volume: { name: '出来高（20日平均比）', min: 0, max: 4, zones: [[2, 4]], ticks: [0, 1, 2, 3, 4], from: 0, unit: '倍', tk: (v) => v + '倍', rule: '2倍以上で過熱の目安' },
+  };
+  function heatPos(key, v) {
+    const h = HEAT[key];
+    if (!h || !isNum(v)) return null;
+    return { pos: clamp((v - h.min) / (h.max - h.min) * 100, 0, 100), over: v > h.max ? 1 : v < h.min ? -1 : 0, zero: h.from == null ? null : (h.from - h.min) / (h.max - h.min) * 100 };
+  }
+  function heatValue(key, v) {
+    const h = HEAT[key];
+    if (!h || !isNum(v)) return '—';
+    if (key === 'rsi') return fmt(v, decOf(v, 1));
+    if (key === 'volume') return fmt(v, 2);
+    return fmtS(v, 2);
+  }
+  function heatGauge(key, v, state) {
+    const h = HEAT[key];
+    if (!h) return '';
+    const P = heatPos(key, v);
+    const pc = (x) => (x - h.min) / (h.max - h.min) * 100;
+    let g = h.zones.map(([a, b]) => `<i class="hz" style="left:${f(pc(a))}%;width:${f(pc(b) - pc(a))}%"></i>`).join('');
+    g += h.ticks.map((t) => `<i class="ht" style="left:${f(pc(t))}%"></i>`).join('');
+    if (P) {
+      const cls = state === 'hot' ? ' hot' : state === 'warm' ? ' warm' : '';
+      if (P.zero != null) {
+        const a = Math.min(P.zero, P.pos), w = Math.abs(P.pos - P.zero);
+        g += `<i class="hb a-gx${cls}" style="left:${f(a)}%;width:${f(Math.max(w, 0.4))}%"></i>`;
+      }
+      g += `<i class="hm${cls}" style="left:${f(P.pos)}%" data-pos="${f(P.pos)}"></i>`;
+    }
+    const lab = h.ticks.map((t, k) => `<span style="left:${f(pc(t))}%"${k === 0 ? ' class="l"' : k === h.ticks.length - 1 ? ' class="r"' : ''}>${esc(h.tk(t))}</span>`).join('');
+    const ov = P && P.over ? `<em class="hov">${P.over > 0 ? '目盛りの上限を超過 ▶' : '◀ 目盛りの下限を超過'}</em>` : '';
+    return `<div class="hg"><div class="hgt${P ? '' : ' nil'}">${g}</div><div class="hgs">${lab}</div>${ov}</div>`;
+  }
+
+  /* =====================================================================
+     売買タイミングの考え方：縦の価格軸を共有する3レーン
+     o = {plans:[{zone:{low,high}, stop:{price}, target:{price}}], close, W, H, axisW, gap}
+     レーンの横位置は CSS の grid（axisW と gap の4列）と同じ式：x_i = axisW + gap + i*(laneW+gap)
+     ===================================================================== */
+  function planLanes(W, axisW, gap, n = 3) {
+    const lw = (W - axisW - gap * n) / n;
+    return Array.from({ length: n }, (_, i) => ({ x: axisW + gap + i * (lw + gap), w: lw }));
+  }
+  function planPrices(p) {
+    const z = p && p.zone ? p.zone : {}, out = [];
+    [z.low, z.high, p && p.stop && p.stop.price, p && p.target && p.target.price].forEach((v) => { if (isNum(v) && v > 0) out.push(v); });
+    return out;
+  }
+  function plansChart(o) {
+    const W = Math.round(o.W), H = Math.round(o.H), axisW = o.axisW || 76, gap = isNum(o.gap) ? o.gap : 10;
+    if (!(W > axisW + 120 && H > 80)) return '';
+    const plans = (o.plans || []).slice(0, 3);
+    const close = isNum(o.close) ? o.close : null;
+    let s = svgOpen(W, H, '3つの考え方の価格帯・撤退ライン・目安と現在値');
+    const vals = [...plans.flatMap(planPrices), ...(close != null ? [close] : [])];
+    if (!vals.length) return s + text(W / 2, H / 2, '価格の指定がありません', { cls: 'st-j', anchor: 'middle', fill: C.tx3 }) + '</svg>';
+    let lo = Math.min(...vals), hi = Math.max(...vals);
+    const sp = hi - lo || Math.abs(hi) * 0.06 || 1;
+    const P1 = hi + sp * 0.12, P0 = Math.max(0, lo - sp * 0.12);
+    const padT = 12, padB = 12, ph = H - padT - padB;
+    const Y = (p) => padT + (P1 - p) / (P1 - P0 || 1) * ph;
+    const lanes = planLanes(W, axisW, gap, 3);
+    // 軸
+    const tk = niceTicks(P0, P1, 5);
+    const nowY = close != null ? Y(close) : null;
+    tk.ticks.forEach((t) => {
+      const y = Y(t);
+      if (y < padT || y > H - padB) return;
+      s += tag('line', { x1: axisW - 4, x2: W, y1: y, y2: y, stroke: 'rgba(62,230,255,.05)' });
+      if (nowY == null || Math.abs(nowY - y) > 15) s += text(axisW - 9, y + 4, fmtP(t), { anchor: 'end', fill: C.tx3 });
+    });
+    s += tag('line', { x1: axisW - 4, x2: axisW - 4, y1: padT, y2: H - padB, stroke: 'rgba(62,230,255,.3)' });
+    const pct = (p) => (close ? ' ' + fmtS((p / close - 1) * 100, 1) + '%' : '');
+    lanes.forEach((ln, i) => {
+      const p = plans[i] || {};
+      const x0 = ln.x, x1 = ln.x + ln.w, bx1 = x0 + Math.max(60, ln.w * 0.46), cx = (x0 + 6 + bx1) / 2;
+      s += tag('rect', { x: x0, y: padT - 6, width: ln.w, height: ph + 12, fill: 'rgba(62,230,255,.025)', stroke: 'rgba(62,230,255,.14)', class: 'pl-lane', 'data-p': i });
+      const z = p.zone || {}, zl = isNum(z.low) ? z.low : null, zh = isNum(z.high) ? z.high : null;
+      const zLo = zl != null && zh != null ? Math.min(zl, zh) : zl != null ? zl : zh, zHi = zl != null && zh != null ? Math.max(zl, zh) : zLo;
+      const stop = p.stop && isNum(p.stop.price) ? p.stop.price : null, tgt = p.target && isNum(p.target.price) ? p.target.price : null;
+      const labs = [];
+      if (zLo != null) {
+        const y0 = Y(zHi), y1 = Y(zLo), h = Math.max(3, y1 - y0);
+        s += tag('rect', { x: x0 + 6, y: y0 - (h > y1 - y0 ? (h - (y1 - y0)) / 2 : 0), width: bx1 - x0 - 6, height: h, fill: 'url(#kl-hatch)', stroke: C.tx, 'stroke-width': 1, class: 'pl-zone', 'data-p': i });
+        s += tag('line', { x1: bx1, x2: x1 - 6, y1: (y0 + y1) / 2, y2: (y0 + y1) / 2, stroke: 'rgba(216,231,239,.35)', 'stroke-dasharray': '1 3' });
+        labs.push({ y: (y0 + y1) / 2 + 4, s: '入る価格帯 ' + (zLo === zHi ? fmtP(zLo) : fmtP(zLo) + '〜' + fmtP(zHi)), fill: C.tx });
+      }
+      if (tgt != null) {
+        s += tag('line', { x1: x0 + 6, x2: x1 - 6, y1: Y(tgt), y2: Y(tgt), stroke: C.cy2, 'stroke-width': 1.6, 'stroke-dasharray': '1 3', 'stroke-linecap': 'round', class: 'pl-tgt', 'data-p': i });
+        labs.push({ y: Y(tgt) - 4, s: '目安 ' + fmtP(tgt) + pct(tgt), fill: C.cy2 });
+      }
+      if (stop != null) {
+        s += tag('line', { x1: x0 + 6, x2: x1 - 6, y1: Y(stop), y2: Y(stop), stroke: C.amb, 'stroke-width': 1.5, 'stroke-dasharray': '6 4', class: 'pl-stop', 'data-p': i });
+        labs.push({ y: Y(stop) + 14, s: '撤退 ' + fmtP(stop) + pct(stop), fill: C.amb });
+      }
+      // 入る価格帯から目安・撤退ラインへの矢印（向きだけを示す中立の線）
+      if (zLo != null) {
+        const zm = Y((zLo + zHi) / 2);
+        if (tgt != null && Math.abs(Y(tgt) - zm) > 14) s += tag('path', { d: `M${f(cx)} ${f(zm)} V${f(Y(tgt) + (Y(tgt) < zm ? 4 : -4))}`, stroke: C.mid, 'stroke-width': 1.2, 'stroke-dasharray': '3 3', fill: 'none', 'marker-end': 'url(#arN)', opacity: 0.75 });
+        if (stop != null && Math.abs(Y(stop) - zm) > 14) s += tag('path', { d: `M${f(cx)} ${f(zm)} V${f(Y(stop) + (Y(stop) < zm ? 4 : -4))}`, stroke: C.mid, 'stroke-width': 1.2, 'stroke-dasharray': '3 3', fill: 'none', 'marker-end': 'url(#arN)', opacity: 0.5 });
+      }
+      if (!labs.length) {
+        s += text(x0 + ln.w / 2, (nowY != null && Math.abs(nowY - (padT + ph * 0.3)) < 20 ? padT + ph * 0.62 : padT + ph * 0.3), '価格の指定なし', { cls: 'st-j pl-none', anchor: 'middle', fill: C.tx2 });
+      }
+      const ys = spread(labs.map((l) => l.y), 15, padT + 10, H - padB - 1);
+      labs.forEach((l, k) => {
+        // 現在値の線と重なる時は少しずらす
+        let yy = ys[k];
+        if (nowY != null && Math.abs(yy - 4 - nowY) < 7) yy = nowY + (yy - 4 < nowY ? -6 : 18);
+        yy = clamp(yy, padT + 10, H - padB - 1);
+        s += text(x1 - 10, yy, l.s, { anchor: 'end', fill: l.fill, cls: 'st-j pl-lab', style: 'paint-order:stroke;stroke:#08121b;stroke-width:3px' });
+      });
+    });
+    if (nowY != null) {
+      s += tag('line', { x1: axisW - 4, x2: W, y1: nowY, y2: nowY, stroke: C.cy, 'stroke-width': 1.2, opacity: 0.85, class: 'pl-now' });
+      const str = fmtP(close), tw = textW(str, 12, true) + 12;
+      s += tag('path', { d: `M${f(axisW - 4)} ${f(nowY)} L${f(axisW - 10)} ${f(nowY - 9)} H${f(axisW - 12 - tw)} V${f(nowY + 9)} H${f(axisW - 10)} Z`, fill: C.cy, class: 'tagbox' });
+      s += text(axisW - 15, nowY + 4, str, { anchor: 'end', fill: C.bg, style: 'font-weight:700' });
+      s += text(axisW - 9, Math.max(padT + 2, nowY - 13), '現在値', { cls: 'st-j', anchor: 'end', fill: C.cy });
+    }
+    return s + '</svg>';
+  }
+
+  /* ---------- 決算：前年値の逆算（value ÷ (1 + yoyPct/100)）。逆算できなければ null ---------- */
+  function prevFromYoy(v, yoy) {
+    if (!isNum(v) || !isNum(yoy)) return null;
+    const k = 1 + yoy / 100;
+    if (!(k > 0)) return null;
+    return v / k;
+  }
+
+  /* ---------- 決算：今期と前年の立体棒（1項目ぶん）。前年は逆算値（≈）。負の値は下向き ----------
+     o = {curr, prev, W, H} */
+  function pairBars3d(o) {
+    const W = Math.round(o.W), H = Math.round(o.H);
+    if (!(W > 60 && H > 60)) return '';
+    const curr = isNum(o.curr) ? o.curr : null, prev = isNum(o.prev) ? o.prev : null;
+    let s = svgOpen(W, H, `今期 ${fmt(curr)}${prev != null ? ' 前年 約' + fmt(Math.round(prev)) : ''}`);
+    if (curr == null) return s + '</svg>';
+    const d = decOf(curr, 2);
+    const vals = [curr, ...(prev != null ? [prev] : [])];
+    const vmax = Math.max(0, ...vals), vmin = Math.min(0, ...vals);
+    const DX = 8, DY = 5, padT = 20 + DY, padB = 34;
+    const ph = H - padT - padB;
+    const Yv = (v) => padT + (vmax - v) / (vmax - vmin || 1) * ph;
+    const base = Yv(0);
+    const items = prev != null ? [['前年', prev, true], ['今期', curr, false]] : [['今期', curr, false]];
+    const bw = Math.min(46, (W - 20) / (items.length * 2));
+    s += floor3d(10 + DX, W - 4, base, DX, DY);
+    items.forEach(([lab, v, isPrev], k) => {
+      const cx = items.length === 1 ? W / 2 + DX / 2 : W * (k === 0 ? 0.32 : 0.7) + DX / 2;
+      const x0 = cx - bw / 2;
+      const yv = Yv(v), top = Math.min(yv, base), bot = Math.max(yv, base);
+      const neg = v < 0;
+      const sty = isPrev
+        ? { front: 'url(#kl-sh)', side: 'rgba(90,110,122,.6)', top: 'rgba(200,215,225,.5)', fedge: 'rgba(157,179,194,.5)' }
+        : neg ? { front: 'rgba(255,92,163,.45)', side: 'rgba(150,40,90,.7)', top: 'rgba(255,160,200,.7)', fedge: C.mag }
+          : { front: 'url(#g3BarF)', side: 'url(#g3BarL)', top: 'rgba(166,243,255,.82)', fedge: 'rgba(62,230,255,.55)', hi: true };
+      s += `<g class="a-grow" style="animation-delay:${f(k * 0.12)}s">` + bar3d(x0, top, bw, Math.max(bot, top + 1.5), DX, DY, sty) + '</g>';
+      const str = (isPrev ? '≈' : '') + fmt(v, isPrev ? (d ? Math.min(d, 1) : 0) : d);
+      const ly = neg ? Math.min(bot + 14, H - padB + 12) : top - DY - 5;
+      s += text(cx - DX / 2, ly, str, { anchor: 'middle', fill: isPrev ? C.tx2 : neg ? C.mag : C.wh, cls: 'st-t' + (isPrev ? '' : ' cur'), style: isPrev ? '' : 'font-weight:700' });
+      s += text(cx - DX / 2, H - 4, lab + (isPrev ? '（逆算）' : ''), { anchor: 'middle', cls: 'st-j', fill: isPrev ? C.tx3 : C.tx2 });
+    });
+    return s + '</svg>';
+  }
+
+  /* ---------- 決算：進捗リング（0〜100% で1周、100%超は内側に超過分）＋均等ペースの目盛り ----------
+     角度は真上から時計回り（度）。画面の検査は data 属性と目盛りの座標で確かめる */
+  function ringGeom(pct, pace) {
+    const p = isNum(pct) ? clamp(pct, 0, 200) : null;
+    const pc = isNum(pace) ? clamp(pace, 0, 100) : null;
+    return { pct: p, main: p == null ? 0 : Math.min(p, 100), over: p != null && p > 100 ? p - 100 : 0, mainDeg: p == null ? 0 : Math.min(p, 100) * 3.6, overDeg: p != null && p > 100 ? (p - 100) * 3.6 : 0, paceDeg: pc == null ? null : pc * 3.6 };
+  }
+  function ring(pct, pace, size = 180) {
+    const g = ringGeom(pct, pace);
+    const cx = size / 2, cy = size / 2, r = size * 0.33, sw = 13;
+    const P = (deg, rr) => [cx + rr * Math.sin(deg * Math.PI / 180), cy - rr * Math.cos(deg * Math.PI / 180)];
+    const arc = (d0, d1, rr) => {
+      if (d1 - d0 >= 359.99) return `M${f(cx)} ${f(cy - rr)} A${rr} ${rr} 0 1 1 ${f(cx)} ${f(cy + rr)} A${rr} ${rr} 0 1 1 ${f(cx)} ${f(cy - rr)}`;
+      const a = P(d0, rr), b = P(d1, rr);
+      return `M${f(a[0])} ${f(a[1])} A${rr} ${rr} 0 ${d1 - d0 > 180 ? 1 : 0} 1 ${f(b[0])} ${f(b[1])}`;
+    };
+    let s = `<svg class="pr-ring" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" role="img" aria-label="進捗率 ${g.pct == null ? '未取得' : fmt(g.pct, decOf(g.pct, 1)) + '%'}・均等ペース ${g.paceDeg == null ? '—' : fmt(g.paceDeg / 3.6, 0) + '%'}" data-pct="${g.pct == null ? '' : g.pct}" data-pace="${g.paceDeg == null ? '' : f(g.paceDeg / 3.6)}" data-cx="${f(cx)}" data-cy="${f(cy)}">`;
+    // 目盛り（10%ごと）
+    for (let k = 0; k < 40; k++) {
+      const d = k * 9, a = P(d, r + sw / 2 + 4), b = P(d, r + sw / 2 + (k % 4 === 0 ? 10 : 7));
+      s += tag('line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], stroke: k % 4 === 0 ? C.tx3 : 'rgba(127,151,168,.45)', 'stroke-width': 1 });
+    }
+    s += tag('circle', { cx, cy, r, fill: 'none', stroke: 'rgba(62,230,255,.1)', 'stroke-width': sw });
+    s += tag('circle', { cx, cy, r: r - sw / 2 - 5, fill: 'none', stroke: 'rgba(62,230,255,.18)', 'stroke-dasharray': '1 4' });
+    if (g.pct != null && g.mainDeg > 0) {
+      s += tag('path', { d: arc(0, g.mainDeg, r), fill: 'none', stroke: C.cy, 'stroke-width': sw - 3, filter: 'url(#mglow)', class: 'pr-arc arc', 'data-deg': f(g.mainDeg) });
+      const e = P(g.mainDeg, r);
+      s += tag('circle', { cx: e[0], cy: e[1], r: 3.2, fill: C.wh, class: 'pr-end' });
+    }
+    if (g.overDeg > 0) s += tag('path', { d: arc(0, g.overDeg, r - sw - 4), fill: 'none', stroke: C.amb, 'stroke-width': 5, class: 'pr-over arc', 'data-deg': f(g.overDeg) });
+    if (g.paceDeg != null) {
+      const a = P(g.paceDeg, r - sw / 2 - 3), b = P(g.paceDeg, r + sw / 2 + 12);
+      s += tag('line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], stroke: C.amb, 'stroke-width': 2, class: 'pr-pace' });
+      s += tag('circle', { cx: b[0], cy: b[1], r: 2.5, fill: C.amb });
+    }
+    if (g.pct != null) {
+      const str = fmt(g.pct, decOf(g.pct, 1));
+      s += `<text x="${f(cx)}" y="${f(cy + 7)}" text-anchor="middle" class="pr-num" style="fill:${C.wh};font:700 ${str.length > 4 ? 24 : 30}px var(--mono,monospace)">${esc(str)}<tspan style="font-size:14px;fill:${C.tx2}">%</tspan></text>`;
+      s += text(cx, cy + 25, '進捗率', { cls: 'st-j', anchor: 'middle', fill: C.tx2 });
+    }
+    return s + '</svg>';
+  }
+
+  /* ---------- 小さな比率バー（進捗の一覧：pct と均等ペースの目盛り。HTML） ---------- */
+  function paceBar(pct, pace) {
+    const p = isNum(pct) ? clamp(pct, 0, 200) : null, pc = isNum(pace) ? clamp(pace, 0, 100) : null;
+    const max = p != null && p > 100 ? 200 : 100;
+    return `<span class="pcb">${p != null ? `<u style="width:${f(p / max * 100)}%"></u>` : ''}${pc != null ? `<i style="left:${f(pc / max * 100)}%"></i>` : ''}</span>`;
+  }
+
+  /* ---------- 増減率の横棒（0を中心に左右。HTML） ---------- */
+  function yoyBar(v, scale) {
+    const sc = isNum(scale) && scale > 0 ? scale : Math.max(10, isNum(v) ? Math.abs(v) : 0);
+    if (!isNum(v)) return '<span class="yb nil"></span>';
+    const w = Math.min(Math.abs(v), sc) / sc * 50;
+    return `<span class="yb"><u class="a-gx${v < 0 ? ' neg' : ''}" style="${v < 0 ? 'right:50%' : 'left:50%'};width:${f(Math.max(w, 0.6))}%"></u></span>`;
+  }
+
+  /* ---------- 「前→今」の対比バー（財務。HTML）。共通の物差しは max(|prev|,|curr|) ---------- */
+  function cmpPair(prev, curr) {
+    const m = Math.max(isNum(prev) ? Math.abs(prev) : 0, isNum(curr) ? Math.abs(curr) : 0);
+    const w = (v) => (isNum(v) && m > 0 ? Math.abs(v) / m * 100 : 0);
+    return `<span class="cp"><span class="cpr p"><u style="width:${f(w(prev))}%"${isNum(prev) && prev < 0 ? ' class="neg"' : ''}></u></span><span class="cpr c"><u class="a-gx${isNum(curr) && curr < 0 ? ' neg' : ''}" style="width:${f(w(curr))}%"></u></span></span>`;
+  }
+  /** 増減の向きと率。単位が % なら差（pt）、それ以外は率（%）。計算できなければ null */
+  function changeOf(prev, curr, unit) {
+    if (!isNum(prev) || !isNum(curr)) return null;
+    const diff = curr - prev;
+    if (unit === '%') return { dir: diff > 1e-9 ? 'up' : diff < -1e-9 ? 'dn' : 'flat', text: fmtS(diff, 1) + 'pt' };
+    if (prev === 0) return { dir: diff > 0 ? 'up' : diff < 0 ? 'dn' : 'flat', text: diff === 0 ? '±0' : '—' };
+    const r = (curr / prev - 1) * 100 * (prev < 0 ? -1 : 1);
+    return { dir: diff > 1e-9 ? 'up' : diff < -1e-9 ? 'dn' : 'flat', text: fmtS(r, 1) + '%' };
+  }
+
+  /* ---------- ブレットチャート（目標 vs 実績 vs 今期予想。HTML） ----------
+     数値でない値（文字の目標など）は物差しに載せない。負の値は 0 の線を挟んで描く */
+  function bulletScale(vals) {
+    const v = (vals || []).filter(isNum);
+    if (!v.length) return null;
+    let lo = Math.min(0, ...v), hi = Math.max(0, ...v);
+    if (hi - lo < 1e-9) hi = lo + 1;
+    hi = hi > 0 ? hi + (hi - lo) * 0.12 : hi;
+    lo = lo < 0 ? lo - (hi - lo) * 0.08 : lo;
+    return { lo, hi, pos: (x) => clamp((x - lo) / (hi - lo) * 100, 0, 100), zero: (0 - lo) / (hi - lo) * 100 };
+  }
+  function bullet(t) {
+    const T = t && isNum(t.target) ? t.target : null, A = t && isNum(t.actual) ? t.actual : null, F = t && isNum(t.forecast) ? t.forecast : null;
+    const sc = bulletScale([T, A, F]);
+    if (!sc) return '<div class="bl nil"><span>数値の比較なし</span></div>';
+    const bar = (v, cls) => { if (v == null) return ''; const a = Math.min(sc.zero, sc.pos(v)), w = Math.abs(sc.pos(v) - sc.zero); return `<u class="${cls}${v < 0 ? ' neg' : ''}" style="left:${f(a)}%;width:${f(Math.max(w, 0.6))}%" data-v="${v}"></u>`; };
+    let s = '<div class="bl"><div class="blt">';
+    s += bar(F, 'bf') + bar(A, 'ba a-gx');
+    if (T != null) s += `<i class="btg" style="left:${f(sc.pos(T))}%" data-v="${T}"></i>`;
+    if (sc.lo < 0) s += `<i class="bz" style="left:${f(sc.zero)}%"></i>`;
+    return s + '</div></div>';
+  }
+
+  /* =====================================================================
+     配当とEPS：期ごとの立体棒（配当）＋浮遊する折れ線（EPS）。予想は斜線と点線
+     o = {divs:[{period,value,forecast}], eps:[{period,value,forecast}], W, H}
+     数値でない配当（「中間28・期末未定」など）は棒を描かず、表（HTML）で見せる
+     ===================================================================== */
+  function returnsPeriods(divs, eps) {
+    const out = [];
+    [...(divs || []), ...(eps || [])].forEach((x) => { if (x && typeof x.period === 'string' && !out.includes(x.period)) out.push(x.period); });
+    return out;
+  }
+  function returns3d(o) {
+    const W = Math.round(o.W), H = Math.round(o.H);
+    if (!(W > 120 && H > 90)) return '';
+    const divs = (o.divs || []).filter((x) => x && typeof x.period === 'string'), eps = (o.eps || []).filter((x) => x && typeof x.period === 'string');
+    const periods = returnsPeriods(divs, eps);
+    const N = Math.max(1, periods.length);
+    let s = svgOpen(W, H, '配当とEPSの推移');
+    const dOf = (p) => divs.find((x) => x.period === p) || null, eOf = (p) => eps.find((x) => x.period === p) || null;
+    const dv = periods.map((p) => { const x = dOf(p); return x && isNum(x.value) ? x.value : null; });
+    const ev = periods.map((p) => { const x = eOf(p); return x && isNum(x.value) ? x.value : null; });
+    const DX = 12, DY = 8, pl = 6 + DX, pr = 6, base = H - 20;
+    const gw = (W - pl - pr) / N, bw = Math.min(54, gw * 0.46);
+    const dmax = Math.max(1, ...dv.filter(isNum));
+    const bandTop = 18, H3 = Math.max(10, (base - DY - bandTop - 40) * 0.62);
+    const RY = (v) => base - Math.max(0, v) / dmax * H3;
+    s += floor3d(pl, W - pr, base, DX, DY);
+    periods.forEach((p, i) => {
+      const cx = pl + gw * (i + 0.5), x0 = cx - bw / 2, d = dOf(p), fc = !!(d && d.forecast) || !!(eOf(p) && eOf(p).forecast), mx = cx - DX / 2;
+      if (isNum(dv[i])) {
+        const y = RY(dv[i]);
+        s += `<g class="a-grow rb" style="animation-delay:${f(i * 0.1)}s">` + bar3d(x0, Math.min(y, base - 1.5), bw, base, DX, DY, d.forecast
+          ? { front: 'url(#fch)', side: 'rgba(62,230,255,.08)', top: 'rgba(62,230,255,.18)', edge: C.cy, dash: '3 3', fedge: C.cy, fdash: '4 3' }
+          : { front: 'url(#g3BarF)', side: 'url(#g3BarL)', top: 'rgba(166,243,255,.82)', fedge: 'rgba(62,230,255,.55)', hi: true }) + '</g>';
+        s += text(mx, y - DY - 4, fmt(dv[i], decOf(dv[i], 2)) + '円', { anchor: 'middle', fill: d.forecast ? C.cy2 : C.tx, cls: 'st-t rbl' });
+      } else {
+        s += tag('path', { d: poly([[x0, base], [x0 + bw, base], [x0 + bw - DX, base - DY], [x0 - DX, base - DY]]), fill: 'none', stroke: C.tx3, 'stroke-dasharray': '2 3' });
+        s += text(mx, base - DY - 5, d && typeof d.value === 'string' && d.value ? '表を参照' : '—', { anchor: 'middle', cls: 'st-j', fill: C.tx3 });
+      }
+      s += text(cx, H - 4, p + (fc ? '予' : ''), { anchor: 'middle', fill: fc ? C.cy2 : C.tx2 });
+    });
+    // EPS の線（上の帯に独立した物差しで）
+    const evn = ev.filter(isNum);
+    if (!evn.length && !dv.some(isNum)) s += text(W / 2, Math.max(16, (base - DY) / 2), '数値の配当・EPSはありません（下の表を参照）', { cls: 'st-j', anchor: 'middle', fill: C.tx3 });
+    if (evn.length) {
+      const emax = Math.max(...evn), emin = Math.min(...evn);
+      const top = bandTop, bot = Math.min(...periods.map((_, i) => (isNum(dv[i]) ? RY(dv[i]) : base) - DY - 24));
+      const bandH = Math.max(6, bot - top);
+      const EY = (v) => (emax > emin ? top + (emax - v) / (emax - emin) * bandH : top + bandH / 2);
+      const pts = [];
+      periods.forEach((p, i) => { if (isNum(ev[i])) pts.push([pl + gw * (i + 0.5) - DX / 2, EY(ev[i]), ev[i], !!(eOf(p) && eOf(p).forecast)]); });
+      for (let k = 1; k < pts.length; k++) {
+        const fc = pts[k][3];
+        s += `<g class="a-rv eline">` + (fc ? tag('path', { d: pathD([pts[k - 1], pts[k]]), stroke: C.w, 'stroke-width': 1.6, 'stroke-dasharray': '4 3', fill: 'none' }) : tube(pathD([pts[k - 1], pts[k]]), C.w, '#5d7686', 1.6)) + '</g>';
+      }
+      pts.forEach((q) => {
+        const lab = fmt(q[2], decOf(q[2], 2)), w = textW(lab, 12, true) + 10;
+        const lx = clamp(q[0], w / 2 + 1, W - w / 2 - 1);
+        s += tag('circle', { cx: q[0], cy: q[1], r: 3.6, fill: q[3] ? C.bg : 'url(#g3OrbW)', stroke: q[3] ? C.w : 'none', 'stroke-width': 1.4, filter: q[3] ? '' : 'url(#mglow)' });
+        s += tag('rect', { x: lx - w / 2, y: q[1] - 20, width: w, height: 15, fill: 'rgba(6,14,22,.95)', stroke: 'rgba(244,251,255,.55)', 'stroke-dasharray': q[3] ? '3 2' : '' });
+        s += text(lx, q[1] - 8.5, lab, { anchor: 'middle', fill: q[2] < 0 ? C.mag : C.w, cls: 'st-t elab' });
+      });
+    }
+    return s + '</svg>';
+  }
+
+  /* ---------- 営業利益率の推移（3か月ごと。小さな折れ線） ---------- */
+  function marginLine(o) {
+    const W = Math.round(o.W), H = Math.round(o.H);
+    if (!(W > 120 && H > 60)) return '';
+    const rows = (o.rows || []).filter((r) => r && typeof r.period === 'string' && isNum(r.v));
+    let s = svgOpen(W, H, '営業利益率の推移（3か月ごと）');
+    if (rows.length < 2) return s + '</svg>';
+    const vals = rows.map((r) => r.v), mn = Math.min(...vals), mx = Math.max(...vals);
+    const tk = niceTicks(Math.min(0, mn) === 0 && mn > 0 ? mn - (mx - mn) * 0.3 : mn, mx, 3);
+    const lo = tk.lo, hi = tk.hi;
+    const pl = Math.max(34, Math.ceil(textW(fmt(hi, tk.dec) + '%', 12, true)) + 8), pr = 22, pt = 16, pb = 18;
+    const X = (i) => pl + (W - pl - pr) * (rows.length === 1 ? 0.5 : i / (rows.length - 1));
+    const Y = (v) => pt + (hi - v) / (hi - lo || 1) * (H - pt - pb);
+    tk.ticks.forEach((t) => { s += tag('line', { x1: pl, x2: W - pr, y1: Y(t), y2: Y(t), stroke: 'rgba(62,230,255,.07)' }); s += text(pl - 6, Y(t) + 4, fmt(t, tk.dec) + '%', { anchor: 'end', fill: C.tx3 }); });
+    const pts = rows.map((r, i) => [X(i), Y(r.v)]);
+    s += tag('path', { d: pathD(pts) + ` L${f(pts[pts.length - 1][0])} ${f(H - pb)} L${f(pts[0][0])} ${f(H - pb)}Z`, fill: 'rgba(62,230,255,.06)' });
+    s += tag('path', { d: pathD(pts), fill: 'none', stroke: C.cy, 'stroke-width': 1.6, class: 'ma' });
+    let lastEnd = -1e9;
+    rows.forEach((r, i) => {
+      const last = i === rows.length - 1;
+      s += tag('circle', { cx: pts[i][0], cy: pts[i][1], r: last ? 3.4 : 2.4, fill: last ? C.cy : C.bg, stroke: C.cy, 'stroke-width': 1.2 });
+      const lab = String(r.period), w = textW(lab, 12, true);
+      const x = clamp(pts[i][0], pl + w / 2, W - w / 2 - 1);
+      if (last || (x - w / 2 > lastEnd + 8 && x + w / 2 < X(rows.length - 1) - textW(String(rows[rows.length - 1].period), 12, true) / 2 - 8)) { s += text(x, H - 4, lab, { anchor: 'middle', fill: last ? C.cy2 : C.tx3 }); lastEnd = x + w / 2; }
+    });
+    const lv = fmt(rows[rows.length - 1].v, 1) + '%', lw = textW(lv, 12, true);
+    const lp = pts[pts.length - 1];
+    s += text(clamp(lp[0], pl + lw / 2, W - lw / 2 - 1), lp[1] > pt + 14 ? lp[1] - 7 : lp[1] + 15, lv, { anchor: 'middle', fill: C.wh, cls: 'st-t', style: 'font-weight:700' });
+    return s + '</svg>';
+  }
+
   const api = {
     C, SEG_COLORS, isNum, clamp, esc, fmt, fmtP, fmtS, fmtVol, yenParts, jpAmountParts, decOf, priceDec, textW,
     niceStep, niceCeil, niceTicks, sma, deviation, spread, mmdd, md, segModel, segListHtml, ckReasons, noteSign,
     priceChart, meter, meterLabelX, devCell, gauge, perf3d, supply3d, fan, donut, spark, checklist, stars, segs,
+    miniCandles, vpLayout, levelChart, levelTag, HEAT, heatPos, heatValue, heatGauge, planLanes, planPrices, plansChart,
+    prevFromYoy, pairBars3d, ringGeom, ring, paceBar, yoyBar, cmpPair, changeOf, bulletScale, bullet, returnsPeriods, returns3d, marginLine,
   };
   G.KABU_CHARTS = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);
