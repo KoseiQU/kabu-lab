@@ -136,6 +136,48 @@ digest.md にはこれらの結果と直近20日の四本値を載せる。チ�
 
 他の型のスキーマは各フェーズの冒頭で本書に追記する。
 
+### 5.1 chart 型（P2）
+
+`type: "chart"`。骨格（schema〜missing）は共通。`sections`：
+
+| キー | 中身 |
+|---|---|
+| `timeframes` | 3件固定。`{frame: monthly/weekly/daily, trend: up/flat/down, text}`（text 120字以内）。上位の足から順に流れを述べる |
+| `levels` | 2〜12件。`{kind: resistance/support, low, high, strength(1〜5), label, basis:[...]}`。`low`=`high` なら線、違えば帯。`basis` は根拠の語（「過去の高値」「役割の逆転」「75日線」「節目」「価格帯別出来高」など）1〜4個 |
+| `heat` | 4件固定。`{key: ma25dev/rsi/change3d/volume, value, state: calm/warm/hot, note}`。過熱の物差し（25日線乖離・RSI・直近3日の騰落率・出来高の20日平均比） |
+| `checklist` | 10件固定順。`{id, status: done/progress/none, reason, watch}`。`reason` 160字以内、`watch` は進行中の項目で次に見る点（80字以内、他は空文字） |
+| `plans` | 3件固定。`{kind: pullback/breakout/wait, title, when, zone:{low,high}, stop:{price,label}, target:{price,label}, pros, cons}`。「〜なら」という条件つきの考え方として書く。断定しない |
+| `lesson` | `{title, text}`。このチャートから学べる読み方を1つ（text 160字以内） |
+
+### 5.2 kessan 型（P2）
+
+`type: "kessan"`。`sections`：
+
+| キー | 中身 |
+|---|---|
+| `period` | `{label, announced, docTitle}`。例 label「2027年3月期 第1四半期」 |
+| `verdict` | `{grade: good/normal/bad, label, reason}`。決算の出来の評価（好決算／普通／悪決算）であり売買の判断ではない |
+| `points` | 3件固定。`{title, text}`（text 120字以内）。判定の理由 |
+| `results` | 2〜6件。`{key, label, value, unit, yoyPct, note}`。売上・本業の利益・純利益など |
+| `driver` | `{title, text}`。伸びた（落ちた）一番の理由 |
+| `progress` | `{label, pct, pace, note}`。通期予想に対する進捗率。`pace` は均等ペース（1Q=25 など） |
+| `margin` | `{label, pct, prevPct, peer}`。利益率と同業比較の一言（概算なら「概算」と明記） |
+| `outlook` | `{stance: bullish/neutral/cautious, revision: up/none/down, text, forecast:[{label, value, unit, yoyPct}]}` |
+| `plusMinus` | `{plus:{title, text}, minus:{title, text}}` |
+| `investments` | 1〜5件。`{title, amount, text}`。何にお金を使っているか |
+| `finance` | `{items:[{label, prev, curr, unit}], verdict, text}`。現金・有利子負債・D/Eレシオ・自己資本比率・営業CF など |
+| `returns` | `{dividends:[{period, value, forecast}], eps:[{period, value, forecast}], buyback}` |
+| `segments` | quick と同じ形（任意） |
+| `next` | 1〜3件の文字列。次の決算で確認する点 |
+| `deep` | 任意（`決算 3点`）。`{yuho:{earner, dragger, oneOff, risks:[...]}, plan:{name, goal, targets:[{label, target, actual, forecast}], consistent, realistic}}` |
+
+### 5.3 P2 で足す収集
+
+- `build.mjs` は各銘柄の指標（移動平均の系列・価格帯別出来高・スイング・クロス・窓・週足と月足への集約）を `stocks[code].indicators` として data.js に入れる。画面は自前で再計算しない。
+- digest に「移動平均線へのタッチと反発」（安値が75日線・200日線の±1.5%以内に入り、その後5日以内に終値が3%以上戻した日）を直近250日ぶん追加する。
+- `collect/kabutan-finance.mjs`：株探の決算ページ（`/stock/finance?code=`）から、通期と四半期の業績推移、財務（自己資本比率・有利子負債倍率など）、キャッシュフローを取り `finance.json` と `digest-kessan.md`（8KB以内）を書く。`node collect/run.mjs <code> --type kessan`。
+- `tools/fetch-doc.mjs <code> <url> --name <名前>`：決算短信などのPDFを `raw/docs/` に保存し、pdf2text でテキスト化し、ページ数と文字数を出す。`tools/doc-slice.mjs <txt> --pages 1-2,8 | --grep <語>`：必要なページだけを取り出す（Claude が読むのは1資料あたり20KBまで）。
+
 ## 6. 画面
 
 見た目の正は `mocks/mock-6-final.html`（案4の高密度HUD＋業績推移と需給の立体棒グラフ。メーター・株価チャート・ゲージは平面）。配色・フォント・枠・文言の調子はこれに従う。
@@ -156,7 +198,9 @@ digest.md にはこれらの結果と直近20日の四本値を載せる。チ�
 | P1a | データ基盤：収集・指標計算・quickスキーマと検証・build・機械テスト。日立のサンプル分析JSON（モックと同じ中身） | `node --test` 全通過。`node collect/run.mjs 6501` が実データで digest を作る | Opus |
 | P1b | アプリ：ホームと銘柄ページ（quick）を data.js から描画。確定版モックと同じ見た目 | 日立のサンプルで確定版モックと見た目が一致。別銘柄のデータでも崩れない | Opus |
 | P1c | スキル v0 と通し運転。`/kabu` を実銘柄で1本通す | 利用者が実際に `/kabu` を打って触る（縦切りゲート） | メイン |
-| P2 | チャート型・決算型 | 触って確認 | Opus |
+| P2a | 収集の拡張（§5.3）と chart・kessan のスキーマ・検証・フィクスチャ | `npm test` 全通過。実銘柄で kessan の digest が作れる | Opus |
+| P2b | チャート型・決算型の画面 | フィクスチャと実データで崩れなし | Opus |
+| P2c | スキルに2つの型を追加し、実銘柄で通す | 触って確認 | メイン |
 | P3 | ニュース・市場・反省・用語、用語帳・気づきノート・答え合わせ | 触って確認 | Opus |
 | P4 | スキル仕上げ（skill-forge で監査と発動テスト）、起動の入口 | 完成 | メイン |
 
