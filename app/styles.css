@@ -590,3 +590,5 @@ a.rl,a.tab,a.k{text-decoration:none}
 .ck p{margin-top:2px}
 /* 銘柄ライブラリ：長い社名は2行まで（全文は title） */
 .h-nm{display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; min-width:7em}
+.gtr>span{flex:none; white-space:nowrap}
+.gtr em.ov{line-height:1}

@@ -442,9 +442,10 @@
     let list = arr(a.sections.segments).filter((x) => x && x.name);
     list = [...list].sort((x, y) => (isNum(y.profit) ? y.profit : -Infinity) - (isNum(x.profit) ? x.profit : -Infinity));
     let rows = list;
-    if (list.length > 5) {
-      const rest = list.slice(4), sum = rest.reduce((s, x) => s + (isNum(x.profit) ? x.profit : 0), 0);
-      rows = [...list.slice(0, 4), { name: `その他 ${rest.length}事業`, profit: sum, margin: null, note: '', other: true }];
+    // 1440×900 の枠に収まるのは4行まで。5事業以上は上位3＋「その他」にまとめる（合計は足し算のみ）
+    if (list.length > 4) {
+      const rest = list.slice(3), sum = rest.reduce((s, x) => s + (isNum(x.profit) ? x.profit : 0), 0);
+      rows = [...list.slice(0, 3), { name: `その他 ${rest.length}事業`, profit: sum, margin: null, note: '', other: true }];
     }
     const maxM = Math.max(20, ...rows.map((x) => (isNum(x.margin) ? Math.ceil(x.margin / 5) * 5 : 0)));
     const colors = rows.map((x, i) => (x.other ? '#47606f' : K.SEG_COLORS[i % K.SEG_COLORS.length]));

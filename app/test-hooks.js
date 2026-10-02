@@ -69,6 +69,10 @@
       const tol = getComputedStyle(el).overflowY === 'visible' ? 4 : 1; /* 見える枠は字形のはみ出し（行高1）を許す */
       if (el.scrollHeight > el.clientHeight + tol || el.scrollWidth > el.clientWidth + 1) add('① 文字が切れている', el.textContent.trim().slice(0, 24));
     });
+    // パネルの中身が枠（overflow:hidden）で切れていない
+    main.querySelectorAll('.panel > .pi').forEach((pi) => {
+      if (pi.scrollHeight > pi.clientHeight + 1) add('① パネルの中身が切れている', `${pi.parentElement.dataset.sec || ''} ${pi.scrollHeight}>${pi.clientHeight}`);
+    });
     main.querySelectorAll('table').forEach((t) => {
       const box = t.parentElement.getBoundingClientRect(), r = t.getBoundingClientRect();
       if (r.right > box.right + 1) add('① 表が枠からはみ出している', (t.querySelector('td') || {}).textContent || '');
