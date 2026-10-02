@@ -169,7 +169,7 @@ digest.md にはこれらの結果と直近20日の四本値を載せる。チ�
 | `returns` | `{dividends:[{period, value, forecast}], eps:[{period, value, forecast}], buyback}` |
 | `segments` | quick と同じ形（任意） |
 | `next` | 1〜3件の文字列。次の決算で確認する点 |
-| `deep` | 任意（`決算 3点`）。`{yuho:{earner, dragger, oneOff, risks:[...]}, plan:{name, goal, targets:[{label, target, actual, forecast}], consistent, realistic}}` |
+| `deep` | 任意（`決算 3点`）。`{yuho:{earner, dragger, oneOff, risks:[...]}, plan:{name, goal, targets:[{label, target, actual, forecast, unit, nums}], consistent, realistic}}`。`target`/`actual`/`forecast` は表示用の文字（「7〜9%」など）。`nums:{targetLow, targetHigh, actual, forecast}` と `unit` を入れると、目標の範囲と実績・今期予想を図で比べられる |
 
 文字数・件数の上限の正は `schemas/*.schema.json`。chart の checklist は「進行中の項目だけ `watch` 必須」。kessan の `investments.amount` は億円の数値か null。
 

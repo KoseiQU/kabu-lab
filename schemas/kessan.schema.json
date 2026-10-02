@@ -737,6 +737,40 @@
              "null"
             ],
             "maxLength": 20
+           },
+           "unit": {
+            "type": "string",
+            "maxLength": 6
+           },
+           "nums": {
+            "type": "object",
+            "description": "図にするための数値（任意）。目標の下限・上限、実績、今期予想",
+            "properties": {
+             "targetLow": {
+              "type": [
+               "number",
+               "null"
+              ]
+             },
+             "targetHigh": {
+              "type": [
+               "number",
+               "null"
+              ]
+             },
+             "actual": {
+              "type": [
+               "number",
+               "null"
+              ]
+             },
+             "forecast": {
+              "type": [
+               "number",
+               "null"
+              ]
+             }
+            }
            }
           }
          }
