@@ -260,6 +260,11 @@
     const nd = (k) => main.querySelector(`[data-nodata="${k}"]`);
     const pair = (cond, key, label) => { if (cond !== !!nd(key)) add(`④ ${label}の未取得表示が不一致`, `${key}: ${cond ? '欠損なのに表示なし' : 'データがあるのに未取得'}`); };
     const whyIn = (key, sec) => { const el = nd(key), why = A.missFor(a, sec); if (el && why && !el.textContent.includes(why)) add('④ 未取得の理由が missing と違う', `${key}: ${why}`); };
+    // 図の中の文字どうしが重ならない（チャート型・決算型の全図）
+    main.querySelectorAll('[data-chart] svg').forEach((svg) => {
+      const ts = [...svg.querySelectorAll('text')].map((t) => { const b = t.getBBox(); return [b.x, b.y + 2, b.x + b.width, b.y + b.height - 2, t.textContent]; }).filter((b) => b[2] > b[0]);
+      ts.forEach((t, i) => { const o = ts.find((u, j) => j > i && t[0] < u[2] - 1 && t[2] > u[0] + 1 && t[1] < u[3] && t[3] > u[1]); if (o) add('図の文字どうしが重なる', `${svg.parentElement.dataset.chart}: ${t[4]} / ${o[4]}`); });
+    });
     if (a.type === 'chart') {
       (s.heat || []).forEach((h) => { if (h && h.key) pair(typeof h.value !== 'number', `heat:${h.key}`, '過熱の物差し'); });
       if ((st.prices && st.prices.rows || []).length) pair(!(st.indicators && typeof st.indicators === 'object'), 'indicators', '移動平均・価格帯別出来高');

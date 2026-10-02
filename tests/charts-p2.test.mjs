@@ -215,3 +215,14 @@ test('marginLine・changeOf・yoyBar・cmpPair・paceBar: 境界値で NaN な�
   for (const [p, c] of [[null, null], [0, 0], [-5, 5], [10, null]]) clean(K.cmpPair(p, c), `cmpPair ${p},${c}`);
   for (const [p, q] of [[null, null], [200, 100], [21, 25]]) clean(K.paceBar(p, q), `paceBar ${p},${q}`);
 });
+
+test('marginLine: 期間の文字どうしが重ならない（8四半期・幅を変えても）', () => {
+  const rows = ['24.07-09', '24.10-12', '25.01-03', '25.04-06', '25.07-09', '25.10-12', '26.01-03', '26.04-06'].map((p, i) => ({ period: p, v: 9 + (i % 3) }));
+  for (const W of [300, 380, 480, 620]) {
+    const s = K.marginLine({ rows, W, H: 116 });
+    const labs = [...s.matchAll(/<text x="([\d.]+)" y="([\d.]+)" class="st-t" text-anchor="middle" style="fill:[^"]+">(\d\d\.\d\d-\d\d)</g)].map((m) => [+m[1], m[3]]);
+    assert.ok(labs.some((l) => l[1] === '26.04-06'), '最新の期は必ず出す');
+    labs.sort((a, b) => a[0] - b[0]);
+    for (let i = 1; i < labs.length; i++) assert.ok(labs[i][0] - labs[i - 1][0] >= K.textW('24.07-09', 12, true) + 4, `W=${W}: ${labs[i - 1][1]} と ${labs[i][1]} が近すぎる`);
+  }
+});

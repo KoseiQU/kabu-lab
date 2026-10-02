@@ -1371,12 +1371,14 @@
     s += tag('path', { d: pathD(pts) + ` L${f(pts[pts.length - 1][0])} ${f(H - pb)} L${f(pts[0][0])} ${f(H - pb)}Z`, fill: 'rgba(62,230,255,.06)' });
     s += tag('path', { d: pathD(pts), fill: 'none', stroke: C.cy, 'stroke-width': 1.6, class: 'ma' });
     let lastEnd = -1e9;
+    const lastLab = String(rows[rows.length - 1].period), lastW = textW(lastLab, 12, true);
+    const lastX0 = clamp(X(rows.length - 1), pl + lastW / 2, W - lastW / 2 - 1) - lastW / 2;
     rows.forEach((r, i) => {
       const last = i === rows.length - 1;
       s += tag('circle', { cx: pts[i][0], cy: pts[i][1], r: last ? 3.4 : 2.4, fill: last ? C.cy : C.bg, stroke: C.cy, 'stroke-width': 1.2 });
       const lab = String(r.period), w = textW(lab, 12, true);
       const x = clamp(pts[i][0], pl + w / 2, W - w / 2 - 1);
-      if (last || (x - w / 2 > lastEnd + 8 && x + w / 2 < X(rows.length - 1) - textW(String(rows[rows.length - 1].period), 12, true) / 2 - 8)) { s += text(x, H - 4, lab, { anchor: 'middle', fill: last ? C.cy2 : C.tx3 }); lastEnd = x + w / 2; }
+      if (last || (x - w / 2 > lastEnd + 8 && x + w / 2 < lastX0 - 8)) { s += text(x, H - 4, lab, { anchor: 'middle', fill: last ? C.cy2 : C.tx3 }); lastEnd = x + w / 2; }
     });
     const lv = fmt(rows[rows.length - 1].v, 1) + '%', lw = textW(lv, 12, true);
     const lp = pts[pts.length - 1];

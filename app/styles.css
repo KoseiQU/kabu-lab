@@ -1119,8 +1119,9 @@ a.rl,a.tab,a.k{text-decoration:none}
   .lvhd,.lvr{grid-template-columns:72px 118px 58px minmax(0,1fr); column-gap:8px}
   .kres{grid-template-columns:minmax(0,1fr) 240px}
   .kv-r3{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.3fr)}
-  .kog{grid-template-columns:150px minmax(0,1fr)}
-  .kol .mt{width:150px}
+  .kog{grid-template-columns:minmax(0,1fr); gap:8px}
+  .kol{flex-direction:row; flex-wrap:wrap; align-items:center; gap:6px 14px}
+  .kol .mt{width:150px; height:84px}
   .kvm{grid-template-columns:170px minmax(0,1fr)}
 }
 /* P2b：見出し・ラベルの1文字だけの折り返しを避ける */
@@ -1136,3 +1137,4 @@ a.rl,a.tab,a.k{text-decoration:none}
 .srh{flex-wrap:wrap; row-gap:2px}
 .srh .sn{min-width:min(7em,100%)}
 .srh .yoy{white-space:normal; max-width:100%; line-height:16px}
+.lsn small{text-wrap:balance}
