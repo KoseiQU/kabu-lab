@@ -119,6 +119,14 @@ digest.md にはこれらの結果と直近20日の四本値を載せる。チ�
 | `margin` | `[{date, sell, buy, ratio}]` 直近5週 |
 | `checklist` | 10件固定順。`{id, status: done/progress/none, reason}` |
 
+補足（P1a で確定）:
+- `scenarios[].target` は `{label, price}` または `{label, low, high}`。答え合わせで数値を使う。
+- `performance` は1〜3期。取得できた期だけを載せる（穴埋め禁止）。
+- `valuation[].max` はゲージの上限（PER 40・PBR 5・PSR 5 を既定）。
+- `window.KABU` には `checklistItems`（C01〜C10 の名称）も入る。checklist の id と名称の対応は `schemas/checklist-items.json` が正。
+- TOPIX は指数を取得できないため連動ETF（1306.T）で代用し、その旨を画面に注記する。
+- テストの入口は `npm test`（`tests/index.js` が `*.test.mjs` を読む）。
+
 他の型のスキーマは各フェーズの冒頭で本書に追記する。
 
 ## 6. 画面
@@ -153,4 +161,5 @@ digest.md にはこれらの結果と直近20日の四本値を載せる。チ�
 
 - 2026-10-02 方式＝Claude Code コマンド型＋専用スキル。出力＝メニュー型（型を省くとクイック診断）。
 - 2026-10-02 モック5案を比較。2026-10-03 デザイン確定＝案4＋立体棒グラフ（`mock-6-final.html`）。
+- 2026-10-03 P1a 完了（収集・指標・検証・build・テスト37本）。メインが別銘柄で再検証のうえ合格。
 - 2026-10-03 学習機能（用語帳・気づきノート・シナリオの答え合わせ）を採用。朝のニュースは市場型に含め、定時実行はしない。
