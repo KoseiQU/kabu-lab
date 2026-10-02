@@ -47,9 +47,23 @@
     ['performance', /業績|売上|最終益|最終利益|1株/], ['scenarios', /シナリオ/], ['checklist', /チェック/],
     ['diagnosis', /診断/], ['chart', /サポート|レジスタンス|サポレジ|注釈/], ['price', /株価|日足/],
   ];
+  // チャート型・決算型の missing の振り分け（上から順に最初に当たったもの）
+  const MISS_BY = {
+    quick: MISS_RULES,
+    chart: [
+      ['timeframes', /週足|月足|時間軸/], ['heat', /過熱|乖離|RSI|騰落|出来高比/], ['levels', /サポート|レジスタンス|節目|価格帯/],
+      ['plans', /考え方|撤退|目安|プラン/], ['checklist', /チェック/], ['lesson', /読み方|学び/], ['price', /株価|日足|移動平均/],
+    ],
+    kessan: [
+      ['segments', /事業別|セグメント|稼ぎ頭/], ['margin', /利益率|同業/], ['progress', /進捗/], ['outlook', /予想|見通し/],
+      ['finance', /財務|現金|負債|自己資本|CF|キャッシュ/], ['returns', /配当|EPS|1株|自社株/], ['invest', /投資|設備|使い道/],
+      ['deep', /有報|有価証券報告書|中期経営計画|中計/], ['results', /決算短信|売上|利益|決算/],
+    ],
+  };
+  const rulesOf = (a) => MISS_BY[a && a.type] || MISS_RULES;
 
   /* ---------- 状態 ---------- */
-  const S = { route: null, recent: null, seen: {}, testing: false, ctx: null, animTimer: 0, segTimer: 0, ckSel: null, ckItems: [] };
+  const S = { route: null, recent: null, seen: {}, testing: false, ctx: null, animTimer: 0, segTimer: 0, ckSel: null, ckItems: [], lvPin: null };
   try { S.recent = window.localStorage.getItem('kabu.recent'); } catch (e) { /* 使えない環境では記憶しない */ }
 
   const dataOk = () => { const D = window.KABU; return !!(D && typeof D === 'object' && D.stocks && typeof D.stocks === 'object' && !Array.isArray(D.stocks)); };
@@ -62,7 +76,7 @@
   function missFor(a, sec, word) {
     for (const m of arr(a && a.missing)) {
       if (typeof m !== 'string') continue;
-      const rule = MISS_RULES.find(([, re]) => re.test(m));
+      const rule = rulesOf(a).find(([, re]) => re.test(m));
       if (rule && rule[0] === sec && (!word || m.includes(word))) return m;
     }
     return '';
@@ -168,8 +182,8 @@
     $('#bot').innerHTML = tape
       + '<nav class="fk" aria-label="ビュー切替">'
       + `<a class="k${onStock ? '' : ' on'}" href="#/"><i>F1</i>HOME 銘柄ライブラリ</a>`
-      + (rc ? `<a class="k${onStock ? ' on' : ''}" href="${hrefStock(rc)}"><i>F2</i>STOCK ${esc(rc)}</a>` : '<span class="k off"><i>F2</i>STOCK —</span>')
-      + offs.map(([k, l]) => `<span class="k off"><i>${k}</i>${l}</span>`).join('')
+      + (rc ? `<a class="k${onStock && !['kessan', 'chart'].includes(route.type) ? ' on' : ''}" href="${hrefStock(rc)}"><i>F2</i>STOCK ${esc(rc)}</a>` : '<span class="k off"><i>F2</i>STOCK —</span>')
+      + offs.map(([k, l]) => { const ty = { F3: 'kessan', F4: 'chart' }[k]; const on = onStock && route.type === ty; return ty && rc ? `<a class="k${on ? ' on' : ''}" href="${hrefStock(rc, ty)}"><i>${k}</i>${l}</a>` : `<span class="k off"><i>${k}</i>${l}</span>`; }).join('')
       + '<span class="st"><b>学習用 ・ 売買推奨なし</b><span>CLOSE BASIS</span></span></nav>';
     document.body.style.setProperty('--botH', tape ? '41px' : '23px');
   }
@@ -466,7 +480,7 @@
   function segPopHtml(a) {
     const M = K.segModel(arr(a.sections.segments));
     const donut = K.donut(M.all.map((x) => ({ v: x.profit, color: x.color })), { cls: 'sp-dn' });
-    const why = arr(a.missing).filter((m) => typeof m === 'string' && MISS_RULES.find(([, re]) => re.test(m))?.[0] === 'segments').join(' ／ ');
+    const why = arr(a.missing).filter((m) => typeof m === 'string' && rulesOf(a).find(([, re]) => re.test(m))?.[0] === 'segments').join(' ／ ');
     return `<div class="seg-pop" id="seg-pop" role="region" aria-label="稼ぎ頭マップ（全${M.count}事業）"><section class="panel" data-pop="segments"><div class="pi">
       <div class="ph"><span class="code">SYS-07 / SEGMENT</span><h2>稼ぎ頭マップ（全${M.count}事業）</h2><div class="pm"><span class="jp">利益の大きい順${M.count > 8 ? '・上位8' : ''}</span><button type="button" class="sp-x" data-seg-close aria-label="閉じる">×</button></div></div>
       <div class="sp-b">
@@ -571,6 +585,408 @@
     return `<div class="rowC">${panel('notes', 'SYS-09 / NOTE', '学びノート', pm, `<div class="notes" style="grid-template-columns:${grid}">${th}${ih}</div>`)}</div>`;
   }
 
+  /* =====================================================================
+     チャート型（P2b）：3つの時間軸・メインチャート＋価格帯別出来高・サポレジ一覧・過熱の物差し・
+     チェックリスト（理由つき）・売買タイミングの考え方（3レーン）・今回の読み方
+     ===================================================================== */
+  const TF = {
+    monthly: ['TF-1', '月足', '大きな流れ'],
+    weekly: ['TF-2', '週足', '中くらいの流れ'],
+    daily: ['TF-3', '日足', '直近の動き'],
+  };
+  const TREND = { up: ['上昇', 'up'], flat: ['横ばい', 'flat'], down: ['下降', 'down'] };
+  const HEAT_STATE = { calm: '落ち着き', warm: 'やや過熱', hot: '過熱' };
+  const PLAN = { pullback: ['PLAN-A', '押し目を待つ考え方'], breakout: ['PLAN-B', '上抜けを待つ考え方'], wait: ['PLAN-C', '見送る考え方'] };
+  const PLAN_AXIS = 76, PLAN_GAP = 10;
+  const trendIcon = (k) => {
+    const d = k === 'up' ? 'M2 14L18 4M11.5 3.2L18 4L15.8 10.2' : k === 'down' ? 'M2 3L18 13M15.8 6.8L18 13L11.5 13.8' : 'M2 8.5H19M14 4.5L19 8.5L14 12.5';
+    return `<svg class="tri" viewBox="0 0 21 17" aria-hidden="true"><path d="${d}" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+  };
+  const secs = (a) => (a && a.sections && typeof a.sections === 'object' ? a.sections : {});
+  const ymd = (d) => (typeof d === 'string' && d.length >= 7 ? d.slice(0, 7).replace('-', '.') : '');
+
+  /** チャート型の描画材料（日足6か月の窓と、それに揃えた移動平均・週足・月足） */
+  function chartCtx(st, a) {
+    const raw = arr(st && st.prices && st.prices.rows);
+    const asOf = (a.price && a.price.asOf) || a.date || '';
+    const I = st && st.indicators && typeof st.indicators === 'object' ? st.indicators : null;
+    const ok = (r) => r && typeof r.d === 'string' && isNum(r.c) && (!asOf || r.d <= asOf);
+    const idx = [];
+    raw.forEach((r, i) => { if (ok(r)) idx.push(i); });
+    let si = 0;
+    if (idx.length) {
+      const dt = new Date(raw[idx[idx.length - 1]].d + 'T00:00:00Z');
+      dt.setUTCMonth(dt.getUTCMonth() - 6);
+      const start = isNaN(dt) ? '' : dt.toISOString().slice(0, 10);
+      si = Math.max(0, idx.findIndex((i) => raw[i].d > start));
+    }
+    const maArr = (k) => (I && I.ma && Array.isArray(I.ma[k]) && I.ma[k].length === raw.length ? I.ma[k] : null);
+    const pick = (ids, k) => { const m = maArr(k); return m ? ids.map((i) => m[i]) : null; };
+    const wi = idx.slice(si), di = idx.slice(-60);
+    const agg = (list, n) => arr(list).filter((r) => r && typeof r.d === 'string' && (!asOf || r.d <= asOf)).slice(-n);
+    const S2 = secs(a);
+    return {
+      kind: 'chart', st, a, I,
+      dec: stockDec(st, [a.price && a.price.close]),
+      close: a.price && isNum(a.price.close) ? a.price.close : null,
+      rows: wi.map((i) => raw[i]),
+      ma: { ma25: pick(wi, 'ma25'), ma75: pick(wi, 'ma75'), ma200: pick(wi, 'ma200') },
+      tf: {
+        monthly: { bars: I ? agg(I.monthly, 36) : [], ma: null },
+        weekly: { bars: I ? agg(I.weekly, 52) : [], ma: null },
+        daily: { bars: di.map((i) => raw[i]), ma: pick(di, 'ma25') },
+      },
+      levels: arr(S2.levels).map((L, i) => (L && typeof L === 'object' ? { ...L, i } : null)).filter((L) => L && isNum(L.low) && isNum(L.high)),
+      plans: ['pullback', 'breakout', 'wait'].map((k) => arr(S2.plans).find((p) => p && p.kind === k) || null),
+    };
+  }
+
+  function tfPanel(c) {
+    const a = c.a, list = arr(secs(a).timeframes);
+    const why = missFor(a, 'timeframes');
+    const pm = '<span class="jp tf-rd">読む順 <b>月足</b> ▶ <b>週足</b> ▶ <b>日足</b>（上位の足から）</span>';
+    const note = why ? `<p class="tfmiss" data-nodata="timeframes:note"><span class="nd">未取得</span>${esc(why)}</p>` : '';
+    if (secAbsent(a, 'timeframes')) return panel('timeframes', 'SYS-C1 / TIMEFRAME', '3つの時間軸', pm, `<div class="pb">${noData('timeframes', a, { sm: true })}</div>`);
+    const cells = ['monthly', 'weekly', 'daily'].map((k, i) => {
+      const t = list.find((x) => x && x.frame === k), d = TF[k], tr = t && TREND[t.trend];
+      const bars = c.tf[k].bars, n = bars.length;
+      const cap = n ? `${k === 'daily' ? bars[0].d.replace(/-/g, '.') : ymd(bars[0].d)} – ${k === 'daily' ? bars[n - 1].d.slice(5).replace('-', '.') : ymd(bars[n - 1].d)} ・ ${n}本${k === 'daily' && c.tf.daily.ma ? ' ・ 白線＝25日線' : ''}` : '';
+      const badge = tr ? `<span class="trd ${tr[1]}">${trendIcon(t.trend)}${tr[0]}</span>` : `<span class="trd nd" data-nodata="timeframes:${k}">未取得</span>`;
+      return `<div class="tf" data-tf="${k}"><div class="tfh"><span class="stp">${String(i + 1).padStart(2, '0')}</span><span class="code">${d[0]}</span><b>${d[1]}</b><span class="tfs">${d[2]}</span>${badge}</div>`
+        + `<div class="host tfc" data-chart="tf" data-k="${k}"></div><div class="tfcap mono">${esc(cap)}</div>`
+        + `<p>${t ? richNums(t.text) : esc(missFor(a, 'timeframes') || 'この時間軸の判断がありません')}</p></div>`
+        + (i < 2 ? '<div class="tfa" aria-hidden="true"><i></i><b>▶</b><i></i></div>' : '');
+    }).join('');
+    return panel('timeframes', 'SYS-C1 / TIMEFRAME', '3つの時間軸', pm, `<div class="pb">${note}<div class="tf3">${cells}</div></div>`);
+  }
+
+  function lvChartPanel(c) {
+    const a = c.a;
+    if (!c.rows.length) return panel('lvchart', 'SYS-C2 / CHART', '株価チャートと節目（日足）', '', `<div class="pb">${noData('price', a, { def: '株価データ（prices.json）がありません' })}</div>`);
+    const first = c.rows[0].d, last = c.rows[c.rows.length - 1].d;
+    const lt = c.I && c.I.latest && Array.isArray(c.I.latest.ma) ? c.I.latest.ma : [];
+    const maV = (n) => { const m = lt.find((x) => x && x.n === n); return m && isNum(m.value) ? `<b>${K.fmtP(c.dec === 0 ? Math.round(m.value) : m.value)}円</b>` : ''; };
+    const hasMa = !!(c.ma.ma25 || c.ma.ma75 || c.ma.ma200);
+    const vp = c.I && c.I.volumeProfile && arr(c.I.volumeProfile.bins).length ? c.I.volumeProfile : null;
+    const legend = '<span><i class="sw cu"></i>陽線</span><span><i class="sw cd"></i>陰線</span>'
+      + (hasMa ? `<span><i class="sw l25"></i>25日線 ${maV(25)}</span><span><i class="sw l75"></i>75日線 ${maV(75)}</span><span><i class="sw l200"></i>200日線 ${maV(200)}</span>` : '')
+      + '<span><i class="sw lvr-r"></i>レジスタンス（線・帯）</span><span><i class="sw lvr-s"></i>サポート（線・帯）</span>'
+      + (vp ? '<span><i class="sw vpw"></i>価格帯別出来高</span>' : '')
+      + (!hasMa || !vp ? `<span class="ndn" data-nodata="indicators">${!hasMa && !vp ? '移動平均線・価格帯別出来高' : !hasMa ? '移動平均線' : '価格帯別出来高'}は未取得${missFor(a, 'price') ? '（' + esc(missFor(a, 'price')) + '）' : ''}</span>` : '');
+    const cap = vp ? `<div class="lvcap"><span>価格帯別出来高＝直近250日 ・ 刻み <span class="mono">${esc(K.fmtP(vp.step))}</span>円</span><span><i class="sw vpm"></i>最多の帯（％は全体に占める割合）</span><span><i class="sw vpn"></i>現在値を含む帯</span><span>右端の札＝線は価格、帯は「下限–上限」</span></div>` : '';
+    return panel('lvchart', 'SYS-C2 / CHART', '株価チャートと節目（日足）', `<span>${esc(first.replace(/-/g, '.'))} – ${esc(last.slice(5).replace('-', '.'))}</span><span>${c.rows.length}本</span>`,
+      `<div class="pb"><div class="legend">${legend}</div><div class="host lvhost" data-chart="lv"></div>${cap}</div>`);
+  }
+
+  function levelsPanel(c) {
+    const a = c.a;
+    if (!c.levels.length) return panel('levels', 'SYS-C3 / LEVELS', 'サポート／レジスタンス', '', `<div class="pb">${noData('levels', a, { sm: true })}</div>`);
+    const close = c.close;
+    const mid = (L) => (L.low + L.high) / 2;
+    const list = [...c.levels].sort((x, y) => mid(y) - mid(x) || y.high - x.high);
+    const nR = list.filter((L) => L.kind === 'resistance').length;
+    const dist = (L) => {
+      if (!isNum(close) || !close) return '';
+      const lo = Math.min(L.low, L.high), hi = Math.max(L.low, L.high);
+      if (close >= lo && close <= hi) return '<em class="ld in">現在値を含む</em>';
+      const p = close > hi ? hi : lo;
+      return `<em class="ld">現在値比 <span class="mono">${fmtS((p / close - 1) * 100, 1)}%</span></em>`;
+    };
+    let nowDone = false;
+    const nowRow = `<div class="lvnow" aria-hidden="true"><i></i><span>現在値 <b class="mono">${K.fmtP(close)}</b>円</span><i></i></div>`;
+    const rows = list.map((L) => {
+      let pre = '';
+      if (!nowDone && isNum(close) && mid(L) < close) { pre = nowRow; nowDone = true; }
+      const r = L.kind === 'resistance';
+      const lo = Math.min(L.low, L.high), hi = Math.max(L.low, L.high);
+      const price = lo === hi ? `<span class="mono">${K.fmtP(lo)}</span>` : `<span class="mono">${K.fmtP(lo)}</span><small>〜</small><span class="mono">${K.fmtP(hi)}</span>`;
+      const basis = arr(L.basis).filter((b) => typeof b === 'string' && b).map((b) => `<span>${esc(b)}</span>`).join('');
+      return `${pre}<button type="button" class="lvr ${r ? 'r' : 's'}" data-lv="${L.i}" aria-pressed="false" aria-label="${r ? 'レジスタンス' : 'サポート'} ${esc(lo === hi ? K.fmtP(lo) : K.fmtP(lo) + '〜' + K.fmtP(hi))}円 ${esc(L.label || '')}。押すとチャートの線を強調">`
+        + `<span class="lvk"><b>${r ? 'RES' : 'SUP'}<i>${lo === hi ? '線' : '帯'}</i></b><small>${r ? '上値の壁' : '下値の支え'}</small></span>`
+        + `<span class="lp"><span class="lpv">${price}<small>円</small></span>${dist(L)}</span>`
+        + `<span class="lvs" title="強さ ${esc(L.strength)}／5">${K.segs(L.strength)}<small>強さ</small></span>`
+        + `<span class="ll"><b>${esc(L.label || '')}</b><span class="lb">${basis}</span></span></button>`;
+    }).join('') + (!nowDone && isNum(close) ? nowRow : '');
+    return panel('levels', 'SYS-C3 / LEVELS', 'サポート／レジスタンス', `<span class="jp">上 ${nR} ・ 下 ${list.length - nR}</span>`,
+      `<div class="pb"><div class="lvhd"><span>種別</span><span>価格</span><span>強さ</span><span>根拠</span></div><div class="lvlist" role="group" aria-label="サポート・レジスタンスの一覧（価格の高い順）">${rows}</div><p class="cap lvtip">行にマウスを重ねる・押すと、チャートの該当ラインを強調（もう一度押すと解除）</p></div>`);
+  }
+
+  function heatPanel(c) {
+    const a = c.a;
+    const pm = '<span class="jp"><i class="sw hzsw"></i>過熱の目安の帯</span><span class="jp"><i class="hdot calm"></i>落ち着き <i class="hdot warm"></i>やや過熱 <i class="hdot hot"></i>過熱</span>';
+    if (secAbsent(a, 'heat')) return panel('heat', 'SYS-C4 / HEAT', '過熱の物差し', pm, `<div class="pb">${noData('heat', a, { sm: true })}</div>`);
+    const list = arr(secs(a).heat);
+    const cells = ['ma25dev', 'rsi', 'change3d', 'volume'].map((k) => {
+      const h = K.HEAT[k], it = list.find((x) => x && x.key === k);
+      const v = it && isNum(it.value) ? it.value : null;
+      const note = it && typeof it.note === 'string' ? it.note : '';
+      if (v == null) {
+        return `<div class="hc" data-nodata="heat:${k}"><div class="hch"><span class="hn">${esc(h.name)}</span><span class="nd">未取得</span></div><div class="hv"><b class="na">—</b></div>${K.heatGauge(k, null)}<p class="hr">${esc(h.rule)}</p><p class="hnote">${esc(note || missFor(a, 'heat') || '値の記載がありません')}</p></div>`;
+      }
+      const stt = HEAT_STATE[it.state] ? it.state : 'calm';
+      return `<div class="hc ${stt}"><div class="hch"><span class="hn">${esc(h.name)}</span><span class="hs ${stt}">${HEAT_STATE[stt]}</span></div>`
+        + `<div class="hv"><b>${esc(K.heatValue(k, v))}</b><small>${esc(h.unit)}</small></div>${K.heatGauge(k, v, stt)}<p class="hr">${esc(h.rule)}</p>${note ? `<p class="hnote">${richNums(note)}</p>` : ''}</div>`;
+    }).join('');
+    return panel('heat', 'SYS-C4 / HEAT', '過熱の物差し', pm, `<div class="pb"><div class="heat4">${cells}</div></div>`);
+  }
+
+  function ckPanelC(c) {
+    const a = c.a;
+    const pm = '<span class="jp">10項目 ・ 理由つき</span>';
+    if (secAbsent(a, 'checklist')) return panel('checklist', 'SYS-C5 / PATTERN', 'チャート型チェックリスト（詳しい理由）', pm, `<div class="pb">${noData('checklist', a)}</div>`);
+    const names = arr(window.KABU.checklistItems), got = arr(secs(a).checklist);
+    const base = names.length ? names : got.map((x) => ({ id: x && x.id, name: '' }));
+    const items = base.map((it) => { const x = got.find((y) => y && y.id === it.id) || {}; return { id: it.id, name: it.name, status: x.status, reason: x.reason, watch: x.watch }; });
+    const ck = K.checklist(items);
+    S.ckItems = items;
+    const G = [['progress', 'p', '進行中', '次に見る点つき'], ['done', 'd', '完成済み', ''], ['none', 'x', 'なし', '']];
+    const cols = G.map(([st, k, lab, sub]) => {
+      const its = items.filter((x) => x.status === st);
+      const cards = its.map((x) => `<div class="cr ${k}" data-why="${esc(x.id)}"><div class="crt"><span class="cid">${esc(String(x.id).replace(/^C/, 'C-'))}</span><b>${esc(x.name || '')}</b></div><p>${richNums(x.reason || '理由の記載がありません')}</p>`
+        + (st === 'progress' && x.watch ? `<div class="wch"><span>次に見る点</span><p>${richNums(x.watch)}</p></div>` : '') + '</div>').join('');
+      return `<div class="crc ${k}"><div class="crh"><svg><use href="#st-${k}"/></svg><b>${lab}</b><em>${its.length}</em>${sub ? `<small>${sub}</small>` : ''}</div>${cards || '<p class="cwn">該当なし</p>'}</div>`;
+    }).join('');
+    const unk = items.filter((x) => !CKS.includes(x.status));
+    const unkH = unk.length ? `<div class="cr-u" data-nodata="checklist:status">判定が未取得の項目：${unk.map((x) => esc(String(x.id).replace(/^C/, 'C-'))).join('・')}</div>` : '';
+    return panel('checklist', 'SYS-C5 / PATTERN', 'チャート型チェックリスト（詳しい理由）', pm,
+      `<div class="pb"><div class="ck-sum">${ck.summary}</div><div class="ckg ck10" role="group" aria-label="チェックリスト（押すと下の理由を強調）">${ck.cells}</div><div class="crb">${cols}</div>${unkH}</div>`);
+  }
+  const CKS = ['done', 'progress', 'none'];
+
+  function plansPanel(c) {
+    const a = c.a;
+    const pm = `<span class="jp">3つの考え方を同じ物差しで比べる</span><span class="jp">起点 現在値 <span class="mono">${K.fmtP(c.close)}</span>円</span>`;
+    if (secAbsent(a, 'plans')) return panel('plans', 'SYS-C6 / TIMING', '売買タイミングの考え方', pm, `<div class="pb">${noData('plans', a)}</div>`);
+    const kinds = ['pullback', 'breakout', 'wait'];
+    const heads = kinds.map((k, i) => {
+      const p = c.plans[i], d = PLAN[k];
+      return `<div class="plh"><span class="code">${d[0]}</span><b>${d[1]}</b>${p && p.title ? `<span class="plt">${esc(p.title)}</span>` : ''}</div>`;
+    }).join('');
+    const px = (v) => (isNum(v) ? `<span class="mono">${K.fmtP(v)}</span>円` : '');
+    const cards = kinds.map((k, i) => {
+      const p = c.plans[i];
+      if (!p) return `<div class="plc" data-nodata="plans:${k}"><div class="nodata sm"><span class="nd">未取得</span><p class="why">${esc(missFor(a, 'plans') || 'この考え方の記載がありません')}</p></div></div>`;
+      const z = p.zone || {}, zl = isNum(z.low) ? z.low : null, zh = isNum(z.high) ? z.high : null;
+      const zone = zl != null && zh != null ? (zl === zh ? px(zl) : `${px(Math.min(zl, zh))}〜${px(Math.max(zl, zh))}`) : zl != null ? px(zl) : zh != null ? px(zh) : '';
+      const dd = (val, lab) => (val ? `<dd>${val}${lab ? `<small>${esc(lab)}</small>` : ''}</dd>` : `<dd class="na">指定なし${lab ? `<small>${esc(lab)}</small>` : ''}</dd>`);
+      return `<div class="plc"><div class="plw"><span>どうなったら</span><p>${richNums(p.when || '')}</p></div>`
+        + `<dl class="pld"><div><dt><i class="sw plz"></i>入る価格帯</dt>${dd(zone, '')}</div><div><dt><i class="sw pls"></i>撤退ライン</dt>${dd(p.stop && isNum(p.stop.price) ? px(p.stop.price) : '', p.stop && p.stop.label)}</div><div><dt><i class="sw plg"></i>目安</dt>${dd(p.target && isNum(p.target.price) ? px(p.target.price) : '', p.target && p.target.label)}</div></dl>`
+        + `<div class="plpc"><div class="pp"><span>良い点</span><p>${richNums(p.pros || '')}</p></div><div class="pc"><span>注意点</span><p>${richNums(p.cons || '')}</p></div></div></div>`;
+    }).join('');
+    const axisHead = '<div class="plax"><span>価格</span><small>円</small></div>';
+    const legend = '<div class="pllg"><span><i class="sw pln"></i>現在値</span><span><i class="sw plz"></i>入る価格帯</span><span><i class="sw pls"></i>撤退</span><span><i class="sw plg"></i>目安</span><span class="cap">％は現在値比</span></div>';
+    return panel('plans', 'SYS-C6 / TIMING', '売買タイミングの考え方', pm,
+      `<div class="pb"><div class="plgrid" style="grid-template-columns:${PLAN_AXIS}px repeat(3,minmax(0,1fr));column-gap:${PLAN_GAP}px">${axisHead}${heads}<div class="host plhost" data-chart="plans"></div>${legend}${cards}</div><p class="plnote">どれも「〜なら」という条件つきの考え方です。どれかを勧めるものではなく、売買の推奨ではありません。</p></div>`);
+  }
+
+  function lessonPanel(c) {
+    const a = c.a, S2 = secs(a);
+    const ls = S2.lesson && typeof S2.lesson === 'object' ? S2.lesson : null;
+    const tfs = arr(S2.timeframes);
+    const tr = ['monthly', 'weekly', 'daily'].map((k) => { const t = tfs.find((x) => x && x.frame === k), r = t && TREND[t.trend]; return `<span class="trd sm ${r ? r[1] : ''}">${r ? trendIcon(t.trend) : ''}${TF[k][1]}${r ? '' : ' —'}</span>`; }).join('');
+    const nR = c.levels.filter((L) => L.kind === 'resistance').length, nS = c.levels.length - nR;
+    const heat = arr(S2.heat).filter((h) => h && isNum(h.value));
+    const hc = (s) => heat.filter((h) => h.state === s).length;
+    const cks = arr(S2.checklist);
+    const cc = (s) => cks.filter((x) => x && x.status === s).length;
+    const steps = [
+      ['01', '流れ', '上位の足から', `<span class="sv">${tr}</span>`],
+      ['02', '節目', 'どこで止まりやすいか', `<span class="sv"><b class="r">上 ${nR}</b><b class="s">下 ${nS}</b></span>`],
+      ['03', '過熱', '行き過ぎていないか', heat.length ? `<span class="sv"><b>過熱 ${hc('hot')}</b><b>やや ${hc('warm')}</b><b>平常 ${hc('calm')}</b></span>` : '<span class="sv"><b class="na">値なし</b></span>'],
+      ['04', '形', 'チェックリスト', `<span class="sv"><b>完成 ${cc('done')}</b><b>進行中 ${cc('progress')}</b></span>`],
+      ['05', '考え方', '条件つきで3案', `<span class="sv"><b>${arr(S2.plans).length}案</b></span>`],
+    ];
+    const flow = steps.map((s, i) => `<div class="lsn"><span class="n">${s[0]}</span><b>${s[1]}</b><small>${s[2]}</small>${s[3]}</div>${i < steps.length - 1 ? '<i class="lsa" aria-hidden="true">▶</i>' : ''}`).join('');
+    const body = ls ? `<div class="lsx"><span class="code">LESSON</span><h3>${esc(ls.title || '')}</h3><p>${richNums(ls.text || '')}</p></div>` : noData('lesson', a, { sm: true });
+    return panel('lesson', 'SYS-C7 / LESSON', '今回の読み方', '<span class="jp">このページを読む手順と今回の結果</span>', `<div class="pb"><div class="lsgrid"><div class="lsf">${flow}</div>${body}</div></div>`);
+  }
+
+  function chartView(c) {
+    return `<div id="cview" class="cv">
+    ${tfPanel(c)}
+    <div class="cv-r2">${lvChartPanel(c)}${levelsPanel(c)}</div>
+    ${heatPanel(c)}
+    ${ckPanelC(c)}
+    ${plansPanel(c)}
+    ${lessonPanel(c)}
+    ${notesPanel(c.a)}
+  </div>`;
+  }
+
+  /* =====================================================================
+     決算型（P2b）
+     ===================================================================== */
+  const GRADE = { good: [0.85, '好決算', 'g'], normal: [0.5, '普通', 'n'], bad: [0.15, '悪決算', 'b'] };
+  const STANCE = { bullish: [0.85, '強気'], neutral: [0.5, '中立'], cautious: [0.15, '慎重'] };
+  const REVISION = { up: ['▲', '上方修正', 'up'], none: ['―', '据え置き', 'flat'], down: ['▼', '下方修正', 'dn'] };
+  const unitTxt = (u) => (typeof u === 'string' ? u : '');
+  const numU = (v, u, d) => (isNum(v) ? `<span class="mono">${fmt(v, d == null ? decOf(v, 2) : d)}</span><small>${esc(unitTxt(u))}</small>` : '');
+  const yoyBadge = (v, lab = '前年比') => (isNum(v) ? `<span class="yy ${v > 0 ? 'up' : v < 0 ? 'dn' : 'flat'}">${v > 0 ? '▲' : v < 0 ? '▼' : '＝'} ${esc(lab)} <span class="mono">${fmtS(v, 1)}%</span></span>` : `<span class="yy na">${esc(lab)} —</span>`);
+  const decOf = K.decOf;
+
+  function kessanCtx(st, a) {
+    const S2 = secs(a), F = st && st.finance && typeof st.finance === 'object' ? st.finance : null;
+    const q = F && F.quarterly && Array.isArray(F.quarterly.rows) ? F.quarterly.rows.filter((r) => r && typeof r.period === 'string' && isNum(r.opMargin)).slice(-8).map((r) => ({ period: r.period, v: r.opMargin })) : [];
+    return {
+      kind: 'kessan', st, a, F,
+      results: arr(S2.results).filter((r) => r && typeof r === 'object'),
+      qm: q.length >= 2 ? q : [],
+      divs: S2.returns && typeof S2.returns === 'object' ? arr(S2.returns.dividends) : [],
+      eps: S2.returns && typeof S2.returns === 'object' ? arr(S2.returns.eps) : [],
+    };
+  }
+  function kmeter(v, l, r) { return `<div class="mt">${K.meter(v)}<span class="ml" data-side="l">${esc(l)}</span><span class="ml" data-side="r">${esc(r)}</span></div>`; }
+
+  function verdictPanel(c) {
+    const a = c.a, S2 = secs(a), p = S2.period && typeof S2.period === 'object' ? S2.period : {}, v = S2.verdict && typeof S2.verdict === 'object' ? S2.verdict : null;
+    const g = v && GRADE[v.grade];
+    const per = `<div class="kpd"><span class="code">PERIOD</span><b>${esc(p.label || '—')}</b><span class="kpmeta"><span>発表 <span class="mono">${esc(p.announced || '—')}</span></span></span>${p.docTitle ? `<span class="kdoc"><i>資料</i>${esc(p.docTitle)}</span>` : ''}</div>`;
+    const body = g
+      ? `<div class="kvm">${kmeter(g[0], '悪決算', '好決算')}<div class="kvl ${g[2]}"><span class="code">GRADE</span><b>${esc(v.label || g[1])}</b><small>出来の評価</small></div></div><p class="kvr">${richNums(v.reason || '')}</p>`
+      : noData('verdict', a, { sm: true });
+    return panel('verdict', 'SYS-K1 / RESULT', '決算の判定', '', `<div class="pb">${per}${body}<p class="kno">※ 決算の出来（好決算・普通・悪決算）の評価であり、売買の判断ではありません</p></div>`);
+  }
+  function pointsPanel(c) {
+    const a = c.a, list = arr(secs(a).points).filter((x) => x && typeof x === 'object');
+    if (!list.length) return panel('points', 'SYS-K2 / POINTS', '判定の理由', '', `<div class="pb">${noData('points', a, { sm: true })}</div>`);
+    const cards = list.map((x, i) => `<div class="kpt"><span class="kn">${String(i + 1).padStart(2, '0')}</span><div><b>${esc(x.title || '')}</b><p>${richNums(x.text || '')}</p></div></div>`).join('');
+    return panel('points', 'SYS-K2 / POINTS', '判定の理由', `<span class="jp">${list.length}点</span>`, `<div class="pb"><div class="kpts">${cards}</div></div>`);
+  }
+  function resultsPanel(c) {
+    const a = c.a, S2 = secs(a), dr = S2.driver && typeof S2.driver === 'object' ? S2.driver : null;
+    const pm = '<span class="jp"><i class="sw r3c"></i>今期</span><span class="jp"><i class="sw r3p"></i>前年（今期と前年比から逆算した概算）</span>';
+    const drv = `<aside class="kdr"><span class="code">DRIVER</span><span class="kdl">伸びた（落ちた）一番の理由</span>${dr ? `<b>${esc(dr.title || '')}</b><p>${richNums(dr.text || '')}</p>` : noData('driver', a, { sm: true })}</aside>`;
+    if (!c.results.length) return panel('results', 'SYS-K3 / RESULTS', '主要数値（前年同期比）', pm, `<div class="pb"><div class="kres">${noData('results', a, { sm: true })}${drv}</div></div>`);
+    const cells = c.results.map((r, i) => {
+      const has = isNum(r.value);
+      const inner = has
+        ? `<div class="host krh" data-chart="pair" data-i="${i}"></div><div class="krv">${numU(r.value, r.unit)}</div>${yoyBadge(r.yoyPct)}`
+        : `<div class="nodata sm" data-nodata="results:${esc(r.key || i)}"><span class="nd">未取得</span><p class="why">${esc(missFor(a, 'results') || '数値の記載がありません')}</p></div>`;
+      return `<div class="krc"><b class="krl">${esc(r.label || r.key || '')}</b>${inner}${r.note ? `<p class="krn">${richNums(r.note)}</p>` : ''}</div>`;
+    }).join('');
+    return panel('results', 'SYS-K3 / RESULTS', '主要数値（前年同期比）', pm, `<div class="pb"><div class="kres"><div class="krs" style="grid-template-columns:repeat(${c.results.length},minmax(0,1fr))">${cells}</div>${drv}</div></div>`);
+  }
+  function progressPanel(c) {
+    const a = c.a, p = secs(a).progress && typeof secs(a).progress === 'object' ? secs(a).progress : null;
+    const fp = c.F && c.F.progress && typeof c.F.progress === 'object' ? c.F.progress : null;
+    const others = fp ? arr(fp.items).filter((x) => x && isNum(x.pct)) : [];
+    const pace = p && isNum(p.pace) ? p.pace : fp && isNum(fp.pace) ? fp.pace : null;
+    const oth = others.length ? `<div class="kpo"><span class="kpoh">株探の進捗率（${esc(fp.cumulativePeriod || '')}累計 ÷ 通期予想）</span>${others.map((x) => `<div class="kpr"><span>${esc(x.label || x.key)}</span>${K.paceBar(x.pct, fp.pace)}<b class="mono">${fmt(x.pct, 1)}%</b></div>`).join('')}</div>` : '';
+    let main;
+    if (p && isNum(p.pct)) {
+      const d = p.pct - (isNum(pace) ? pace : 0);
+      main = `<div class="kring">${K.ring(p.pct, pace)}<div class="krg"><b class="kpl">${esc(p.label || '')}</b>`
+        + `<span class="kpc"><i class="sw pcs"></i>均等ペース <span class="mono">${isNum(pace) ? fmt(pace, decOf(pace, 1)) + '%' : '—'}</span></span>`
+        + (isNum(pace) ? `<span class="kpc ${d >= 0 ? 'up' : 'dn'}">ペースとの差 <span class="mono">${fmtS(d, 1)}pt</span></span>` : '')
+        + (p.pct > 100 ? '<span class="kpc am"><i class="sw pco"></i>内側の輪＝100%を超えた分</span>' : '')
+        + `${p.note ? `<p>${richNums(p.note)}</p>` : ''}</div></div>`;
+    } else {
+      main = `<div class="kring nd1">${noData('progress', a, { sm: true })}${isNum(pace) ? `<span class="kpc"><i class="sw pcs"></i>均等ペース <span class="mono">${fmt(pace, decOf(pace, 1))}%</span></span>` : ''}</div>`;
+    }
+    return panel('progress', 'SYS-K4 / PROGRESS', '通期予想に対する進捗率', '', `<div class="pb">${main}${oth}</div>`);
+  }
+  function marginPanelK(c) {
+    const a = c.a, m = secs(a).margin && typeof secs(a).margin === 'object' ? secs(a).margin : {};
+    const cur = isNum(m.pct) ? m.pct : null, prv = isNum(m.prevPct) ? m.prevPct : null;
+    let bars;
+    if (cur == null && prv == null) bars = noData('margin', a, { sm: true });
+    else {
+      const max = K.niceCeil(Math.max(cur || 0, prv || 0, 1) * 1.25);
+      const row = (lab, v, cls) => `<div class="kmr ${cls}"><span>${lab}</span><span class="kmt">${v != null ? `<u class="a-gx" style="width:${K.clamp(Math.max(0, v) / max * 100, 0, 100).toFixed(1)}%"></u>` : ''}</span><b class="mono">${v != null ? fmt(v, 1) + '%' : '—'}</b></div>`;
+      const dlt = cur != null && prv != null ? `<span class="yy ${cur - prv > 0 ? 'up' : cur - prv < 0 ? 'dn' : 'flat'}">前年から <span class="mono">${fmtS(cur - prv, 1)}pt</span></span>` : '';
+      bars = `<div class="kmg">${row('今期', cur, 'c')}${row('前年', prv, 'p')}<div class="kms"><span>0%</span><span>${fmt(max / 2, decOf(max / 2, 1))}%</span><span>${fmt(max, decOf(max, 1))}%</span></div>${dlt}</div>`;
+    }
+    const peer = m.peer ? `<p class="kpe"><span>同業比較</span>${richNums(m.peer)}</p>` : `<div class="kpe" data-nodata="margin:peer"><span>同業比較</span><span class="nd">未取得</span>${missFor(a, 'margin') ? `<em>${esc(missFor(a, 'margin'))}</em>` : ''}</div>`;
+    const line = c.qm.length ? `<div class="kml"><span class="kmlh">営業利益率の推移（3か月ごと・株探の営業利益で計算）</span><div class="host kmlc" data-chart="mline"></div></div>` : '';
+    return panel('margin', 'SYS-K5 / MARGIN', '利益率', '<span class="jp">今期と前年の比較</span>', `<div class="pb">${m.label ? `<p class="kmlab">${esc(m.label)}</p>` : ''}${bars}${peer}${line}</div>`);
+  }
+  function outlookPanel(c) {
+    const a = c.a, o = secs(a).outlook && typeof secs(a).outlook === 'object' ? secs(a).outlook : null;
+    if (!o) return panel('outlook', 'SYS-K6 / OUTLOOK', '会社の見通し', '', `<div class="pb">${noData('outlook', a, { sm: true })}</div>`);
+    const sv = STANCE[o.stance], rv = REVISION[o.revision];
+    const fc = arr(o.forecast).filter((x) => x && typeof x === 'object');
+    const sc = Math.max(10, ...fc.map((x) => (isNum(x.yoyPct) ? Math.abs(x.yoyPct) : 0)));
+    const rows = fc.map((x, i) => `<tr><td>${esc(x.label || '')}</td><td class="r">${isNum(x.value) ? numU(x.value, x.unit) : `<span class="nd" data-nodata="outlook:${i}">未取得</span>`}</td><td class="yc">${K.yoyBar(x.yoyPct, sc)}</td><td class="r mono ${isNum(x.yoyPct) ? (x.yoyPct >= 0 ? 'up' : 'dn') : 'na'}">${isNum(x.yoyPct) ? fmtS(x.yoyPct, 1) + '%' : '—'}</td></tr>`).join('');
+    const left = `<div class="kol">${sv ? kmeter(sv[0], '慎重', '強気') : ''}<div class="kos"><span>会社のスタンス</span><b>${sv ? sv[1] : '—'}</b></div>${rv ? `<span class="krv2 ${rv[2]}"><i>${rv[0]}</i>${rv[1]}</span>` : ''}</div>`;
+    const tbl = `<table class="kft"><thead><tr><th>通期予想</th><th class="r">金額</th><th class="yc">前期比</th><th class="r">率</th></tr></thead><tbody>${rows}</tbody></table>`;
+    return panel('outlook', 'SYS-K6 / OUTLOOK', '会社の見通し', '<span class="jp">会社が出した通期予想</span>', `<div class="pb"><div class="kog">${left}<div class="kor">${tbl}${o.text ? `<p class="kot">${richNums(o.text)}</p>` : ''}</div></div></div>`);
+  }
+  function pmPanel(c) {
+    const a = c.a, pmx = secs(a).plusMinus && typeof secs(a).plusMinus === 'object' ? secs(a).plusMinus : null;
+    if (!pmx) return panel('plusminus', 'SYS-K7 / PLUS-MINUS', '良い点・悪い点', '', `<div class="pb">${noData('plusminus', a, { sm: true })}</div>`);
+    const col = (x, k, g, lab) => `<div class="kpmc ${k}"><span class="kg" aria-hidden="true">${g}</span><div><span class="kpml">${lab}</span><b>${esc(x && x.title || '')}</b><p>${richNums(x && x.text || '')}</p></div></div>`;
+    return panel('plusminus', 'SYS-K7 / PLUS-MINUS', '良い点・悪い点', '<span class="jp">左右で比べる</span>', `<div class="pb"><div class="kpm">${col(pmx.plus, 'p', '＋', '良い点')}<div class="kpmv" aria-hidden="true"><i></i><b>VS</b><i></i></div>${col(pmx.minus, 'm', '−', '悪い点')}</div></div>`);
+  }
+  function investPanel(c) {
+    const a = c.a, list = arr(secs(a).investments).filter((x) => x && typeof x === 'object');
+    if (!list.length) return panel('invest', 'SYS-K8 / INVEST', 'お金の使い道', '', `<div class="pb">${noData('invest', a, { sm: true })}</div>`);
+    const nums = list.filter((x) => isNum(x.amount));
+    const max = Math.max(1, ...nums.map((x) => Math.abs(x.amount)));
+    let body;
+    if (nums.length) {
+      body = `<div class="kiv">${list.map((x) => `<div class="kir"><div class="kih"><b>${esc(x.title || '')}</b>${isNum(x.amount) ? `<span class="mono">${fmt(x.amount, decOf(x.amount, 1))}<small>億円</small></span>` : '<span class="kina">金額の記載なし</span>'}</div><span class="kib${isNum(x.amount) ? '' : ' nil'}">${isNum(x.amount) ? `<u class="a-gx" style="width:${K.clamp(Math.abs(x.amount) / max * 100, 0.6, 100).toFixed(1)}%"></u>` : ''}</span>${x.text ? `<p>${richNums(x.text)}</p>` : ''}</div>`).join('')}</div>`;
+    } else {
+      body = `<div class="kic">${list.map((x, i) => `<div class="kicc"><span class="kn">${String(i + 1).padStart(2, '0')}</span><b>${esc(x.title || '')}</b><span class="kina">金額の記載なし</span>${x.text ? `<p>${richNums(x.text)}</p>` : ''}</div>`).join('')}</div>`;
+    }
+    return panel('invest', 'SYS-K8 / INVEST', 'お金の使い道', nums.length ? '<span class="jp">横棒＝金額（億円・最大＝100%）</span>' : '', `<div class="pb">${body}</div>`);
+  }
+  function financePanel(c) {
+    const a = c.a, F = secs(a).finance && typeof secs(a).finance === 'object' ? secs(a).finance : null;
+    const pm = '<span class="jp"><i class="sw fpv"></i>前</span><span class="jp"><i class="sw fcu"></i>今</span>';
+    if (!F) return panel('finance', 'SYS-K9 / BALANCE', '財務', pm, `<div class="pb">${noData('finance', a, { sm: true })}</div>`);
+    const rows = arr(F.items).filter((x) => x && typeof x === 'object').map((x, i) => {
+      const u = unitTxt(x.unit), ch = K.changeOf(x.prev, x.curr, u);
+      const v = (n) => (isNum(n) ? `<span class="mono">${fmt(n, decOf(n, 2))}</span><small>${esc(u)}</small>` : '<span class="na">—</span>');
+      const nd = !isNum(x.prev) || !isNum(x.curr);
+      return `<div class="kfr"${nd ? ` data-nodata="finance:${i}"` : ''}><span class="kfl">${esc(x.label || '')}</span><span class="kfv p">${v(x.prev)}</span><i class="kfa" aria-hidden="true">→</i><span class="kfv c">${v(x.curr)}</span>${K.cmpPair(x.prev, x.curr)}${ch ? `<span class="yy ${ch.dir}">${ch.dir === 'up' ? '▲' : ch.dir === 'dn' ? '▼' : '＝'} <span class="mono">${esc(ch.text)}</span></span>` : '<span class="nd">未取得</span>'}</div>`;
+    }).join('');
+    return panel('finance', 'SYS-K9 / BALANCE', '財務', pm, `<div class="pb"><div class="kfh"><span>項目</span><span>前</span><span></span><span>今</span><span>前→今</span><span>増減</span></div><div class="kfs">${rows}</div><div class="kfv2">${F.verdict ? `<span class="kfj">${esc(F.verdict)}</span>` : ''}${F.text ? `<p>${richNums(F.text)}</p>` : ''}</div></div>`);
+  }
+  function returnsPanel(c) {
+    const a = c.a, R2 = secs(a).returns && typeof secs(a).returns === 'object' ? secs(a).returns : null;
+    const pm = '<span class="jp"><i class="sw r3c"></i>1株配当</span><span class="jp"><i class="sw l25"></i>EPS（1株利益）</span><span class="jp"><i class="sw r3f"></i>予想</span>';
+    if (!R2) return panel('returns', 'SYS-K10 / RETURN', '配当とEPS', pm, `<div class="pb">${noData('returns', a, { sm: true })}</div>`);
+    const periods = K.returnsPeriods(c.divs, c.eps);
+    const cell = (list, p) => { const x = list.find((y) => y && y.period === p); if (!x) return '<td class="na">—</td>'; const v = x.value; const s = isNum(v) ? `<span class="mono">${fmt(v, decOf(v, 2))}</span>` : typeof v === 'string' && v ? esc(v) : '—'; return `<td class="${x.forecast ? 'fc' : ''}${v == null ? ' na' : ''}">${s}</td>`; };
+    const tbl = periods.length ? `<table class="krt"><thead><tr><th>決算期</th>${periods.map((p) => { const fc = [...c.divs, ...c.eps].some((x) => x && x.period === p && x.forecast); return `<th class="${fc ? 'fc' : ''}">${esc(p)}${fc ? '<small>予想</small>' : ''}</th>`; }).join('')}</tr></thead><tbody><tr><td>1株配当（円）</td>${periods.map((p) => cell(c.divs, p)).join('')}</tr><tr><td>EPS（円）</td>${periods.map((p) => cell(c.eps, p)).join('')}</tr></tbody></table>` : '';
+    const bb = `<div class="kbb"><span class="kbi" aria-hidden="true">⟲</span><span>自社株買い</span><p>${R2.buyback ? richNums(R2.buyback) : '<span class="na">記載なし</span>'}</p></div>`;
+    return panel('returns', 'SYS-K10 / RETURN', '配当とEPS', pm, `<div class="pb"><div class="host krch${[...c.divs, ...c.eps].some((x) => x && isNum(x.value)) ? '' : ' sm'}" data-chart="returns"></div>${tbl}${bb}</div>`);
+  }
+  function nextPanel(c) {
+    const a = c.a, list = arr(secs(a).next).filter((x) => typeof x === 'string' && x);
+    if (!list.length) return panel('next', 'SYS-K12 / NEXT', '次の決算で見る点', '', `<div class="pb">${noData('next', a, { sm: true })}</div>`);
+    return panel('next', 'SYS-K12 / NEXT', '次の決算で見る点', `<span class="jp">${list.length}項目</span>`, `<div class="pb"><ol class="knx">${list.map((x, i) => `<li><i class="cb" aria-hidden="true"></i><span class="n">${String(i + 1).padStart(2, '0')}</span><p>${richNums(x)}</p></li>`).join('')}</ol><p class="cap knc">次の決算が出たら、この項目を確かめると今回の読みの答え合わせになります</p></div>`);
+  }
+  function deepPanel(c) {
+    const a = c.a, d = secs(a).deep && typeof secs(a).deep === 'object' ? secs(a).deep : null;
+    const name = (c.st && c.st.name) || a.name || a.code;
+    if (!d) return `<div class="kguide" data-sec="deep-guide"><span class="code">SYS-K11 / DEEP</span><span>有報・中期経営計画まで読む「3点読み」はこの分析に含まれていません。</span><span class="cmdl"><em>&gt;</em>/kabu ${esc(name)} 決算 3点</span><span>で追加できます</span></div>`;
+    const y = d.yuho && typeof d.yuho === 'object' ? d.yuho : {}, p = d.plan && typeof d.plan === 'object' ? d.plan : {};
+    const yc = [['ky-e', '▲', '稼ぎ頭', y.earner], ['ky-d', '▼', '足を引っ張る事業', y.dragger], ['ky-o', '◆', '一時的な要因', y.oneOff]].map(([k, g, lab, t]) => `<div class="kyc ${k}"><span class="kyg">${g}</span><div><span class="kyl">${lab}</span><p>${t ? richNums(t) : '<span class="na">記載なし</span>'}</p></div></div>`).join('');
+    const risks = arr(y.risks).filter((x) => typeof x === 'string' && x);
+    const rk = risks.length ? `<div class="kyr"><span class="kyrh">会社が挙げるリスク</span><ol>${risks.map((x, i) => `<li><span class="n">R${i + 1}</span><p>${richNums(x)}</p></li>`).join('')}</ol></div>` : '';
+    const tv = (v) => (isNum(v) ? `<span class="mono">${fmt(v, decOf(v, 2))}</span>` : typeof v === 'string' && v ? esc(v) : '<span class="na">—</span>');
+    const tg = arr(p.targets).filter((x) => x && typeof x === 'object').map((x) => `<div class="kbr"><span class="kbl">${esc(x.label || '')}</span>${K.bullet(x)}<span class="kbv"><span><i class="sw btgs"></i>目標 ${tv(x.target)}</span><span><i class="sw r3c"></i>実績 ${tv(x.actual)}</span><span><i class="sw r3f"></i>今期予想 ${tv(x.forecast)}</span></span></div>`).join('');
+    const vd = (lab, t, g) => `<div class="kvc"><span class="kvg">${g}</span><div><span class="kyl">${lab}</span><p>${t ? richNums(t) : '<span class="na">記載なし</span>'}</p></div></div>`;
+    const left = `<div class="kdy"><div class="kdh"><span class="code">YUHO</span><b>有価証券報告書から</b></div>${yc}${rk}</div>`;
+    const right = `<div class="kdpn"><div class="kdh"><span class="code">PLAN</span><b>${esc(p.name || '中期経営計画')}</b></div>${p.goal ? `<p class="kgl"><span>目指す姿</span>${richNums(p.goal)}</p>` : ''}${tg ? `<div class="kbs"><div class="kbsh"><span>目標 vs 実績 vs 今期予想</span><span class="cap"><i class="sw btgs"></i>縦線＝目標 ・ 実線＝実績 ・ 斜線＝今期予想</span></div>${tg}</div>` : ''}${vd('お金の使い道と目標の一致', p.consistent, '⇄')}${vd('現実的か', p.realistic, '◎')}</div>`;
+    return panel('deep', 'SYS-K11 / DEEP', '3点読み（有報・中期経営計画）', '<span class="jp">決算 3点</span>', `<div class="pb"><div class="kdg">${left}${right}</div></div>`);
+  }
+  function kessanView(c) {
+    const a = c.a;
+    const segShow = !secAbsent(a, 'segments') || !!missFor(a, 'segments');
+    return `<div id="kview" class="kv">
+    <div class="kv-r1">${verdictPanel(c)}${pointsPanel(c)}</div>
+    ${resultsPanel(c)}
+    <div class="kv-r3">${progressPanel(c)}${marginPanelK(c)}${outlookPanel(c)}</div>
+    <div class="kv-r4">${pmPanel(c)}${investPanel(c)}</div>
+    <div class="kv-r5">${financePanel(c)}${returnsPanel(c)}</div>
+    ${segShow ? `<div class="pair kv-pair">${nextPanel(c)}${segPanel(a)}</div>` : `<div class="kv-r6">${nextPanel(c)}</div>`}
+    ${deepPanel(c)}
+    ${notesPanel(a)}
+  </div>`;
+  }
+
   function renderStock(route) {
     const D = window.KABU;
     const R = resolve(route);
@@ -581,11 +997,13 @@
     const st = R.st, a = R.a, t = typeOf(R.type);
     if (st.code) { S.recent = st.code; try { window.localStorage.setItem('kabu.recent', st.code); } catch (e) { /* 記憶できなくても動く */ } }
     const name = st.name || R.code;
-    const cmd = `/kabu ${name} ${t.cmd}${t.arg ? ' ' + t.arg : ''}`;
+    const deep = a && a.type === 'kessan' && a.sections && a.sections.deep && typeof a.sections.deep === 'object';
+    const cmd = `/kabu ${name} ${t.cmd}${deep ? ' 3点' : ''}${t.arg ? ' ' + t.arg : ''}`;
     let body;
     S.ctx = null;
     S.ckSel = null;
     S.ckItems = [];
+    S.lvPin = null;
     clearTimeout(S.segTimer);
     if (!a) {
       const q = quoteOf(st);
@@ -599,6 +1017,12 @@
         note: q.date ? `株価・基本情報は収集済み（<b>${esc(q.date)}</b>）。下のコマンドで分析を実行できます。` : '',
         cmd: `/kabu ${name}${t.key === 'quick' ? '' : ' ' + t.cmd}`, arg: t.arg || '',
       });
+    } else if (R.type === 'chart') {
+      S.ctx = chartCtx(st, a);
+      body = chartView(S.ctx);
+    } else if (R.type === 'kessan') {
+      S.ctx = kessanCtx(st, a);
+      body = kessanView(S.ctx);
     } else if (R.type !== 'quick') {
       body = emptyHtml({ code: `SYS-T-0${TYPES.indexOf(t) + 1} / PENDING`, title: t.label, status: '表示準備中', mod: 'VIEW PENDING', h3: `${t.label}の表示は次の段階で対応します`, p: `${a.date} の分析は保存されています。要約：${a.summary || '—'}` });
     } else {
@@ -642,13 +1066,38 @@
       const sc = arr(c.a.sections.scenarios), by = (k) => { const s = sc.find((x) => x && x.kind === k); return s && s.target ? s.target : null; };
       return K.fan({ hist: c.upto.slice(-20).map((r) => r.c), now: c.a.price && c.a.price.close, bull: by('bull'), base: by('base'), bear: by('bear'), dec: c.dec, W, H });
     },
+    // チャート型
+    lv: (W, H, c) => K.levelChart({ rows: c.rows, ma: c.ma, levels: c.levels, vp: c.I && c.I.volumeProfile, dec: c.dec, W, H, label: `${c.st.name || c.st.code} 日足チャートとサポート・レジスタンス` }),
+    tf: (W, H, c, h) => { const t = c.tf && c.tf[h.dataset.k]; return t ? K.miniCandles({ bars: t.bars, ma: t.ma, W, H, label: `${TF[h.dataset.k][1]}のローソク足`, empty: `${TF[h.dataset.k][1]}のデータがありません` }) : ''; },
+    plans: (W, H, c) => K.plansChart({ plans: c.plans, close: c.close, W, H, axisW: PLAN_AXIS, gap: PLAN_GAP }),
+    // 決算型
+    pair: (W, H, c, h) => { const r = c.results && c.results[+h.dataset.i]; return r ? K.pairBars3d({ curr: r.value, prev: K.prevFromYoy(r.value, r.yoyPct), W, H }) : ''; },
+    returns: (W, H, c) => K.returns3d({ divs: c.divs, eps: c.eps, W, H }),
+    mline: (W, H, c) => K.marginLine({ rows: c.qm, W, H }),
   };
   function drawHost(h) {
     const fn = DRAW[h.dataset.chart];
     const W = h.clientWidth, H = h.clientHeight;
     h.dataset.wh = `${W}x${H}`;
-    h.innerHTML = fn && S.ctx && W > 0 && H > 0 ? fn(W, H, S.ctx) : '';
+    h.innerHTML = fn && S.ctx && W > 0 && H > 0 ? fn(W, H, S.ctx, h) : '';
+    if (h.dataset.chart === 'lv') lvApply(S.lvPin);
   }
+  /** サポレジ一覧の行 i に対応するチャートの線・帯・札を強調（null で解除）。押して固定した行は aria-pressed */
+  function lvApply(i) {
+    const key = i == null ? null : String(i);
+    const svg = $('svg.lvchart');
+    if (svg) {
+      svg.classList.toggle('hl', key != null);
+      $$('.lvg', svg).forEach((g) => g.classList.toggle('on', g.dataset.lv === key));
+    }
+    $$('.lvr').forEach((r) => {
+      r.classList.toggle('on', r.dataset.lv === key);
+      const pin = S.lvPin != null && r.dataset.lv === String(S.lvPin);
+      r.classList.toggle('pin', pin);
+      r.setAttribute('aria-pressed', pin ? 'true' : 'false');
+    });
+  }
+  function lvSelect(i) { S.lvPin = S.lvPin != null && String(S.lvPin) === String(i) ? null : String(i); lvApply(S.lvPin); }
   // 枠の大きさが変わったら（理由欄の開閉・行の伸縮など）その図だけ描き直す
   const RO = window.ResizeObserver ? new ResizeObserver((ents) => {
     ents.forEach((en) => { const h = en.target; if (h.isConnected && h.dataset.wh !== `${h.clientWidth}x${h.clientHeight}`) drawHost(h); });
@@ -668,6 +1117,9 @@
         if (parseFloat(l.style.left) + lw / 2 + 6 > parseFloat(r.style.left) - rw / 2) { l.style.left = lw / 2 + 'px'; r.style.left = (W - rw / 2) + 'px'; }
       }
     });
+    // チャート型：サポレジ一覧の枠はメインチャートの枠より短くしない（下端を揃える）
+    const lc = $('.cv-r2 > [data-sec="lvchart"]'), lvp = $('.cv-r2 > [data-sec="levels"]');
+    if (lc && lvp) lvp.style.minHeight = lc.offsetHeight + 'px';
     const pop = $('#seg-pop'), pair = $('.pair');
     if (pop && pair) pop.style.minHeight = pair.getBoundingClientRect().height + 'px';
     if (document.body.classList.contains('anim')) setLens();
@@ -738,6 +1190,7 @@
     $$('.ckg .ck').forEach((c) => { const on = c.dataset.ck === S.ckSel; c.classList.toggle('sel', on); c.setAttribute('aria-pressed', on ? 'true' : 'false'); });
     const why = $('[data-ck-why]');
     if (why) why.innerHTML = K.ckReasons(S.ckItems, S.ckSel);
+    $$('.cr[data-why]').forEach((c) => c.classList.toggle('sel', c.dataset.why === S.ckSel));
     // 理由欄の高さが変わると同じ段の図の枠も変わるので、すぐ描き直す（ResizeObserver を待たない）
     $$('[data-chart]').forEach((h) => { if (h.dataset.wh !== `${h.clientWidth}x${h.clientHeight}`) drawHost(h); });
   }
@@ -751,7 +1204,14 @@
     if (segIsOpen() && !t.closest('#seg-pop')) segSet(false, { focus: false });
     const ck = t.closest('.ckg .ck');
     if (ck) ckSelect(ck.dataset.ck);
+    const lr = t.closest('.lvr');
+    if (lr) lvSelect(lr.dataset.lv);
   });
+  // サポレジ一覧：マウス・フォーカスを合わせている間だけ強調（離れたら固定中の行に戻す）
+  document.addEventListener('mouseover', (e) => { const r = e.target.closest && e.target.closest('.lvr'); if (r) lvApply(r.dataset.lv); else if (e.target.closest && e.target.closest('.lvlist')) lvApply(S.lvPin); });
+  document.addEventListener('mouseout', (e) => { const r = e.target.closest && e.target.closest('.lvr'); if (r && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('.lvr'))) lvApply(S.lvPin); });
+  document.addEventListener('focusin', (e) => { const r = e.target.closest && e.target.closest('.lvr'); if (r) lvApply(r.dataset.lv); });
+  document.addEventListener('focusout', (e) => { if (e.target.closest && e.target.closest('.lvr')) lvApply(S.lvPin); });
   // 展開一覧の行にマウス・フォーカスを合わせると、ドーナツの該当部分を強調
   const segHl = (i) => { const dn = $('#seg-pop .sp-dn'); if (!dn) return; dn.classList.toggle('hl', i != null); $$('.arc', dn).forEach((a) => a.classList.toggle('on', a.dataset.i === String(i))); $$('#seg-pop .sp-r').forEach((r) => r.classList.toggle('on', r.dataset.i === String(i))); };
   document.addEventListener('mouseover', (e) => { const r = e.target.closest && e.target.closest('#seg-pop .sp-r'); if (r) segHl(r.dataset.i); else if (e.target.closest && e.target.closest('#seg-pop')) segHl(null); });
@@ -763,7 +1223,7 @@
     if (e.key === 'Escape' && segIsOpen()) { e.preventDefault(); segSet(false); return; }
     const ck = e.target.closest && e.target.closest('.ckg .ck');
     if (ck && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
-      const cells = $$('.ckg .ck'), i = cells.indexOf(ck), cols = 5;
+      const cells = $$('.ckg .ck'), i = cells.indexOf(ck), cols = ck.closest('.ck10') ? 10 : 5;
       const j = { ArrowLeft: i - 1, ArrowRight: i + 1, ArrowUp: i - cols, ArrowDown: i + cols }[e.key];
       if (j >= 0 && j < cells.length) { e.preventDefault(); cells[j].focus(); ckSelect(cells[j].dataset.ck, true); }
       return;
@@ -786,6 +1246,7 @@
   window.__KABU_APP = {
     TYPES, VAL_KEYS, DIAG_KEYS: Object.keys(DIAG), parseHash, secAbsent, missFor,
     render, redraw: drawAll, current: () => S.route, segSet, segIsOpen, ckSelect, ckState: () => ({ sel: S.ckSel, items: S.ckItems }),
+    lvSelect, lvState: () => S.lvPin, rulesOf, PLAN_AXIS, PLAN_GAP,
     setTesting: (b) => { S.testing = !!b; if (b) { clearTimeout(S.animTimer); document.body.classList.remove('anim'); } },
     snapshot: () => ({ recent: S.recent, seen: { ...S.seen } }),
     restore: (s) => { if (!s) return; S.recent = s.recent; S.seen = { ...s.seen }; try { if (s.recent) window.localStorage.setItem('kabu.recent', s.recent); else window.localStorage.removeItem('kabu.recent'); } catch (e) { /* 無視 */ } },
