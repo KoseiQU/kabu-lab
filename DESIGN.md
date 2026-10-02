@@ -41,46 +41,43 @@ AIは売買の正解を当てる装置ではない。複数のシナリオと根
 
 ```
 /kabu 日立 →（スキル）
+  （cd src してから）
   ① node collect/run.mjs 6501 --type quick   収集と指標計算（トークン0）
        → data/stocks/6501/prices.json, profile.json, digest.md
   ② Claude が digest.md と Web検索で分析 → data/stocks/6501/analyses/2026-10-03-quick.json
   ③ node tools/validate.mjs <その JSON>      スキーマ検証（不合格なら②を直す）
-  ④ node build.mjs                           data/ 全体 → app/data.js（window.KABU）
-  ⑤ open "file://$PWD/app/index.html#/stock/6501/quick"   （file:// の絶対URLで渡す。相対パス＋# は開けない）
+  ④ node build.mjs                           data/ 全体 → app/data.js と デスクトップのビューア
+  ⑤ open "file://$HOME/Desktop/KABU LAB.html#/stock/6501/quick"
 ```
 
-### ディレクトリ
+### ディレクトリ（2026-10-03 整理。利用者指示「散らかっていてどこを押せばいいか分からない」）
+
+フォルダ直下は5つだけにする。利用者が普段開くのはデスクトップの `KABU LAB.html` だけ。
 
 ```
+~/Desktop/KABU LAB.html   ★ビューア。ダブルクリックで分析結果が開く。分析のたびに build が作り直す（単体で動く1ファイル）
+
 kabu-lab/
-├── DESIGN.md
-├── docs/                 正文・スキーマの説明・モック指示書
-├── mocks/                デザインモック（mock-6-final.html が見た目の正）
-├── collect/              収集スクリプト（Node、依存パッケージなし）
-│   ├── run.mjs           入口。型に応じて下を呼び digest.md を書く
-│   ├── prices.mjs        Yahoo chart API（query1.finance.yahoo.com/v8/finance/chart/<code>.T、日足2年）
-│   ├── kabutan.mjs       株探 基本情報（PER・PBR・利回り・時価総額・信用残・業績推移・業種・テーマ）
-│   ├── market.mjs        指数・為替・金利・原油（Yahoo chart API のシンボル）
-│   └── lib/              fetch共通（UA・タイムアウト・リトライ）、indicators.mjs
-├── tools/
-│   ├── validate.mjs      分析JSONのスキーマ検証
-│   └── pdf2text.py       決算PDF → テキスト（pypdf）
-├── schemas/              型ごとの JSON スキーマ
-├── build.mjs             data/ → app/data.js
-├── app/
-│   ├── index.html        アプリ本体
-│   ├── styles.css
-│   ├── app.js            ルーティングと画面
-│   ├── charts.js         SVG描画部品（ローソク足・立体棒・円弧メーター・ゲージ・ドーナツ・扇）
-│   └── data.js           build.mjs の生成物（コミットしない）
-├── data/                 収集・分析結果（コミットする。学習ノートの本体）
-│   ├── stocks/<code>/{profile.json, prices.json, digest.md, memo.md, analyses/<date>-<type>.json}
+├── README.md             はじめに（どこを開けばよいか・フォルダの意味）
+├── DESIGN.md             設計書（契約）
+├── data/                 分析データ（学習ノートの本体。コミットする）
+│   ├── stocks/<code>/{profile.json, prices.json, digest.md, digest-kessan.md, finance.json, memo.md, analyses/<date>-<type>.json}
 │   ├── market/<date>.json
-│   ├── glossary.json     用語帳
-│   └── notes.json        気づきノート
-├── tests/                node --test
-└── skill/SKILL.md        /kabu スキルの正文（~/.claude/skills/kabu/ へ設置）
+│   └── glossary.json, notes.json
+├── src/                  プログラム一式（コマンドはここで実行する）
+│   ├── package.json, build.mjs, config.json
+│   ├── collect/          収集スクリプト（run.mjs, prices.mjs, kabutan.mjs, kabutan-finance.mjs, market.mjs, lib/）
+│   ├── tools/            validate.mjs, fetch-doc.mjs, doc-slice.mjs, pdf2text.py
+│   ├── schemas/          型ごとの JSON スキーマ、indicators.md
+│   ├── app/              アプリ本体（index.html, styles.css, app.js, charts.js, test-hooks.js, data.js＝生成物）
+│   ├── tests/            node --test
+│   └── skill/SKILL.md    /kabu スキルの正文（~/.claude/skills/kabu/ へ設置）
+└── archive/              制作時の資料（mocks/・スクリーンショット・モック指示書）。普段は開かない
 ```
+
+- **ビューア**：`build.mjs` は `src/app/data.js` を作った後、`src/app/index.html` に styles・charts・app・data をすべて埋め込んだ単体HTMLを `src/config.json` の `viewerPath`（既定 `~/Desktop/KABU LAB.html`）へ書き出す。test-hooks は含めない。外部読み込みは Google Fonts だけ。書き出しに失敗しても build 全体は失敗させず、警告を出す。
+- 生データ（`data/stocks/<code>/raw/`）はコミットしない。
+- スキルの手順は `cd ~/Desktop/kabu-lab/src` で実行し、表示は `open "file://$HOME/Desktop/KABU LAB.html#/stock/<code>/<type>"`。
 
 ### 指標計算（collect/lib/indicators.mjs。機械テスト必須）
 
@@ -222,4 +219,5 @@ digest.md にはこれらの結果と直近20日の四本値を載せる。チ�
 - 2026-10-03 P2 への申し送り: digest に「移動平均線へのタッチと反発」の日付がなく、チェックリスト C10 を過去分まで判定できない。チャート型の実装時に digest へ追加する。
 - 2026-10-03 縦切りの利用者評価: スクロール可・情報の質と量を優先／文章と待ち時間はOK／回数を重ねるほど効率化したい／事業は「その他」を押して全部見たい（全体のバランスは変えない）。→ §4 効率化・§6 を改訂。
 - 2026-10-03 P2a 完了（テスト106本）。株探の決算ページから通期・四半期・進捗率・修正履歴・財務・CFを取得。四半期の営業CFなど株探にない数字は決算短信PDFから読む。`indicators` の形は `schemas/indicators.md` が正。
+- 2026-10-03 利用者指示: フォルダが散らかっていて分かりにくい → 直下を5つに整理（README・DESIGN・data・src・archive）。分析結果だけを見る単体ビューアをデスクトップに置き、build のたびに更新する。
 - 2026-10-03 学習機能（用語帳・気づきノート・シナリオの答え合わせ）を採用。朝のニュースは市場型に含め、定時実行はしない。
