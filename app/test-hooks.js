@@ -57,7 +57,12 @@
     // ① 枠が存在し可視
     secs.forEach((s) => { if (!visible(main.querySelector(`[data-sec="${s}"]`))) add('① 枠が無い／見えない', s); });
     // 図の枠が空でない
-    main.querySelectorAll('[data-chart]').forEach((h) => { const svg = h.querySelector('svg'); if (!svg || !(svg.getBoundingClientRect().width > 0)) add('① 図が描かれていない', h.dataset.chart); });
+    main.querySelectorAll('[data-chart]').forEach((h) => {
+      const svg = h.querySelector('svg');
+      if (!svg || !(svg.getBoundingClientRect().width > 0)) { add('① 図が描かれていない', h.dataset.chart); return; }
+      const r = svg.getBoundingClientRect();
+      if (Math.abs(r.width - h.clientWidth) > 1.5 || Math.abs(r.height - h.clientHeight) > 1.5) add('① 図の大きさが枠と合わない（描き直し漏れ）', `${h.dataset.chart} ${Math.round(r.width)}x${Math.round(r.height)} / ${h.clientWidth}x${h.clientHeight}`);
+    });
     // パネル見出しのはみ出し
     main.querySelectorAll('.ph').forEach((ph) => {
       const box = ph.getBoundingClientRect();
@@ -114,6 +119,12 @@
       const ls = [...m.querySelectorAll('.ml')].map((e) => e.getBoundingClientRect());
       if (ls.length === 2 && ls[0].right + 2 > ls[1].left) add('① メーターの両端ラベルが重なる', m.parentElement.textContent.slice(0, 8));
     });
+    // 情報優先：省略記号・行数制限で文字が欠けていない
+    main.querySelectorAll('*').forEach((el) => {
+      const cs = getComputedStyle(el);
+      if (cs.textOverflow === 'ellipsis' && el.scrollWidth > el.clientWidth + 1 && el.textContent.trim()) add('情報優先：省略記号で切れている', el.textContent.trim().slice(0, 24));
+      if (cs.webkitLineClamp && cs.webkitLineClamp !== 'none' && el.scrollHeight > el.clientHeight + 1) add('情報優先：行数制限で切れている', el.textContent.trim().slice(0, 24));
+    });
     // ② NaN / undefined / Infinity（SVG属性・style属性・画面テキスト）
     document.querySelectorAll('#main svg *, #main svg, #top *, #bot *').forEach((el) => {
       SVG_ATTRS.forEach((k) => { const v = el.getAttribute && el.getAttribute(k); if (v && BAD.test(v)) add('② 属性に不正値', `${el.tagName}[${k}]=${v.slice(0, 60)}`); });
@@ -166,7 +177,7 @@
           const shown = Number((last.querySelector('.pf').textContent.match(/[−-]?[\d,]+/) || ['NaN'])[0].replace(/,/g, '').replace('−', '-'));
           if (!last.textContent.includes(`その他 ${segs.length - 3}事業`) || shown !== sum) add('稼ぎ頭の「その他」の合計が違う', `${shown} ≠ ${sum}`);
         }
-        if (segs.every((x) => typeof x.margin !== 'number') && (/利益率/.test(panelEl.querySelector('.sg-top').textContent) || panelEl.querySelector('.mbar b'))) add('利益率が無いのに利益率の表示がある', '');
+        if (segs.every((x) => typeof x.margin !== 'number') && (/利益率/.test(panelEl.querySelector('.sg-top').textContent) || panelEl.querySelector('.mbar b:not(.xp)'))) add('利益率が無いのに利益率の表示がある', '');
       }
       const list = main.querySelector('[data-missing-list]');
       (a.missing || []).forEach((m) => { if (!list || !list.textContent.includes(m)) add('④ missing の文が画面に無い', m); });
@@ -178,6 +189,83 @@
         const el = n.parentElement;
         if (!el.closest('[data-nodata], [data-missing-list], .sh-kv, [data-chart], .h-bd')) add('④ 根拠の無い「未取得」表示', el.outerHTML.slice(0, 80));
       }
+    }
+  }
+
+  /** 操作の検査：稼ぎ頭の展開（他パネルが動かない・全事業が画面内）とチェックリストの理由。最後は閉じた初期状態に戻す */
+  function checkInteractions(route, add) {
+    const A = app(), main = document.getElementById('main');
+    const D = window.KABU, st = D.stocks[route.code];
+    const a = st && (st.analyses || []).find((x) => x.type === (route.type || 'quick') && (!route.date || x.date === route.date));
+    if (!a || (route.type || 'quick') !== 'quick') return;
+    const rects = () => [...main.querySelectorAll('[data-sec]')].map((p) => { const r = p.getBoundingClientRect(); return [p.dataset.sec, Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)].join(':'); }).join('|');
+    const segs = (a.sections && a.sections.segments || []).filter((x) => x && x.name);
+    const btn = main.querySelector('.srow.other[data-seg-toggle]');
+    if (segs.length >= 5 && !btn) add('稼ぎ頭：5事業以上なのに展開ボタンが無い', String(segs.length));
+    if (segs.length < 5 && btn) add('稼ぎ頭：4事業以下なのに展開ボタンがある', String(segs.length));
+    if (btn) {
+      const before = rects(), sw0 = document.documentElement.scrollWidth;
+      btn.click();
+      const pop = document.getElementById('seg-pop');
+      if (!pop) add('稼ぎ頭：押しても開かない', '');
+      else {
+        if (btn.getAttribute('aria-expanded') !== 'true') add('稼ぎ頭：aria-expanded が true にならない', '');
+        if (document.activeElement !== pop.querySelector('.sp-list')) add('稼ぎ頭：開いた後のフォーカスが一覧に無い', String(document.activeElement && document.activeElement.className));
+        const rows = [...pop.querySelectorAll('.sp-r')];
+        if (rows.length !== Math.min(segs.length, 8)) add('稼ぎ頭：一覧の行数が違う', `${rows.length}`);
+        const pr = pop.getBoundingClientRect(), rail = document.getElementById('rail').getBoundingClientRect().right;
+        if (pr.left < rail - 1 || pr.right > window.innerWidth + 1) add('稼ぎ頭：展開パネルが画面外にはみ出す', `${Math.round(pr.left)}〜${Math.round(pr.right)}`);
+        const pair = main.querySelector('.pair').getBoundingClientRect(), seg = main.querySelector('[data-sec="segments"]').getBoundingClientRect();
+        if (Math.abs(pr.right - seg.right) > 1 || Math.abs(pr.left - pair.left) > 1) add('稼ぎ頭：展開パネルの位置（右端固定・2枠ぶん）が違う', `${Math.round(pr.left)}/${Math.round(pair.left)} ${Math.round(pr.right)}/${Math.round(seg.right)}`);
+        rows.forEach((r, i) => { const b = r.getBoundingClientRect(); if (!(b.width > 0 && b.height > 0) || b.right > pr.right + 1 || b.bottom > pr.bottom + 1) add('稼ぎ頭：一覧の行が見えない／枠外', String(i + 1)); });
+        pop.querySelectorAll('.sp-r .nm b, .sp-r .pf').forEach((e) => { if (e.scrollWidth > e.clientWidth + 1) add('稼ぎ頭：一覧の文字が切れている', e.textContent); });
+        const names = rows.map((r) => r.querySelector('.nm b').textContent);
+        const want = [...segs].sort((x, y) => (y.profit ?? -Infinity) - (x.profit ?? -Infinity)).slice(0, 8).map((x) => x.name);
+        if (names.join('|') !== want.join('|')) add('稼ぎ頭：一覧の並び（利益の大きい順）が違う', names.join(','));
+        if (rects() !== before) add('稼ぎ頭：開くと他のパネルが動く', '');
+        if (document.documentElement.scrollWidth > window.innerWidth || document.documentElement.scrollWidth > Math.max(sw0, window.innerWidth)) add('稼ぎ頭：開くと横スクロールが出る', '');
+        const bad = pop.innerHTML.match(/NaN|undefined|Infinity/);
+        if (bad) add('稼ぎ頭：展開パネルに不正値', bad[0]);
+        // 閉じ方：Esc
+        document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        if (document.getElementById('seg-pop')) add('稼ぎ頭：Esc で閉じない', '');
+        if (document.activeElement !== btn) add('稼ぎ頭：閉じた後のフォーカスがボタンに戻らない', '');
+        // 閉じ方：枠外クリック・×ボタン・同じボタン（たたむ）
+        btn.click(); main.querySelector('.sh').click();
+        if (document.getElementById('seg-pop')) add('稼ぎ頭：枠外クリックで閉じない', '');
+        btn.click(); const x = document.querySelector('#seg-pop [data-seg-close]'); if (x) x.click();
+        if (document.getElementById('seg-pop')) add('稼ぎ頭：×で閉じない', '');
+        btn.click(); const fold = document.querySelector('#seg-pop .sp-fold'); if (fold) fold.click();
+        if (document.getElementById('seg-pop')) add('稼ぎ頭：たたむボタンで閉じない', '');
+        btn.click(); btn.click();
+        if (document.getElementById('seg-pop')) add('稼ぎ頭：同じボタンで閉じない', '');
+        if (rects() !== before) add('稼ぎ頭：閉じても元の位置・大きさに戻らない', '');
+        if (btn.getAttribute('aria-expanded') !== 'false') add('稼ぎ頭：閉じても aria-expanded が false にならない', '');
+      }
+    }
+    // チェックリスト：セルを順に押すと、理由欄にその項目の reason が出る。もう一度押すと既定に戻る
+    const cells = [...main.querySelectorAll('.ckg .ck')];
+    const why = main.querySelector('[data-ck-why]');
+    if (cells.length && !why) add('チェックリスト：理由欄が無い', '');
+    if (cells.length && why) {
+      const items = A.ckState().items;
+      const prog = items.filter((x) => x.status === 'progress');
+      const defIds = (prog.length ? prog : items.filter((x) => x.status === 'done').slice(-2).reverse()).map((x) => x.id);
+      const shown = () => [...why.querySelectorAll('[data-why]')].map((e) => e.dataset.why).join(',');
+      if (shown() !== defIds.join(',')) add('チェックリスト：初期表示の理由が規則と違う', `${shown()} ≠ ${defIds.join(',')}`);
+      const h0 = main.querySelector('[data-sec="checklist"]').getBoundingClientRect().height;
+      cells.forEach((c) => {
+        c.click();
+        const it = items.find((x) => x.id === c.dataset.ck);
+        if (!c.classList.contains('sel') || c.getAttribute('aria-pressed') !== 'true') add('チェックリスト：選んだセルが強調されない', c.dataset.ck);
+        if (shown() !== c.dataset.ck || (it && it.reason && !why.textContent.includes(it.reason))) add('チェックリスト：理由欄に選んだ項目の reason が出ない', c.dataset.ck);
+        const pi = main.querySelector('[data-sec="checklist"] > .pi');
+        if (pi.scrollHeight > pi.clientHeight + 1) add('チェックリスト：理由が枠で切れる', c.dataset.ck);
+        main.querySelectorAll('[data-chart]').forEach((h) => { const r = h.querySelector('svg') && h.querySelector('svg').getBoundingClientRect(); if (!r || Math.abs(r.height - h.clientHeight) > 1.5 || Math.abs(r.width - h.clientWidth) > 1.5) add('チェックリスト：理由欄の開閉で図が描き直されない', `${h.dataset.chart} ${c.dataset.ck}`); });
+        c.click();
+      });
+      if (shown() !== defIds.join(',')) add('チェックリスト：もう一度押しても既定に戻らない', shown());
+      if (Math.abs(main.querySelector('[data-sec="checklist"]').getBoundingClientRect().height - h0) > 1) add('チェックリスト：操作後に高さが元に戻らない', '');
     }
   }
 
@@ -210,7 +298,9 @@
         try {
           A.render(route);
           pages++;
-          checkPage(route, (check, detail) => { n++; failures.push({ route: label, check, detail }); });
+          const addF = (check, detail) => { n++; failures.push({ route: label, check, detail }); };
+          checkPage(route, addF);
+          if (route.view === 'stock') checkInteractions(route, addF);
         } catch (e) {
           n++;
           failures.push({ route: label, check: '描画で例外', detail: String(e && e.stack ? e.stack : e).slice(0, 300) });

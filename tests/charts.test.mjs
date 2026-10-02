@@ -239,3 +239,57 @@ test('需給: 5桁の買い残でも売り残の棒が最低3pxで見え、NaN �
     assert.equal((svg.match(/rlab/g) || []).length, 5);
   }
 });
+
+/* ---------- P1d：稼ぎ頭の展開・チェックリストの理由 ---------- */
+const seg = (name, profit, margin = null, note = '') => ({ name, profit, margin, note });
+test('segModel: 0/1/3/4/5/8件・利益率すべて null・負の利益', () => {
+  const m0 = K.segModel([]);
+  assert.equal(m0.count, 0); assert.equal(m0.expandable, false); assert.deepEqual(m0.collapsed, []); assert.equal(m0.total, 0);
+  const m1 = K.segModel([seg('A', 100, 10)]);
+  assert.equal(m1.collapsed.length, 1); assert.equal(m1.expandable, false); assert.equal(m1.all[0].barW, 100);
+  const m3 = K.segModel([seg('A', 1), seg('B', 3), seg('C', 2)]);
+  assert.deepEqual(m3.collapsed.map((x) => x.name), ['B', 'C', 'A']); assert.ok(!m3.collapsed.some((x) => x.other));
+  const m4 = K.segModel([seg('A', 4), seg('B', 3), seg('C', 2), seg('D', 1)]);
+  assert.equal(m4.collapsed.length, 4); assert.equal(m4.expandable, false); assert.ok(!m4.collapsed.some((x) => x.other));
+  const m5 = K.segModel([seg('A', 5), seg('B', 4), seg('C', 3), seg('D', 2), seg('E', 1)]);
+  assert.equal(m5.expandable, true);
+  assert.deepEqual(m5.collapsed.map((x) => x.name), ['A', 'B', 'C', 'その他 2事業']);
+  assert.equal(m5.collapsed[3].profit, 3);
+  const eight = Array.from({ length: 8 }, (_, i) => seg(`S${i + 1}`, (i + 1) * 100, i % 2 ? null : 5 + i, i === 2 ? '前年比 +12億円' : i === 3 ? '前年比 −7億円' : ''));
+  const m8 = K.segModel(eight);
+  assert.equal(m8.all.length, 8);
+  assert.deepEqual(m8.all.map((x) => x.rank), [1, 2, 3, 4, 5, 6, 7, 8]);
+  assert.equal(m8.all[0].name, 'S8'); assert.equal(m8.all[0].barW, 100);
+  assert.equal(m8.collapsed[3].name, 'その他 5事業'); assert.equal(m8.collapsed[3].profit, 100 + 200 + 300 + 400 + 500);
+  assert.equal(m8.total, 3600); assert.equal(m8.hasMargin, true);
+  assert.equal(new Set(m8.all.map((x) => x.color)).size, 8, '8色すべて別');
+  assert.deepEqual(m8.all.filter((x) => x.sign).map((x) => [x.name, x.sign]), [['S4', 'dn'], ['S3', 'up']]);
+  // 利益率すべて null（商社型）
+  const r = realistic.cases[0].analysis.sections.segments;
+  const mr = K.segModel(r);
+  assert.equal(mr.hasMargin, false); assert.equal(mr.count, 7);
+  assert.equal(mr.collapsed[3].profit, 921 + 693 + 450 + 433);
+  assert.ok(!/class="mg"/.test(K.segListHtml(mr)), '利益率が無いのに利益率の列');
+  // 負の利益を含む
+  const mn = K.segModel([seg('A', 500, 12), seg('B', -120, -3.1, '前年比 −80億円'), seg('C', 300), seg('D', 50), seg('E', 10)]);
+  assert.equal(mn.all.at(-1).name, 'B'); assert.equal(mn.all.at(-1).barW, 0); assert.equal(mn.all.at(-1).share, null);
+  assert.equal(mn.total, 740); assert.equal(mn.collapsed[3].profit, 10 - 120); // 上位3＝A・C・D、その他＝E＋B
+  for (const m of [m0, m1, m3, m4, m5, m8, mr, mn]) clean(K.segListHtml(m) + JSON.stringify(m.collapsed), '稼ぎ頭');
+  const html = K.segListHtml(mn);
+  assert.equal((html.match(/class="sp-r"/g) || []).length, 5);
+  assert.match(html, /class="pf dn">−120/);
+  assert.match(html, /class="nt dn">前年比 −80億円/);
+});
+
+test('チェックリストの理由: 既定は進行中すべて、0件なら完成済みを後ろから2件、選択時はその1件', () => {
+  const items = sample.sections.checklist.map((c, i) => ({ ...c, name: `項目${i + 1}` }));
+  const ids = (h) => [...h.matchAll(/data-why="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(ids(K.ckReasons(items, null)), ['C01', 'C06']);
+  assert.deepEqual(ids(K.ckReasons(items.map((x) => ({ ...x, status: x.status === 'progress' ? 'none' : x.status })), null)), ['C10', 'C09']);
+  assert.deepEqual(ids(K.ckReasons(items, 'C08')), ['C08']);
+  assert.match(K.ckReasons(items, 'C08'), new RegExp(items[7].reason));
+  assert.match(K.ckReasons([], null), /表示できる理由がありません/);
+  const ck = K.checklist(items);
+  assert.equal((ck.cells.match(/<button type="button" class="ck /g) || []).length, 10);
+  assert.equal((ck.cells.match(/aria-pressed="false"/g) || []).length, 10);
+});

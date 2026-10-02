@@ -607,3 +607,94 @@ a.rl,a.tab,a.k{text-decoration:none}
 .sch .tgt em{white-space:nowrap}
 /* ホーム下段：今日の用語の定義（最大80字）が長いときは段を伸ばす */
 .h-b{height:auto; min-height:170px}
+
+/* =====================================================================
+   P1d：情報優先（省略しない）・稼ぎ頭マップの展開・チェックリストの理由
+   ===================================================================== */
+/* 情報優先：省略記号・行数制限をやめ、枠を中身に合わせて伸ばす（中身が少ない時の見た目はモックのまま） */
+.h-nm{display:block; -webkit-line-clamp:unset; overflow:visible}
+.srh{height:auto; min-height:16px}
+.srh .sn{white-space:normal; overflow:visible; text-overflow:clip; line-height:1.3}
+.srh .yoy,.srh .pf{white-space:nowrap}
+.vg .ref{white-space:normal; overflow:visible; text-overflow:clip; line-height:1.3}
+.h-mr .cg{white-space:normal; overflow:visible; text-overflow:clip}
+.gr .nm{white-space:normal; overflow:visible; text-overflow:clip}
+.h-term .w{white-space:normal; overflow:visible; text-overflow:clip; overflow-wrap:anywhere; line-height:1.15}
+.sg-rows{max-height:none}
+.rcol{grid-template-rows:minmax(auto,.8fr) auto minmax(auto,1.2fr)}
+.rcol>.panel:nth-child(2){min-height:auto}
+.rcol>.panel:nth-child(2)>.pi{min-height:84px}
+.pair>.panel{min-height:auto}
+.pair>.panel>.pi{min-height:215px}
+
+/* 稼ぎ頭：「その他」行はボタン（右端に展開記号） */
+.pair{position:relative}
+.srow.other{display:block; width:calc(100% + 8px); margin:0 -4px; padding:2px 4px; text-align:left; cursor:pointer;
+  border:1px solid rgba(62,230,255,.28); background:rgba(62,230,255,.045)}
+.srow.other:hover,.srow.other:focus-visible{border-color:var(--cy); background:rgba(62,230,255,.11); outline:none}
+.srow.other[aria-expanded="true"]{border-color:var(--cy); background:rgba(62,230,255,.16)}
+.srow .xp{flex:none; margin-left:8px; font:700 12px/14px var(--jp); color:var(--cy); white-space:nowrap}
+
+/* 展開パネル：業績推移の上に重なる（右端は固定・2枠ぶんの幅・下へは必要なだけ） */
+.seg-pop{position:absolute; top:0; right:0; width:100%; z-index:15; filter:drop-shadow(0 12px 22px rgba(0,0,0,.65))}
+.seg-pop.tr{transition:clip-path .22s cubic-bezier(.3,.7,.2,1)}
+.seg-pop>.panel,.seg-pop>.panel>.pi{min-height:inherit}
+.seg-pop .pi{background:linear-gradient(180deg,rgba(11,24,35,.995),rgba(7,13,20,.995))}
+.sp-x{width:22px; height:19px; display:grid; place-items:center; border:1px solid var(--cyl); color:var(--cy); font:700 14px/1 var(--mono); text-align:center}
+.sp-x:hover,.sp-x:focus-visible{background:rgba(62,230,255,.16); outline:none; border-color:var(--cy)}
+.sp-b{flex:1; display:grid; grid-template-columns:150px minmax(0,1fr); gap:16px; padding:10px 14px 6px}
+.sp-l{display:flex; flex-direction:column; align-items:center; gap:8px; min-width:0}
+.sp-l svg{width:116px; height:116px}
+.sp-tot{display:flex; align-items:baseline; gap:8px; font-size:12px; color:var(--tx2)}
+.sp-tot b{font:700 17px var(--mono); color:var(--wh)}
+.sp-tot small{font:500 12px var(--jp); color:var(--tx2); margin-left:2px}
+.sp-l .cap{font:500 12px/1.45 var(--jp); color:var(--tx2); text-align:center}
+.sp-list{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; min-width:0}
+.sp-list:focus{outline:1px dashed var(--cyl); outline-offset:3px}
+.sp-r{display:grid; grid-template-columns:22px 10px minmax(0,1fr) auto minmax(90px,32%); column-gap:10px; align-items:center; padding:5px 6px; border-bottom:1px solid var(--line2)}
+.sp-list.m .sp-r{grid-template-columns:22px 10px minmax(0,1fr) auto minmax(70px,24%) 100px}
+.sp-r:last-child{border-bottom:0}
+.sp-r.on{background:rgba(62,230,255,.08)}
+.sp-r .rk{font:700 12px var(--orb); color:var(--tx3); letter-spacing:.06em}
+.sp-r .ch{width:10px; height:10px; background:var(--k)}
+.sp-r .nm{min-width:0}
+.sp-r .nm b{display:block; font-size:13px; font-weight:700; line-height:1.35}
+.sp-r .nm .nt{display:block; font:500 12px/1.35 var(--jp); font-style:normal; color:var(--tx2)}
+.sp-r .nm .nt.up{color:var(--cy)} .sp-r .nm .nt.dn{color:var(--mag)}
+.sp-r .pf{font:700 14px var(--mono); color:var(--tx); text-align:right; white-space:nowrap}
+.sp-r .pf.dn{color:var(--mag)}
+.sp-r .pf small{font:500 12px var(--jp); color:var(--tx2); margin-left:1px}
+.sp-r .pf em{display:block; font:500 12px var(--mono); font-style:normal; color:var(--tx3)}
+.sp-r .br{position:relative; height:8px; background:rgba(62,230,255,.07)}
+.sp-r .br u,.sp-r .mg u{position:absolute; left:0; top:0; bottom:0; background:var(--k); text-decoration:none}
+.sp-r .mg{display:flex; align-items:center; gap:6px}
+.sp-r .mg .tr{position:relative; flex:1; height:5px; background:rgba(62,230,255,.07)}
+.sp-r .mg b{font:500 12px var(--mono); color:var(--tx); width:46px; text-align:right}
+.sp-r .mg b.na{color:var(--tx3)}
+.sp-dn .arc{transition:opacity .15s}
+.sp-dn.hl .arc{opacity:.25}
+.sp-dn.hl .arc.on{opacity:1}
+.sp-f{display:flex; align-items:center; gap:14px; padding:6px 14px 10px; border-top:1px solid var(--line2)}
+.sp-fold{border:1px solid var(--cyl); padding:5px 10px; color:var(--cy); font-size:12px}
+.sp-fold:hover,.sp-fold:focus-visible{background:rgba(62,230,255,.12); outline:none; border-color:var(--cy)}
+
+/* チェックリスト：セルはボタン。選んだセルは枠で強調し、理由をパネル下部に出す */
+.ck{width:100%; text-align:left; cursor:pointer; font:inherit; color:inherit}
+.ck:hover{border-color:rgba(62,230,255,.75)}
+.ck:focus-visible{outline:2px solid var(--cy); outline-offset:-2px}
+.ck.sel{border-color:var(--cy); box-shadow:inset 0 0 0 1px var(--cy), 0 0 10px rgba(62,230,255,.35)}
+.ck .n,.ck .s{display:flex}
+.ck .s{display:block}
+.ck-why{flex:none; margin-top:6px; padding-top:5px; border-top:1px solid var(--line); display:flex; flex-direction:column; gap:4px}
+.cwh{display:flex; justify-content:space-between; align-items:baseline; gap:12px; font-size:12px; color:var(--cy2); font-weight:700}
+.cwh .cap{font-weight:500; color:var(--tx3); font-family:var(--jp)}
+.cw{display:grid; grid-template-columns:auto auto 1fr; column-gap:8px; align-items:baseline; padding:4px 8px 5px; border-left:2px solid var(--tx3); background:rgba(62,230,255,.035)}
+.cw.d{border-left-color:var(--cy)} .cw.p{border-left-color:var(--cy2)} .cw.x{border-left-color:var(--tx3)}
+.cw .cid{font:500 12px var(--mono); color:var(--tx3)}
+.cw b{font-size:12.5px}
+.cw .cs{justify-self:end; font:700 12px var(--jp); color:var(--cy2)}
+.cw.x .cs{color:var(--tx2)}
+.cw p{grid-column:1 / -1; margin-top:2px; font-size:12.5px; line-height:1.55; color:var(--tx)}
+.cwn{font-size:12px; color:var(--tx2)}
+@media (prefers-reduced-motion:reduce){ .seg-pop.tr{transition:none} }
+.srow .mbar b.xp{width:auto; text-align:left}

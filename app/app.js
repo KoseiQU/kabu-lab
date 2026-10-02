@@ -49,7 +49,7 @@
   ];
 
   /* ---------- 状態 ---------- */
-  const S = { route: null, recent: null, seen: {}, testing: false, ctx: null, animTimer: 0 };
+  const S = { route: null, recent: null, seen: {}, testing: false, ctx: null, animTimer: 0, segTimer: 0, ckSel: null, ckItems: [] };
   try { S.recent = window.localStorage.getItem('kabu.recent'); } catch (e) { /* 使えない環境では記憶しない */ }
 
   const dataOk = () => { const D = window.KABU; return !!(D && typeof D === 'object' && D.stocks && typeof D.stocks === 'object' && !Array.isArray(D.stocks)); };
@@ -397,7 +397,7 @@
     const lv = (list, name) => {
       const v = arr(list).filter((x) => x && isNum(x.price));
       if (!v.length) return '';
-      return `<span><i class="sw bd"></i>${name} <b>${K.fmtP(v[0].price)}円</b>${v[0].label ? `（${esc(v[0].label)}）` : ''}${v.length > 1 ? `<span class="cap">ほか${v.length - 1}</span>` : ''}</span>`;
+      return `<span><i class="sw bd"></i>${name} ${v.map((x) => `<b>${K.fmtP(x.price)}円</b>${x.label ? `（${esc(x.label)}）` : ''}`).join('・')}</span>`;
     };
     const legend = '<span><i class="sw cu"></i>陽線（上昇）</span><span><i class="sw cd"></i>陰線（下落）</span>'
       + (isNum(ma25) ? `<span><i class="sw l25"></i>25日線 <b>${maP(ma25)}円</b></span>` : '')
@@ -440,30 +440,78 @@
     const n = arr(a.sections.performance).length;
     return panel('performance', 'SYS-03 / PERF', '業績推移', n < 3 ? `<span class="jp">取得できた${n}期のみ</span>` : '', '<div class="pb"><div class="host" id="perf" data-chart="perf"></div></div>');
   }
+  function segRowHtml(x, i, noMargin, maxP, maxM, total) {
+    const m = isNum(x.margin) ? x.margin : null;
+    const w = noMargin ? (isNum(x.profit) && maxP > 0 ? K.clamp(x.profit / maxP * 100, 0, 100) : 0) : m != null ? K.clamp(m / maxM * 100, 0, 100) : 0;
+    const head = `<span class="srh"><i></i><span class="sn">${esc(x.name)}</span>${x.note ? `<span class="yoy">${esc(x.note)}</span>` : ''}<span class="pf${isNum(x.profit) && x.profit < 0 ? ' dn' : ''}">${fmt(x.profit)}<small>億円</small></span></span>`;
+    const xp = x.other ? `<b class="xp" aria-hidden="true">◀ 全${total}事業を見る</b>` : '';
+    const bar = noMargin
+      ? `<span class="mbar pbar"><span class="tr"><u class="a-gx" style="width:${w.toFixed(1)}%"></u></span>${xp}</span>`
+      : `<span class="mbar"><span class="tr"><u class="a-gx" style="width:${w.toFixed(1)}%"></u></span>${x.other ? xp : `<b>${m != null ? fmt(m, 1) + '%' : '—'}</b>`}</span>`;
+    if (x.other) return `<button type="button" class="srow other" style="--k:${x.color}" data-seg-toggle aria-expanded="false" aria-controls="seg-pop" aria-label="${esc(x.name)}を含む全${total}事業を一覧で開く">${head}${bar}</button>`;
+    return `<div class="srow" style="--k:${x.color}">${head}${bar}</div>`;
+  }
   function segPanel(a) {
     if (secAbsent(a, 'segments')) return panel('segments', 'SYS-07 / SEGMENT', '稼ぎ頭マップ', '', `<div class="pb">${noData('segments', a, { sm: true })}</div>`);
-    let list = arr(a.sections.segments).filter((x) => x && x.name);
-    list = [...list].sort((x, y) => (isNum(y.profit) ? y.profit : -Infinity) - (isNum(x.profit) ? x.profit : -Infinity));
-    let rows = list;
-    // 1440×900 の枠に収まるのは4行まで。5事業以上は上位3＋「その他」にまとめる（合計は足し算のみ）
-    if (list.length > 4) {
-      const rest = list.slice(3), sum = rest.reduce((s, x) => s + (isNum(x.profit) ? x.profit : 0), 0);
-      rows = [...list.slice(0, 3), { name: `その他 ${rest.length}事業`, profit: sum, margin: null, note: '', other: true }];
-    }
+    const M = K.segModel(arr(a.sections.segments));
     // 利益率が1つも無いとき（純利益だけの開示など）は、利益率の凡例とバーを出さず、利益額の横棒にする
-    const noMargin = list.every((x) => !isNum(x.margin));
+    const noMargin = !M.hasMargin;
+    const rows = M.collapsed;
     const maxP = Math.max(1, ...rows.map((x) => (isNum(x.profit) ? x.profit : 0)));
-    const maxM = Math.max(20, ...rows.map((x) => (isNum(x.margin) ? Math.ceil(x.margin / 5) * 5 : 0)));
-    const colors = rows.map((x, i) => (x.other ? '#47606f' : K.SEG_COLORS[i % K.SEG_COLORS.length]));
-    const donut = K.donut(rows.map((x, i) => ({ v: x.profit, color: colors[i] })));
-    const rowsH = rows.map((x, i) => {
-      const m = isNum(x.margin) ? x.margin : null;
-      const w = noMargin ? (isNum(x.profit) ? K.clamp(x.profit / maxP * 100, 0, 100) : 0) : m != null ? K.clamp(m / maxM * 100, 0, 100) : 0;
-      return `<div class="srow" style="--k:${colors[i]}"><div class="srh"><i></i><span class="sn" title="${esc(x.name)}">${esc(x.name)}</span>${x.note ? `<span class="yoy">${esc(x.note)}</span>` : ''}<span class="pf${isNum(x.profit) && x.profit < 0 ? ' dn' : ''}">${fmt(x.profit)}<small>億円</small></span></div>`
-        + (noMargin ? `<div class="mbar pbar"><span class="tr"><u class="a-gx" style="width:${w.toFixed(1)}%"></u></span></div></div>`
-          : `<div class="mbar"><span class="tr"><u class="a-gx" style="width:${w.toFixed(1)}%"></u></span><b>${m != null ? fmt(m, 1) + '%' : '—'}</b></div></div>`);
-    }).join('');
-    return panel('segments', 'SYS-07 / SEGMENT', '稼ぎ頭マップ', '', `<div class="pb"><div class="sg-top">${donut}<div class="t"><span class="code">PROFIT</span>円＝事業別の利益<br>${noMargin ? 'バー＝利益の大きさ' : `バー＝利益率（0〜${maxM}%）`}</div></div><div class="sg-rows">${rowsH}</div></div>`);
+    const donut = K.donut(rows.map((x) => ({ v: x.profit, color: x.color })));
+    const rowsH = rows.map((x, i) => segRowHtml(x, i, noMargin, maxP, M.maxM, M.count)).join('');
+    return panel('segments', 'SYS-07 / SEGMENT', '稼ぎ頭マップ', '', `<div class="pb"><div class="sg-top">${donut}<div class="t"><span class="code">PROFIT</span>円＝事業別の利益<br>${noMargin ? 'バー＝利益の大きさ' : `バー＝利益率（0〜${M.maxM}%）`}</div></div><div class="sg-rows">${rowsH}</div></div>`);
+  }
+  /** 展開パネル（業績推移の上に重なる。右端は稼ぎ頭パネルと揃え、幅は2枠ぶん） */
+  function segPopHtml(a) {
+    const M = K.segModel(arr(a.sections.segments));
+    const donut = K.donut(M.all.map((x) => ({ v: x.profit, color: x.color })), { cls: 'sp-dn' });
+    const why = arr(a.missing).filter((m) => typeof m === 'string' && MISS_RULES.find(([, re]) => re.test(m))?.[0] === 'segments').join(' ／ ');
+    return `<div class="seg-pop" id="seg-pop" role="region" aria-label="稼ぎ頭マップ（全${M.count}事業）"><section class="panel" data-pop="segments"><div class="pi">
+      <div class="ph"><span class="code">SYS-07 / SEGMENT</span><h2>稼ぎ頭マップ（全${M.count}事業）</h2><div class="pm"><span class="jp">利益の大きい順${M.count > 8 ? '・上位8' : ''}</span><button type="button" class="sp-x" data-seg-close aria-label="閉じる">×</button></div></div>
+      <div class="sp-b">
+        <div class="sp-l">${donut}<div class="sp-tot"><span>合計</span><b>${fmt(M.total)}<small>億円</small></b></div><p class="cap">円＝事業別の利益<br>横棒＝利益の大きさ（最大の事業＝100%）${M.hasMargin ? '<br>右＝利益率' : ''}</p>${why ? `<p class="cap">${esc(why)}</p>` : ''}</div>
+        <ol class="sp-list${M.hasMargin ? ' m' : ''}" tabindex="-1" aria-label="事業の一覧">${K.segListHtml(M)}</ol>
+      </div>
+      <div class="sp-f"><button type="button" class="sp-fold" data-seg-toggle aria-expanded="true" aria-controls="seg-pop">▶ たたむ（上位3＋その他に戻す）</button><span class="cap">Esc・枠の外を押しても閉じます</span></div>
+    </div></section></div>`;
+  }
+  function segIsOpen() { return !!$('#seg-pop'); }
+  function segSet(open, opt = {}) {
+    const pair = $('.pair');
+    const btn = $('.srow.other[data-seg-toggle]');
+    const pop = $('#seg-pop');
+    if (!pair || !S.ctx || !btn) return;
+    clearTimeout(S.segTimer);
+    if (open) {
+      if (pop && !pop.classList.contains('closing')) return;
+      if (pop) pop.remove();
+      pair.insertAdjacentHTML('beforeend', segPopHtml(S.ctx.a));
+      const el = $('#seg-pop');
+      el.style.minHeight = pair.getBoundingClientRect().height + 'px';
+      btn.setAttribute('aria-expanded', 'true');
+      if (!RM && !S.testing) {
+        const off = $('[data-sec="segments"]', pair).getBoundingClientRect().left - pair.getBoundingClientRect().left;
+        el.style.clipPath = `inset(0 0 0 ${off}px)`;
+        el.getBoundingClientRect();
+        el.classList.add('tr');
+        S.segTimer = setTimeout(() => { el.style.clipPath = 'inset(0 0 0 0px)'; S.segTimer = setTimeout(() => { el.style.clipPath = ''; el.classList.remove('tr'); }, 260); }, 16);
+      }
+      if (opt.focus !== false) $('.sp-list', el).focus({ preventScroll: true });
+    } else {
+      if (!pop) return;
+      btn.setAttribute('aria-expanded', 'false');
+      const done = () => { pop.remove(); };
+      if (!RM && !S.testing) {
+        const off = $('[data-sec="segments"]', pair).getBoundingClientRect().left - pair.getBoundingClientRect().left;
+        pop.classList.add('tr', 'closing');
+        pop.style.clipPath = 'inset(0 0 0 0px)';
+        pop.getBoundingClientRect();
+        pop.style.clipPath = `inset(0 0 0 ${off}px)`;
+        S.segTimer = setTimeout(done, 200);
+      } else done();
+      if (opt.focus !== false) btn.focus({ preventScroll: true });
+    }
   }
   function scenPanel(a, dec) {
     const close = a.price && isNum(a.price.close) ? a.price.close : null;
@@ -502,7 +550,8 @@
     const base = names.length ? names : got.map((c) => ({ id: c && c.id, name: '' }));
     const items = base.map((it) => { const c = got.find((x) => x && x.id === it.id) || {}; return { id: it.id, name: it.name, status: c.status, reason: c.reason }; });
     const ck = K.checklist(items);
-    return panel('checklist', 'SYS-08 / PATTERN', 'チャート型チェックリスト', `<span class="jp">${items.length}項目</span>`, `<div class="pb"><div class="ck-sum">${ck.summary}</div><div class="ckg">${ck.cells}</div></div>`);
+    S.ckItems = items;
+    return panel('checklist', 'SYS-08 / PATTERN', 'チャート型チェックリスト', `<span class="jp">${items.length}項目</span>`, `<div class="pb"><div class="ck-sum">${ck.summary}</div><div class="ckg" role="group" aria-label="チェックリスト（押すと理由を表示）">${ck.cells}</div><div class="ck-why" data-ck-why aria-live="polite">${K.ckReasons(items, null)}</div></div>`);
   }
   function fxHtml(term) {
     if (term === '乖離率') return '<div class="fx"><b class="m">−10%</b><span style="flex:1;max-width:120px;height:6px;background:linear-gradient(90deg,rgba(255,179,64,.55),rgba(62,230,255,.12) 20% 80%,rgba(255,179,64,.55))"></span><b class="m">+10%</b><span style="color:var(--amber);font-family:var(--jp)">過熱</span></div>';
@@ -535,6 +584,9 @@
     const cmd = `/kabu ${name} ${t.cmd}${t.arg ? ' ' + t.arg : ''}`;
     let body;
     S.ctx = null;
+    S.ckSel = null;
+    S.ckItems = [];
+    clearTimeout(S.segTimer);
     if (!a) {
       const q = quoteOf(st);
       const none = !arr(st.analyses).length;
@@ -591,12 +643,18 @@
       return K.fan({ hist: c.upto.slice(-20).map((r) => r.c), now: c.a.price && c.a.price.close, bull: by('bull'), base: by('base'), bear: by('bear'), dec: c.dec, W, H });
     },
   };
+  function drawHost(h) {
+    const fn = DRAW[h.dataset.chart];
+    const W = h.clientWidth, H = h.clientHeight;
+    h.dataset.wh = `${W}x${H}`;
+    h.innerHTML = fn && S.ctx && W > 0 && H > 0 ? fn(W, H, S.ctx) : '';
+  }
+  // 枠の大きさが変わったら（理由欄の開閉・行の伸縮など）その図だけ描き直す
+  const RO = window.ResizeObserver ? new ResizeObserver((ents) => {
+    ents.forEach((en) => { const h = en.target; if (h.isConnected && h.dataset.wh !== `${h.clientWidth}x${h.clientHeight}`) drawHost(h); });
+  }) : null;
   function drawAll() {
-    $$('[data-chart]').forEach((h) => {
-      const fn = DRAW[h.dataset.chart];
-      const W = h.clientWidth, H = h.clientHeight;
-      h.innerHTML = fn && S.ctx && W > 0 && H > 0 ? fn(W, H, S.ctx) : '';
-    });
+    $$('[data-chart]').forEach((h) => { drawHost(h); if (RO) RO.observe(h); });
     $$('.mt').forEach((h) => {
       const W = h.clientWidth, Hs = h.clientHeight - 15;
       const ls = $$('.ml', h);
@@ -610,6 +668,8 @@
         if (parseFloat(l.style.left) + lw / 2 + 6 > parseFloat(r.style.left) - rw / 2) { l.style.left = lw / 2 + 'px'; r.style.left = (W - rw / 2) + 'px'; }
       }
     });
+    const pop = $('#seg-pop'), pair = $('.pair');
+    if (pop && pair) pop.style.minHeight = pair.getBoundingClientRect().height + 'px';
     if (document.body.classList.contains('anim')) setLens();
   }
   function setLens() {
@@ -672,15 +732,42 @@
 
   /* ---------- イベント ---------- */
   window.addEventListener('hashchange', () => render(parseHash(location.hash)));
+  /** チェックリストのセルを選ぶ（同じセルをもう一度押すと既定の表示に戻す） */
+  function ckSelect(id, keep) {
+    S.ckSel = keep ? id : S.ckSel === id ? null : id;
+    $$('.ckg .ck').forEach((c) => { const on = c.dataset.ck === S.ckSel; c.classList.toggle('sel', on); c.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+    const why = $('[data-ck-why]');
+    if (why) why.innerHTML = K.ckReasons(S.ckItems, S.ckSel);
+    // 理由欄の高さが変わると同じ段の図の枠も変わるので、すぐ描き直す（ResizeObserver を待たない）
+    $$('[data-chart]').forEach((h) => { if (h.dataset.wh !== `${h.clientWidth}x${h.clientHeight}`) drawHost(h); });
+  }
   document.addEventListener('click', (e) => {
-    const tr = e.target.closest && e.target.closest('tr[data-href]');
-    if (tr) location.hash = tr.dataset.href;
+    const t = e.target;
+    if (!t || !t.closest) return;
+    const tr = t.closest('tr[data-href]');
+    if (tr) { location.hash = tr.dataset.href; return; }
+    if (t.closest('[data-seg-toggle]')) { segSet(!segIsOpen() || $('#seg-pop').classList.contains('closing')); return; }
+    if (t.closest('[data-seg-close]')) { segSet(false); return; }
+    if (segIsOpen() && !t.closest('#seg-pop')) segSet(false, { focus: false });
+    const ck = t.closest('.ckg .ck');
+    if (ck) ckSelect(ck.dataset.ck);
   });
+  // 展開一覧の行にマウス・フォーカスを合わせると、ドーナツの該当部分を強調
+  const segHl = (i) => { const dn = $('#seg-pop .sp-dn'); if (!dn) return; dn.classList.toggle('hl', i != null); $$('.arc', dn).forEach((a) => a.classList.toggle('on', a.dataset.i === String(i))); $$('#seg-pop .sp-r').forEach((r) => r.classList.toggle('on', r.dataset.i === String(i))); };
+  document.addEventListener('mouseover', (e) => { const r = e.target.closest && e.target.closest('#seg-pop .sp-r'); if (r) segHl(r.dataset.i); else if (e.target.closest && e.target.closest('#seg-pop')) segHl(null); });
   document.addEventListener('change', (e) => { if (e.target && e.target.matches && e.target.matches('select[data-dates]')) location.hash = e.target.value; });
   document.addEventListener('keydown', (e) => {
     const tr = e.target.closest && e.target.closest('tr[data-href]');
     if (tr && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); location.hash = tr.dataset.href; return; }
     if (!dataOk()) return;
+    if (e.key === 'Escape' && segIsOpen()) { e.preventDefault(); segSet(false); return; }
+    const ck = e.target.closest && e.target.closest('.ckg .ck');
+    if (ck && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+      const cells = $$('.ckg .ck'), i = cells.indexOf(ck), cols = 5;
+      const j = { ArrowLeft: i - 1, ArrowRight: i + 1, ArrowUp: i - cols, ArrowDown: i + cols }[e.key];
+      if (j >= 0 && j < cells.length) { e.preventDefault(); cells[j].focus(); ckSelect(cells[j].dataset.ck, true); }
+      return;
+    }
     if (e.key === 'F1') { e.preventDefault(); location.hash = '#/'; }
     if (e.key === 'F2') { const c = recentCode(); if (c) { e.preventDefault(); location.hash = hrefStock(c); } }
   });
@@ -698,7 +785,7 @@
   /* ---------- 検証フック用の窓口（test-hooks.js が使う） ---------- */
   window.__KABU_APP = {
     TYPES, VAL_KEYS, DIAG_KEYS: Object.keys(DIAG), parseHash, secAbsent, missFor,
-    render, redraw: drawAll, current: () => S.route,
+    render, redraw: drawAll, current: () => S.route, segSet, segIsOpen, ckSelect, ckState: () => ({ sel: S.ckSel, items: S.ckItems }),
     setTesting: (b) => { S.testing = !!b; if (b) { clearTimeout(S.animTimer); document.body.classList.remove('anim'); } },
     snapshot: () => ({ recent: S.recent, seen: { ...S.seen } }),
     restore: (s) => { if (!s) return; S.recent = s.recent; S.seen = { ...s.seen }; try { if (s.recent) window.localStorage.setItem('kabu.recent', s.recent); else window.localStorage.removeItem('kabu.recent'); } catch (e) { /* 無視 */ } },

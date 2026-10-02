@@ -666,15 +666,15 @@
   }
 
   /* ---------- 小型ドーナツ（事業別の利益の構成。正の値のみ） ---------- */
-  function donut(items) {
-    const vals = (items || []).filter((x) => x && isNum(x.v) && x.v > 0);
+  function donut(items, opt = {}) {
+    const vals = (items || []).map((x, i) => (x ? { ...x, i } : null)).filter((x) => x && isNum(x.v) && x.v > 0);
     const tot = vals.reduce((a, b) => a + b.v, 0);
     const cx = 32, cy = 32, r = 23, sw = 9;
-    let s = '<svg viewBox="0 0 64 64" role="img" aria-label="事業別の利益の構成">';
+    let s = `<svg viewBox="0 0 64 64" role="img" aria-label="事業別の利益の構成"${opt.cls ? ` class="${opt.cls}"` : ''}>`;
     s += tag('circle', { cx, cy, r: r + 8, fill: 'none', stroke: 'rgba(62,230,255,.3)', 'stroke-dasharray': '1 4' });
     s += tag('circle', { cx, cy, r: r - 8, fill: 'none', stroke: 'rgba(62,230,255,.15)' });
     if (!(tot > 0)) s += tag('circle', { cx, cy, r, fill: 'none', stroke: 'rgba(62,230,255,.12)', 'stroke-width': sw });
-    else if (vals.length === 1) s += tag('circle', { cx, cy, r, fill: 'none', stroke: vals[0].color || C.cy, 'stroke-width': sw });
+    else if (vals.length === 1) s += tag('circle', { cx, cy, r, fill: 'none', stroke: vals[0].color || C.cy, 'stroke-width': sw, class: 'arc', 'data-i': vals[0].i });
     else {
       let a = -Math.PI / 2;
       const gapA = 0.03;
@@ -682,7 +682,7 @@
         const da = x.v / tot * Math.PI * 2;
         const a0 = a + Math.min(gapA, da / 4), a1 = a + da - Math.min(gapA, da / 4);
         const p0 = [cx + r * Math.cos(a0), cy + r * Math.sin(a0)], p1 = [cx + r * Math.cos(a1), cy + r * Math.sin(a1)];
-        s += tag('path', { d: `M${f(p0[0])} ${f(p0[1])} A${r} ${r} 0 ${da > Math.PI ? 1 : 0} 1 ${f(p1[0])} ${f(p1[1])}`, fill: 'none', stroke: x.color || SEG_COLORS[i % SEG_COLORS.length], 'stroke-width': sw, class: 'arc', style: `animation-delay:${f(i * 0.15)}s` });
+        s += tag('path', { d: `M${f(p0[0])} ${f(p0[1])} A${r} ${r} 0 ${da > Math.PI ? 1 : 0} 1 ${f(p1[0])} ${f(p1[1])}`, fill: 'none', stroke: x.color || SEG_COLORS[i % SEG_COLORS.length], 'stroke-width': sw, class: 'arc', 'data-i': x.i, style: `animation-delay:${f(i * 0.15)}s` });
         a += da;
       });
     }
@@ -719,11 +719,70 @@
       cnt[k]++;
       const id = it && it.id ? String(it.id).replace(/^C/, 'C-') : 'C-' + String(i + 1).padStart(2, '0');
       const icon = st ? `<svg><use href="#st-${k}"/></svg>` : '';
-      return `<div class="ck ${k}"${it && it.reason ? ` title="${esc(it.reason)}"` : ''}><div class="n"><span>${esc(id)}</span>${icon}</div><p>${esc(it && it.name ? it.name : '（名称未定義）')}</p><div class="s">${st ? st[1] : '未取得'}</div></div>`;
+      return `<button type="button" class="ck ${k}" data-ck="${esc(it && it.id ? it.id : '')}" data-i="${i}" aria-pressed="false" aria-label="${esc(id)} ${esc(it && it.name ? it.name : '')} ${st ? st[1] : '未取得'}。押すと理由を表示"><span class="n"><span>${esc(id)}</span>${icon}</span><p>${esc(it && it.name ? it.name : '（名称未定義）')}</p><span class="s">${st ? st[1] : '未取得'}</span></button>`;
     });
     const bar = (items || []).map((it) => { const st = CK[it && it.status]; return `<i class="${st ? st[0] : 'u'}"></i>`; }).join('');
     const sum = `<div class="ck-bar" aria-hidden="true">${bar}</div><div class="ck-cnt"><span class="d"><svg><use href="#st-d"/></svg>完成済み<b>${cnt.d}</b></span><span><svg><use href="#st-p"/></svg>進行中<b>${cnt.p}</b></span><span><svg><use href="#st-x"/></svg>なし<b>${cnt.x}</b></span></div>`;
     return { summary: sum, cells: cells.join(''), count: cnt };
+  }
+
+  /** チェックリストの理由欄。sel=選んだ id（無ければ既定：進行中すべて、0件なら完成済みを後ろの項目から2件） */
+  function ckReasons(items, sel) {
+    const list = (items || []).filter((x) => x && x.id);
+    let show, head;
+    const one = sel ? list.find((x) => x.id === sel) : null;
+    if (one) { show = [one]; head = '選んだ項目の理由'; }
+    else {
+      show = list.filter((x) => x.status === 'progress');
+      head = '進行中の項目の理由';
+      if (!show.length) { show = list.filter((x) => x.status === 'done').slice(-2).reverse(); head = '完成済みの項目の理由'; }
+    }
+    const body = show.map((x) => {
+      const st = CK[x.status];
+      return `<div class="cw ${st ? st[0] : 'u'}" data-why="${esc(x.id)}"><span class="cid">${esc(String(x.id).replace(/^C/, 'C-'))}</span><b>${esc(x.name || '')}</b><span class="cs">${st ? st[1] : '未取得'}</span><p>${esc(x.reason || '理由の記載がありません')}</p></div>`;
+    }).join('');
+    return `<div class="cwh"><span>${head}</span><span class="cap">セルを押す（矢印キーで移動）と、その項目の理由を表示</span></div>${body || '<p class="cwn">表示できる理由がありません</p>'}`;
+  }
+
+  /* =====================================================================
+     稼ぎ頭マップ：事業の並べ替え・折りたたみ（上位3＋その他）・展開時の全事業一覧
+     ===================================================================== */
+  function noteSign(note) {
+    if (typeof note !== 'string') return '';
+    if (/[+＋]\s*\d/.test(note)) return 'up';
+    if (/[−\-－]\s*\d/.test(note)) return 'dn';
+    return '';
+  }
+  function segModel(segsIn) {
+    const list = (segsIn || []).filter((x) => x && typeof x.name === 'string' && x.name)
+      .map((x) => ({ name: x.name, profit: isNum(x.profit) ? x.profit : null, margin: isNum(x.margin) ? x.margin : null, note: typeof x.note === 'string' ? x.note : '' }))
+      .sort((a, b) => (b.profit == null ? -Infinity : b.profit) - (a.profit == null ? -Infinity : a.profit));
+    const total = list.reduce((t, x) => t + (x.profit == null ? 0 : x.profit), 0);
+    const maxP = Math.max(0, ...list.map((x) => (x.profit == null ? 0 : x.profit)));
+    const hasMargin = list.some((x) => x.margin != null);
+    const maxM = Math.max(20, ...list.map((x) => (x.margin != null ? Math.ceil(x.margin / 5) * 5 : 0)));
+    const all = list.slice(0, 8).map((x, i) => ({
+      ...x, rank: i + 1, color: SEG_COLORS[i % SEG_COLORS.length], sign: noteSign(x.note),
+      barW: x.profit != null && x.profit > 0 && maxP > 0 ? x.profit / maxP * 100 : 0,
+      marginW: x.margin != null && x.margin > 0 ? clamp(x.margin / maxM * 100, 0, 100) : 0,
+      share: x.profit != null && x.profit > 0 && total > 0 ? x.profit / total * 100 : null,
+    }));
+    const expandable = list.length >= 5;
+    let collapsed = all.slice(0, 4);
+    if (expandable) {
+      const rest = list.slice(3);
+      collapsed = [...all.slice(0, 3), { name: `その他 ${rest.length}事業`, profit: rest.reduce((t, x) => t + (x.profit == null ? 0 : x.profit), 0), margin: null, note: '', other: true, count: rest.length, color: '#47606f' }];
+    }
+    return { all, total, maxP, hasMargin, maxM, expandable, collapsed, count: list.length };
+  }
+  /** 展開時の全事業一覧（ol の中身）。行：順位・色・事業名・note・利益額・利益の横棒・利益率（あれば） */
+  function segListHtml(m) {
+    return m.all.map((x, i) => `<li class="sp-r" data-i="${i}" style="--k:${x.color}"><span class="rk">${String(x.rank).padStart(2, '0')}</span><i class="ch"></i>`
+      + `<span class="nm"><b>${esc(x.name)}</b>${x.note ? `<em class="nt ${x.sign}">${esc(x.note)}</em>` : ''}</span>`
+      + `<span class="pf${x.profit != null && x.profit < 0 ? ' dn' : ''}">${fmt(x.profit)}<small>億円</small>${x.share != null ? `<em>${fmt(x.share, 0)}%</em>` : ''}</span>`
+      + `<span class="br"><u style="width:${f(x.barW)}%"></u></span>`
+      + (m.hasMargin ? `<span class="mg">${x.margin != null ? `<span class="tr"><u style="width:${f(x.marginW)}%"></u></span><b>${fmt(x.margin, 1)}%</b>` : '<b class="na">—</b>'}</span>` : '')
+      + '</li>').join('');
   }
 
   /* ---------- ★5段階とセグメントバー（地政学など。HTML） ---------- */
@@ -740,7 +799,7 @@
 
   const api = {
     C, SEG_COLORS, isNum, clamp, esc, fmt, fmtP, fmtS, fmtVol, yenParts, jpAmountParts, decOf, priceDec, textW,
-    niceStep, niceCeil, niceTicks, sma, deviation, spread, mmdd, md,
+    niceStep, niceCeil, niceTicks, sma, deviation, spread, mmdd, md, segModel, segListHtml, ckReasons, noteSign,
     priceChart, meter, meterLabelX, devCell, gauge, perf3d, supply3d, fan, donut, spark, checklist, stars, segs,
   };
   G.KABU_CHARTS = api;
