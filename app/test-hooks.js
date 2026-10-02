@@ -51,6 +51,7 @@
         { label: '純利益（億円・赤字あり）', target: 500, actual: -120, forecast: 80 },
         { label: '全同値', target: 5, actual: 5, forecast: 5 },
         { label: '文字の目標', target: '業界トップ', actual: null, forecast: null },
+        { label: '範囲の目標（%）', target: '7〜9%', actual: '+8%', forecast: '+11%', unit: '%', nums: { targetLow: 7, targetHigh: 9, actual: 8, forecast: 11 } },
       ], consistent: '検査用：一致の説明', realistic: '検査用：現実的かの説明' },
     };
     return a;
@@ -353,6 +354,30 @@
         if ((pg.pct > 100) !== !!ring.querySelector('.pr-over')) add('進捗リング：100%超の表示が不一致', String(pg.pct));
         if (!ring.textContent.includes(String(Math.round(pg.pct * 10) / 10).replace(/\B(?=(\d{3})+(?!\d))/g, ','))) add('進捗リング：中央の数値が pct と違う', String(pg.pct));
       }
+      // 中計のブレットチャート：帯・実績・予想の印が軸の中、文字が枠内で重ならない、判定バッジがデータと一致
+      const K = window.KABU_CHARTS, tg = (((s.deep || {}).plan || {}).targets || []).filter((x) => x && typeof x === 'object');
+      const rows = [...main.querySelectorAll('[data-sec="deep"] .kbr')];
+      if (s.deep && rows.length !== tg.length) add('3点読み：目標の行数が違う', `${rows.length} ≠ ${tg.length}`);
+      rows.forEach((row, i) => {
+        const t = tg[i], m = t ? K.bulletModel(t) : null, lab = (t && t.label) || String(i);
+        const rbl = row.querySelector('.rbl');
+        if (!!m !== !!rbl) add('3点読み：数値があるのに図が無い／無いのに図がある', lab);
+        if (!m && !row.querySelector('.bl.nil')) add('3点読み：「数値の比較なし」が無い', lab);
+        if (!rbl) return;
+        const tr = rbl.querySelector('.rbt').getBoundingClientRect(), box = row.getBoundingClientRect();
+        rbl.querySelectorAll('.rb-band, .rb-tl, .rb-a, .rb-f').forEach((e) => { const r = e.getBoundingClientRect(); const cx = r.width ? (r.left + r.right) / 2 : r.left; if (cx < tr.left - 1 || cx > tr.right + 1 || (e.classList.contains('rb-band') && (r.left < tr.left - 1 || r.right > tr.right + 1))) add('3点読み：印が軸の外', `${lab} ${e.className}`); });
+        const want = [['rb-a', m.actual], ['rb-f', m.forecast]];
+        want.forEach(([c, v]) => { if ((v != null) !== !!rbl.querySelector('.' + c)) add('3点読み：実績・予想の印の有無が違う', `${lab} ${c}`); });
+        if ((m.lo != null) !== !!rbl.querySelector('.rb-band, .rb-tl')) add('3点読み：目標の帯・線の有無が違う', lab);
+        const texts = [...rbl.querySelectorAll('.rb-lab, .rbs span')].map((e) => [e.getBoundingClientRect(), e.textContent]);
+        texts.forEach(([r, tx], k) => {
+          if (r.left < box.left - 1 || r.right > box.right + 1) add('3点読み：文字が枠からはみ出す', `${lab} ${tx}`);
+          texts.forEach(([q, ty], j) => { if (j > k && r.left < q.right - 1 && r.right > q.left + 1 && r.top < q.bottom - 1 && r.bottom > q.top + 1) add('3点読み：文字が重なる', `${lab} ${tx} / ${ty}`); });
+        });
+        const st = [...row.querySelectorAll('.rbg')].map((e) => e.dataset.status).join(',');
+        const exp = [m.sActual, m.sForecast].filter(Boolean).map((x) => x.k).join(',');
+        if (st !== exp) add('3点読み：判定バッジがデータと違う', `${lab} ${st} ≠ ${exp}`);
+      });
       // 主要数値：前年の逆算（yoyPct があれば前年の棒、なければ今期だけ）
       main.querySelectorAll('[data-chart="pair"]').forEach((h) => {
         const r = (s.results || [])[+h.dataset.i] || {}, n = h.querySelectorAll('svg text.cur').length, pv = [...h.querySelectorAll('svg text')].some((t) => t.textContent.startsWith('≈'));

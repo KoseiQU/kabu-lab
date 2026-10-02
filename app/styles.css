@@ -1140,3 +1140,33 @@ a.rl,a.tab,a.k{text-decoration:none}
 .plax small,.krt th small{font-size:12px}
 .lvchart .lvg.on .lvline{stroke-opacity:1; opacity:1}
 .lvchart .lvg.on .tagtxt{font-weight:700}
+/* 中期経営計画のブレットチャート（目標の範囲＝帯、実績＝塗りの菱形、今期予想＝点線の菱形。軸は値の範囲から自動） */
+.kbr{align-items:start}
+.kbl small{display:block; font-size:12px; color:var(--tx3)}
+.rbl{position:relative; padding:20px 0 0; min-width:0}
+.rbt{position:relative; height:14px; margin:0 6px; background:rgba(62,230,255,.05); border-top:1px solid rgba(62,230,255,.15); border-bottom:1px solid rgba(62,230,255,.15)}
+.rb-tk{position:absolute; top:100%; width:1px; height:4px; background:var(--tx3)}
+.rb-band{position:absolute; top:-1px; bottom:-1px; background:repeating-linear-gradient(135deg,rgba(216,231,239,.32) 0 2px,rgba(216,231,239,.1) 2px 5px); border-left:2px solid var(--wh); border-right:2px solid var(--wh)}
+.rb-tl{position:absolute; top:-5px; bottom:-5px; width:3px; margin-left:-1.5px; background:var(--wh); box-shadow:var(--glow)}
+.rb-link{position:absolute; top:50%; height:0; border-top:1.5px dashed rgba(207,221,230,.75)}
+.rb-a,.rb-f{position:absolute; top:50%; width:0; height:0; z-index:1}
+.rb-a::before,.rb-f::before{content:""; position:absolute; left:-5.5px; top:-5.5px; width:11px; height:11px; box-sizing:border-box; transform:rotate(45deg)}
+.rb-a::before{background:var(--cy); box-shadow:0 0 8px rgba(62,230,255,.6)}
+.rb-f::before{background:#08121b; border:1.5px dashed var(--cy2)}
+.rb-a.below::before{background:var(--amber); box-shadow:0 0 8px rgba(255,179,64,.5)}
+.rb-f.below::before{border-color:var(--amber)}
+.rb-lab{position:absolute; left:0; transform:translateX(-50%); font:700 12px/14px var(--mono); white-space:nowrap; pointer-events:none}
+.rb-lab.l{transform:translateX(-7px)} .rb-lab.r{transform:translateX(calc(-100% + 7px))}
+.rb-lab.up{top:-26px; color:var(--cy2)}
+.rb-lab.dn{top:10px; color:var(--wh)}
+.rbs{position:relative; height:14px; margin:22px 6px 0; font:500 12px/1 var(--mono); color:var(--tx3)}
+.rbs span{position:absolute; top:0; transform:translateX(-50%); white-space:nowrap}
+.rbs span.l{transform:none} .rbs span.r{transform:translateX(-100%)}
+.sw.rbbs{width:14px; height:10px; border-left:2px solid var(--wh); border-right:2px solid var(--wh); background:repeating-linear-gradient(135deg,rgba(216,231,239,.4) 0 2px,transparent 2px 5px)}
+.sw.rbas{width:9px; height:9px; transform:rotate(45deg); background:var(--cy)}
+.sw.rbfs{width:9px; height:9px; transform:rotate(45deg); border:1.5px dashed var(--cy2)}
+.rbgs{display:inline-flex; flex-wrap:wrap; gap:4px 6px}
+.rbg{display:inline-block; padding:0 6px; font:700 12px/18px var(--jp); border:1px solid}
+.rbg.in{color:var(--cy); border-color:var(--cyl); background:rgba(62,230,255,.08)}
+.rbg.below{color:var(--amber); border-color:rgba(255,179,64,.5); background:rgba(255,179,64,.08)}
+.rbg.above{color:#cfdde6; border-color:rgba(207,221,230,.45); background:rgba(207,221,230,.06)}

@@ -1265,27 +1265,58 @@
     return { dir: diff > 1e-9 ? 'up' : diff < -1e-9 ? 'dn' : 'flat', text: fmtS(r, 1) + '%' };
   }
 
-  /* ---------- ブレットチャート（目標 vs 実績 vs 今期予想。HTML） ----------
-     数値でない値（文字の目標など）は物差しに載せない。負の値は 0 の線を挟んで描く */
-  function bulletScale(vals) {
-    const v = (vals || []).filter(isNum);
-    if (!v.length) return null;
-    let lo = Math.min(0, ...v), hi = Math.max(0, ...v);
-    if (hi - lo < 1e-9) hi = lo + 1;
-    hi = hi > 0 ? hi + (hi - lo) * 0.12 : hi;
-    lo = lo < 0 ? lo - (hi - lo) * 0.08 : lo;
-    return { lo, hi, pos: (x) => clamp((x - lo) / (hi - lo) * 100, 0, 100), zero: (0 - lo) / (hi - lo) * 100 };
+  /* ---------- ブレットチャート（中期経営計画：目標の範囲 vs 実績 vs 今期予想。HTML） ----------
+     数値は t.nums {targetLow, targetHigh, actual, forecast} を使う。nums が無ければ、従来の数値の target/actual/forecast を使う。
+     軸は 0 起点にせず、値の範囲に余白をつけて自動で決める。表示用の文字（「7〜9%」など）は画面側で併記する */
+  function bulletModel(t) {
+    if (!t || typeof t !== 'object') return null;
+    const n = t.nums && typeof t.nums === 'object' ? t.nums : null;
+    const g = (v) => (isNum(v) ? v : null);
+    let lo, hi, A, F;
+    if (n) { lo = g(n.targetLow); hi = g(n.targetHigh); A = g(n.actual); F = g(n.forecast); }
+    else { lo = hi = g(t.target); A = g(t.actual); F = g(t.forecast); }
+    if (lo == null) lo = hi;
+    if (hi == null) hi = lo;
+    if (lo != null && lo > hi) [lo, hi] = [hi, lo];
+    const vals = [lo, hi, A, F].filter(isNum);
+    if (!vals.length) return null;
+    let mn = Math.min(...vals), mx = Math.max(...vals);
+    const sp = mx - mn || Math.abs(mx) * 0.2 || 1;
+    const tk = niceTicks(mn - sp * 0.3, mx + sp * 0.3, 4);
+    const unit = typeof t.unit === 'string' ? t.unit : '';
+    const dUnit = unit === '%' ? 'pt' : unit;
+    const pos = (v) => clamp((v - tk.lo) / (tk.hi - tk.lo || 1) * 100, 0, 100);
+    const status = (v) => {
+      if (v == null || lo == null) return null;
+      const eps = Math.max(1e-9, (tk.hi - tk.lo) * 1e-6);
+      const r = (x) => Math.round(Math.abs(x) * 10) / 10;
+      const dn = (x) => fmt(r(x), decOf(r(x), 1)) + dUnit;
+      if (v < lo - eps) return { k: 'below', text: `目標まであと${dn(lo - v)}` };
+      if (v > hi + eps) return { k: 'above', text: `目標を${dn(v - hi)}上回る` };
+      return { k: 'in', text: lo === hi ? '目標どおり' : '目標範囲内' };
+    };
+    return { lo, hi, actual: A, forecast: F, unit, dUnit, ticks: tk.ticks, axisLo: tk.lo, axisHi: tk.hi, dec: tk.dec, pos, sActual: status(A), sForecast: status(F) };
   }
   function bullet(t) {
-    const T = t && isNum(t.target) ? t.target : null, A = t && isNum(t.actual) ? t.actual : null, F = t && isNum(t.forecast) ? t.forecast : null;
-    const sc = bulletScale([T, A, F]);
-    if (!sc) return '<div class="bl nil"><span>数値の比較なし</span></div>';
-    const bar = (v, cls) => { if (v == null) return ''; const a = Math.min(sc.zero, sc.pos(v)), w = Math.abs(sc.pos(v) - sc.zero); return `<u class="${cls}${v < 0 ? ' neg' : ''}" style="left:${f(a)}%;width:${f(Math.max(w, 0.6))}%" data-v="${v}"></u>`; };
-    let s = '<div class="bl"><div class="blt">';
-    s += bar(F, 'bf') + bar(A, 'ba a-gx');
-    if (T != null) s += `<i class="btg" style="left:${f(sc.pos(T))}%" data-v="${T}"></i>`;
-    if (sc.lo < 0) s += `<i class="bz" style="left:${f(sc.zero)}%"></i>`;
-    return s + '</div></div>';
+    const m = bulletModel(t);
+    if (!m) return '<div class="bl nil"><span>数値の比較なし</span></div>';
+    const u = m.unit, v = (x) => fmt(x, decOf(x, 2)) + u;
+    const edge = (p) => (p < 8 ? ' l' : p > 92 ? ' r' : '');
+    let s = `<div class="rbl" data-lo="${f(m.axisLo)}" data-hi="${f(m.axisHi)}"><div class="rbt">`;
+    s += m.ticks.map((x) => `<i class="rb-tk" style="left:${f(m.pos(x))}%"></i>`).join('');
+    if (m.lo != null) {
+      s += m.lo === m.hi
+        ? `<i class="rb-tl" style="left:${f(m.pos(m.lo))}%" data-v="${m.lo}"></i>`
+        : `<i class="rb-band" style="left:${f(m.pos(m.lo))}%;width:${f(m.pos(m.hi) - m.pos(m.lo))}%" data-a="${m.lo}" data-b="${m.hi}"></i>`;
+    }
+    if (m.actual != null && m.forecast != null && Math.abs(m.pos(m.forecast) - m.pos(m.actual)) > 1.5) {
+      const a = Math.min(m.pos(m.actual), m.pos(m.forecast)), w = Math.abs(m.pos(m.forecast) - m.pos(m.actual));
+      s += `<i class="rb-link${m.forecast < m.actual ? ' back' : ''}" style="left:${f(a)}%;width:${f(w)}%"></i>`;
+    }
+    if (m.forecast != null) { const p = m.pos(m.forecast); s += `<i class="rb-f ${m.sForecast ? m.sForecast.k : ''}" style="left:${f(p)}%" data-v="${m.forecast}"><b class="rb-lab up${edge(p)}">予 ${esc(v(m.forecast))}</b></i>`; }
+    if (m.actual != null) { const p = m.pos(m.actual); s += `<i class="rb-a ${m.sActual ? m.sActual.k : ''}" style="left:${f(p)}%" data-v="${m.actual}"><b class="rb-lab dn${edge(p)}">実 ${esc(v(m.actual))}</b></i>`; }
+    s += '</div><div class="rbs">' + m.ticks.map((x, k) => `<span style="left:${f(m.pos(x))}%"${k === 0 ? ' class="l"' : k === m.ticks.length - 1 ? ' class="r"' : ''}>${esc(fmt(x, m.dec) + u)}</span>`).join('') + '</div></div>';
+    return s;
   }
 
   /* =====================================================================
@@ -1391,7 +1422,7 @@
     niceStep, niceCeil, niceTicks, sma, deviation, spread, mmdd, md, segModel, segListHtml, ckReasons, noteSign,
     priceChart, meter, meterLabelX, devCell, gauge, perf3d, supply3d, fan, donut, spark, checklist, stars, segs,
     miniCandles, vpLayout, levelChart, levelTag, HEAT, heatPos, heatValue, heatGauge, planLanes, planPrices, plansChart,
-    prevFromYoy, pairBars3d, ringGeom, ring, paceBar, yoyBar, cmpPair, changeOf, bulletScale, bullet, returnsPeriods, returns3d, marginLine,
+    prevFromYoy, pairBars3d, ringGeom, ring, paceBar, yoyBar, cmpPair, changeOf, bulletModel, bullet, returnsPeriods, returns3d, marginLine,
   };
   G.KABU_CHARTS = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

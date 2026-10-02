@@ -966,10 +966,16 @@
     const risks = arr(y.risks).filter((x) => typeof x === 'string' && x);
     const rk = risks.length ? `<div class="kyr"><span class="kyrh">会社が挙げるリスク</span><ol>${risks.map((x, i) => `<li><span class="n">R${i + 1}</span><p>${richNums(x)}</p></li>`).join('')}</ol></div>` : '';
     const tv = (v) => (isNum(v) ? `<span class="mono">${fmt(v, decOf(v, 2))}</span>` : typeof v === 'string' && v ? esc(v) : '<span class="na">—</span>');
-    const tg = arr(p.targets).filter((x) => x && typeof x === 'object').map((x) => `<div class="kbr"><span class="kbl">${esc(x.label || '')}</span>${K.bullet(x)}<span class="kbv"><span><i class="sw btgs"></i>目標 ${tv(x.target)}</span><span><i class="sw r3c"></i>実績 ${tv(x.actual)}</span><span><i class="sw r3f"></i>今期予想 ${tv(x.forecast)}</span></span></div>`).join('');
+    const badge = (lab, st) => (st ? `<span class="rbg ${st.k}" data-status="${st.k}">${lab}：${esc(st.text)}</span>` : '');
+    const tg = arr(p.targets).filter((x) => x && typeof x === 'object').map((x) => {
+      const m = K.bulletModel(x);
+      return `<div class="kbr"><span class="kbl">${esc(x.label || '')}${x.unit ? `<small>単位 ${esc(x.unit)}</small>` : ''}</span>${K.bullet(x)}`
+        + `<span class="kbv"><span><i class="sw btgs"></i>目標 ${tv(x.target)}</span><span><i class="sw rbas"></i>実績 ${tv(x.actual)}</span><span><i class="sw rbfs"></i>今期予想 ${tv(x.forecast)}</span>`
+        + (m ? `<span class="rbgs">${badge('実績', m.sActual)}${badge('今期予想', m.sForecast)}</span>` : '') + '</span></div>';
+    }).join('');
     const vd = (lab, t, g) => `<div class="kvc"><span class="kvg">${g}</span><div><span class="kyl">${lab}</span><p>${t ? richNums(t) : '<span class="na">記載なし</span>'}</p></div></div>`;
     const left = `<div class="kdy"><div class="kdh"><span class="code">YUHO</span><b>有価証券報告書から</b></div>${yc}${rk}</div>`;
-    const right = `<div class="kdpn"><div class="kdh"><span class="code">PLAN</span><b>${esc(p.name || '中期経営計画')}</b></div>${p.goal ? `<p class="kgl"><span>目指す姿</span>${richNums(p.goal)}</p>` : ''}${tg ? `<div class="kbs"><div class="kbsh"><span>目標 vs 実績 vs 今期予想</span><span class="cap"><i class="sw btgs"></i>縦線＝目標 ・ 実線＝実績 ・ 斜線＝今期予想</span></div>${tg}</div>` : ''}${vd('お金の使い道と目標の一致', p.consistent, '⇄')}${vd('現実的か', p.realistic, '◎')}</div>`;
+    const right = `<div class="kdpn"><div class="kdh"><span class="code">PLAN</span><b>${esc(p.name || '中期経営計画')}</b></div>${p.goal ? `<p class="kgl"><span>目指す姿</span>${richNums(p.goal)}</p>` : ''}${tg ? `<div class="kbs"><div class="kbsh"><span>目標 vs 実績 vs 今期予想</span><span class="cap"><i class="sw rbbs"></i>帯＝目標の範囲（縦線＝目標が1つの値） ・ <i class="sw rbas"></i>実＝実績 ・ <i class="sw rbfs"></i>予＝今期予想</span></div>${tg}</div>` : ''}${vd('お金の使い道と目標の一致', p.consistent, '⇄')}${vd('現実的か', p.realistic, '◎')}</div>`;
     return panel('deep', 'SYS-K11 / DEEP', '3点読み（有報・中期経営計画）', '<span class="jp">決算 3点</span>', `<div class="pb"><div class="kdg">${left}${right}</div></div>`);
   }
   function kessanView(c) {

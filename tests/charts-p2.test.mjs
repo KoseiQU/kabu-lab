@@ -16,7 +16,7 @@ const svgSize = (s) => { const m = /width="([\d.]+)" height="([\d.]+)"/.exec(s);
 const nums = (s, re) => [...s.matchAll(re)].map((m) => +m[1]);
 
 test('P2 charts: 新しい部品が globalThis.KABU_CHARTS に出ている', () => {
-  for (const k of ['miniCandles', 'vpLayout', 'levelChart', 'heatGauge', 'plansChart', 'planLanes', 'prevFromYoy', 'pairBars3d', 'ringGeom', 'ring', 'bulletScale', 'bullet', 'returns3d', 'marginLine', 'changeOf', 'yoyBar', 'cmpPair', 'paceBar']) assert.equal(typeof K[k], 'function', k);
+  for (const k of ['miniCandles', 'vpLayout', 'levelChart', 'heatGauge', 'plansChart', 'planLanes', 'prevFromYoy', 'pairBars3d', 'ringGeom', 'ring', 'bulletModel', 'bullet', 'returns3d', 'marginLine', 'changeOf', 'yoyBar', 'cmpPair', 'paceBar']) assert.equal(typeof K[k], 'function', k);
 });
 
 test('miniCandles（週足・月足・日足の小チャート）: 実データ・空・1本・全同値・欠損で NaN を出さず、高値と安値の札は枠内', () => {
@@ -167,25 +167,53 @@ test('ring（進捗リング）: pct と均等ペースの角度、100%超は内
   clean(K.ring(0, 0), 'ring 0');
 });
 
-test('bullet（目標 vs 実績 vs 今期予想）: 空・単一・全同値・負値・文字の目標', () => {
-  assert.equal(K.bulletScale([]), null);
-  assert.equal(K.bulletScale([null, 'x']), null);
-  const one = K.bulletScale([10]);
-  assert.ok(one.lo === 0 && one.hi > 10);
-  const same = K.bulletScale([5, 5, 5]);
-  assert.ok(same.hi > same.lo && Number.isFinite(same.pos(5)));
-  const neg = K.bulletScale([500, -120, 80]);
-  assert.ok(neg.lo < -120 && neg.hi > 500 && neg.zero > 0 && neg.zero < 100, '負の値は 0 の線を挟む');
-  const zz = K.bulletScale([0, 0]);
-  assert.ok(zz.hi > zz.lo);
-  const b = K.bullet({ target: 12, actual: 10.6, forecast: 11.7 });
-  clean(b, 'bullet');
-  assert.match(b, /class="btg"/); assert.match(b, /class="ba a-gx"/); assert.match(b, /class="bf"/);
-  const n = K.bullet({ target: 500, actual: -120, forecast: 80 });
-  assert.match(n, /ba a-gx neg/); assert.match(n, /class="bz"/); clean(n, 'bullet neg');
+test('bulletModel（中計の目標の範囲 vs 実績 vs 今期予想）: 日立の実データ4本・軸は0起点にしない・未達／範囲内／超過の判定', () => {
+  const real = JSON.parse(readFileSync(join(ROOT, 'data/stocks/6501/analyses/2026-10-02-kessan.json'), 'utf8')).sections.deep.plan.targets;
+  const want = [['in', 'above'], ['below', 'in'], ['in', 'in'], ['below', 'below']];
+  real.forEach((t, i) => {
+    const m = K.bulletModel(t);
+    assert.ok(m, t.label);
+    assert.deepEqual([m.sActual.k, m.sForecast.k], want[i], t.label);
+    const vals = [m.lo, m.hi, m.actual, m.forecast];
+    assert.ok(m.axisLo < Math.min(...vals) && m.axisHi > Math.max(...vals), `${t.label}: 軸に余白`);
+    assert.ok(m.axisLo > 0, `${t.label}: 0 起点にしない（${m.axisLo}）`);
+    for (const v of vals) assert.ok(m.pos(v) > 0 && m.pos(v) < 100);
+    const h = K.bullet(t);
+    clean(h, t.label);
+    assert.match(h, /class="rb-a /); assert.match(h, /class="rb-f /);
+    assert.match(h, t.nums.targetLow === t.nums.targetHigh ? /class="rb-tl"/ : /class="rb-band"/);
+  });
+  assert.equal(K.bulletModel(real[0]).sForecast.text, '目標を2pt上回る');
+  assert.equal(K.bulletModel(real[1]).sActual.text, '目標まであと0.6pt');
+  assert.equal(K.bulletModel(real[3]).sActual.text, '目標まであと12pt');
+  assert.equal(K.bulletModel(real[2]).sForecast.text, '目標範囲内', '帯の端ちょうどは範囲内');
+  assert.match(K.bullet(real[0]), /4%<\/span>/, '軸の目盛りに単位');
+});
+
+test('bulletModel: 一部 null・帯の片側だけ・低=高・範囲外の負値・全部 null・nums なし（従来の数値／文字）', () => {
+  const part = K.bulletModel({ unit: '%', nums: { targetLow: null, targetHigh: 15, actual: null, forecast: 13 } });
+  assert.equal(part.lo, 15); assert.equal(part.hi, 15); assert.equal(part.sActual, null); assert.equal(part.sForecast.text, '目標まであと2pt');
+  const h = K.bullet({ unit: '%', nums: { targetLow: null, targetHigh: 15, actual: null, forecast: 13 } });
+  assert.doesNotMatch(h, /rb-a/); assert.match(h, /rb-f/); assert.match(h, /rb-tl/); clean(h, 'part');
+  const onlyA = K.bulletModel({ nums: { actual: 3 } });
+  assert.equal(onlyA.lo, null); assert.equal(onlyA.sActual, null); clean(K.bullet({ nums: { actual: 3 } }), 'onlyA');
+  const neg = K.bulletModel({ unit: '億円', nums: { targetLow: -5, targetHigh: 5, actual: -120, forecast: 80 } });
+  assert.equal(neg.sActual.text, '目標まであと115億円'); assert.equal(neg.sForecast.text, '目標を75億円上回る');
+  assert.ok(neg.axisLo < -120 && neg.axisHi > 80);
+  const rev = K.bulletModel({ nums: { targetLow: 9, targetHigh: 7, actual: 8 } });
+  assert.deepEqual([rev.lo, rev.hi, rev.sActual.k], [7, 9, 'in'], '下限と上限が逆でも直す');
+  const same = K.bulletModel({ nums: { targetLow: 5, targetHigh: 5, actual: 5, forecast: 5 } });
+  assert.ok(same.axisHi > same.axisLo); assert.equal(same.sActual.text, '目標どおり'); clean(K.bullet({ nums: { targetLow: 5, targetHigh: 5, actual: 5, forecast: 5 } }), 'same');
+  const zero = K.bulletModel({ nums: { targetLow: 0, targetHigh: 0, actual: 0 } });
+  assert.ok(zero.axisHi > zero.axisLo);
+  assert.equal(K.bulletModel({ nums: { targetLow: null, targetHigh: null, actual: null, forecast: null } }), null);
+  assert.match(K.bullet({ target: '7〜9%', actual: '+8%', forecast: '+11%', nums: { targetLow: null, targetHigh: null, actual: null, forecast: null } }), /数値の比較なし/);
   assert.match(K.bullet({ target: '業界トップ', actual: null, forecast: null }), /数値の比較なし/);
-  clean(K.bullet({ target: 5, actual: 5, forecast: 5 }), 'bullet 全同値');
-  clean(K.bullet(null), 'bullet null');
+  const legacy = K.bulletModel({ target: 12, actual: 10.6, forecast: 11.7 });
+  assert.deepEqual([legacy.lo, legacy.hi, legacy.sActual.k, legacy.sForecast.k], [12, 12, 'below', 'below'], 'nums が無ければ従来の数値');
+  assert.equal(K.bulletModel(null), null);
+  const ext = JSON.parse(readFileSync(join(ROOT, 'tests/fixtures/kessan-extreme.json'), 'utf8')).sections.deep.plan.targets;
+  ext.forEach((t) => clean(K.bullet(t), t.label));
 });
 
 test('returns3d（配当とEPS）: 文字の配当は棒を描かない、予想は斜線、空・null だけでも NaN なし', () => {

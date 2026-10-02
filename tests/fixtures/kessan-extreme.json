@@ -379,31 +379,66 @@
       "label": "目標0目標0目標0目標0目標0目標0目標0目標0目標0目標0",
       "target": "目標の文字表記目標の文字表記目標の文字表",
       "actual": null,
-      "forecast": null
+      "forecast": null,
+      "unit": "%",
+      "nums": {
+       "targetLow": 7,
+       "targetHigh": 9,
+       "actual": 8,
+       "forecast": 11
+      }
      },
      {
       "label": "目標1目標1目標1目標1目標1目標1目標1目標1目標1目標1",
       "target": null,
       "actual": null,
-      "forecast": null
+      "forecast": null,
+      "unit": "%",
+      "nums": {
+       "targetLow": null,
+       "targetHigh": 15,
+       "actual": null,
+       "forecast": 13
+      }
      },
      {
       "label": "目標2目標2目標2目標2目標2目標2目標2目標2目標2目標2",
       "target": "目標の文字表記目標の文字表記目標の文字表",
       "actual": null,
-      "forecast": null
+      "forecast": null,
+      "unit": "%",
+      "nums": {
+       "targetLow": 50,
+       "targetHigh": 50,
+       "actual": 38,
+       "forecast": 44
+      }
      },
      {
       "label": "目標3目標3目標3目標3目標3目標3目標3目標3目標3目標3",
       "target": null,
       "actual": null,
-      "forecast": null
+      "forecast": null,
+      "unit": "億円",
+      "nums": {
+       "targetLow": -5,
+       "targetHigh": 5,
+       "actual": -120,
+       "forecast": 80
+      }
      },
      {
       "label": "目標4目標4目標4目標4目標4目標4目標4目標4目標4目標4",
       "target": "目標の文字表記目標の文字表記目標の文字表",
       "actual": null,
-      "forecast": null
+      "forecast": null,
+      "unit": "兆円",
+      "nums": {
+       "targetLow": null,
+       "targetHigh": null,
+       "actual": null,
+       "forecast": null
+      }
      },
      {
       "label": "目標5目標5目標5目標5目標5目標5目標5目標5目標5目標5",
