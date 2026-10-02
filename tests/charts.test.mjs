@@ -153,3 +153,89 @@ test('app: fetch を使わない・読み込み順・固定文言に売買の断
   const ext = [...html.matchAll(/(?:src|href)="(https?:[^"]+)"/g)].map((m) => m[1]);
   assert.ok(ext.every((u) => /^https:\/\/fonts\.(googleapis|gstatic)\.com/.test(u)), `外部読み込み: ${ext}`);
 });
+
+/* ---------- 差し戻し（伊藤忠 8001 の通し運転）で追加 ---------- */
+const realistic = JSON.parse(readFileSync(join(ROOT, 'tests/fixtures/realistic-quick.json'), 'utf8'));
+const num = (s) => Number(s);
+function pinBoxes(svg) {
+  return [...svg.matchAll(/<path d="M([\d.-]+) ([\d.-]+) H([\d.-]+) V([\d.-]+) H([\d.-]+) V[\d.-]+ Z"[^>]*class="pinbox"/g)].map((m) => [num(m[5]), num(m[2]), num(m[3]), num(m[4])]);
+}
+function candleBoxes(svg) {
+  const g = svg.slice(svg.indexOf('class="a-rv candles"'), svg.indexOf('</g>', svg.indexOf('class="a-rv candles"')));
+  const out = [];
+  for (const m of g.matchAll(/<line x1="([\d.-]+)" x2="[\d.-]+" y1="([\d.-]+)" y2="([\d.-]+)"/g)) out.push([num(m[1]) - 0.5, Math.min(num(m[2]), num(m[3])), num(m[1]) + 0.5, Math.max(num(m[2]), num(m[3]))]);
+  for (const m of g.matchAll(/<rect x="([\d.-]+)" y="([\d.-]+)" width="([\d.-]+)" height="([\d.-]+)"/g)) out.push([num(m[1]), num(m[2]), num(m[1]) + num(m[3]), num(m[2]) + num(m[4])]);
+  return out;
+}
+const hit = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
+
+test('価格の表記: 小数部が0なら整数、そうでなければ小数1桁（全画面共通の fmtP）', () => {
+  assert.equal(K.fmtP(2227), '2,227');
+  assert.equal(K.fmtP(2227.0), '2,227');
+  assert.equal(K.fmtP(2175.5), '2,175.5');
+  assert.equal(K.fmtP(2226.66), '2,226.7');
+  assert.equal(K.fmtP(5510), '5,510');
+  assert.equal(K.fmtP(285.5), '285.5');
+  assert.equal(K.fmtP(38450), '38,450');
+  assert.equal(K.fmtP(2040.96), '2,041');
+  assert.equal(K.fmtP(NaN), '—');
+  // 株価チャート・シナリオ図に「.0」の価格が出ない
+  const rows = realistic.cases[0].prices.rows.slice(-122), a = realistic.cases[0].analysis, c = a.sections.chart;
+  const svg = K.priceChart({ rows, res: c.resistance, sup: c.support, pins: c.pins, W: 700, H: 460 });
+  assert.match(svg, /RES 2,227</);
+  assert.match(svg, /2,175\.5</);
+  assert.ok(!/\d,\d{3}\.0</.test(svg), '株価チャートに .0 の価格');
+  const T = (k) => a.sections.scenarios.find((s) => s.kind === k).target;
+  const fanSvg = K.fan({ hist: rows.slice(-20).map((r) => r.c), now: 2175.5, bull: T('bull'), base: T('base'), bear: T('bear'), W: 200, H: 200 });
+  assert.ok(!/\d,\d{3}\.0</.test(fanSvg), 'シナリオ図に .0 の価格');
+  assert.match(fanSvg, />2,175\.5</);
+});
+
+test('実データ型フィクスチャ: スキーマ合格で、差し戻しの条件をすべて含む', () => {
+  const { analysis: a, prices } = realistic.cases[0];
+  assert.deepEqual(validateAnalysis(a), []);
+  const s = a.sections;
+  assert.ok(s.margin.some((m) => m.buy >= 10000), '5桁の信用残');
+  assert.ok(prices.rows.some((r) => !Number.isInteger(r.c)) && prices.rows.every((r) => Number.isInteger(r.c * 2)), '0.5円刻み');
+  assert.equal(s.segments.length, 7);
+  assert.ok(s.segments.every((x) => x.margin === null), '利益率 null');
+  assert.equal(s.chart.pins.length, 5);
+  assert.equal(s.chart.resistance.length, 2);
+  assert.equal(s.chart.support.length, 2);
+  assert.equal(s.performance.find((p) => p.forecast).sales, null);
+  const len = (x) => [...x].length;
+  assert.ok(s.scenarios.every((x) => len(x.text) === 80), 'シナリオ文80字');
+  assert.ok(s.checklist.every((x) => len(x.reason) === 80), 'チェックリスト80字');
+  assert.ok(s.diagnosis.every((x) => len(x.reason) === 80), '診断80字');
+});
+
+test('チャートのピン: 5個でも札どうし・ローソク足・右端のタグ領域に重ならない（幅を変えても）', () => {
+  const a8001 = JSON.parse(readFileSync(join(ROOT, 'data/stocks/8001/analyses/2026-10-02-quick.json'), 'utf8'));
+  const p8001 = JSON.parse(readFileSync(join(ROOT, 'data/stocks/8001/prices.json'), 'utf8')).rows.filter((r) => r.d > '2026-04-02' && r.d <= '2026-10-02');
+  for (const tc of [realistic.cases[0], { prices: { rows: prices6501.filter((r) => r.d > '2026-04-01' && r.d <= '2026-10-01') }, analysis: sample }, { prices: { rows: p8001 }, analysis: a8001 }]) {
+    const rows = tc.prices.rows.slice(-122), c = tc.analysis.sections.chart;
+    for (const [W, H] of [[520, 400], [560, 420], [640, 440], [700, 460], [800, 520], [940, 600]]) {
+      const svg = K.priceChart({ rows, res: c.resistance, sup: c.support, pins: c.pins, W, H });
+      const pins = pinBoxes(svg), cdl = candleBoxes(svg);
+      assert.equal(pins.length, c.pins.length, `${W}: ピンの数`);
+      const ax = W - Math.max(84, 0);
+      pins.forEach((p, i) => {
+        assert.ok(!cdl.some((q) => hit(p, q)), `${W}: ピン${i + 1}がローソク足に重なる`);
+        pins.forEach((q, j) => { if (j > i) assert.ok(!hit(p, q), `${W}: ピン${i + 1}と${j + 1}が重なる`); });
+        assert.ok(p[2] <= ax - 4 + 0.5, `${W}: ピン${i + 1}がタグ領域に入る`);
+      });
+    }
+  }
+});
+
+test('需給: 5桁の買い残でも売り残の棒が最低3pxで見え、NaN を出さない', () => {
+  const m = realistic.cases[0].analysis.sections.margin;
+  for (const [W, H] of [[260, 110], [330, 190]]) {
+    const svg = K.supply3d(m, W, H);
+    clean(svg, '需給 5桁');
+    const fronts = [...svg.matchAll(/<rect x="[\d.-]+" y="[\d.-]+" width="[\d.-]+" height="([\d.-]+)" fill="(url\(#kl-sh\)|rgba\(62,230,255,\.[58]\))"/g)].map((x) => num(x[1]));
+    assert.equal(fronts.length, 10);
+    assert.ok(fronts.every((h) => h >= 3), `棒の高さ ${fronts}`);
+    assert.equal((svg.match(/rlab/g) || []).length, 5);
+  }
+});

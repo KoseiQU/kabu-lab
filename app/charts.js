@@ -29,6 +29,12 @@
     const s = Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
     return (v < 0 && Number(s.replace(/,/g, '')) !== 0 ? '−' : '') + s;
   }
+  /** 価格の表記：小数部が0なら整数、そうでなければ小数1桁（2,227 ／ 2,175.5）。全画面でこの規則に統一する */
+  function fmtP(v) {
+    if (!isNum(v)) return '—';
+    const r = Math.round(v * 10) / 10;
+    return fmt(r, Number.isInteger(r) ? 0 : 1);
+  }
   /** 符号つき（+21 ／ −0.23） */
   function fmtS(v, d = 0) {
     if (!isNum(v)) return '—';
@@ -172,10 +178,10 @@
     const dec = isNum(o.dec) ? o.dec : priceDec(rows.map((r) => r.c));
     // 右余白はタグの最長文字列に合わせる（既定84px＝モック）
     const rLo = Math.min(...rows.map((r) => r.l)), rHi = Math.max(...rows.map((r) => r.h)), rSp = rHi - rLo || Math.abs(rHi) * 0.05 || 1;
-    const tagMax = Math.max(textW(fmt(rows[rows.length - 1].c, dec), 12, true),
+    const tagMax = Math.max(textW(fmtP(rows[rows.length - 1].c), 12, true),
       ...[...(o.res || []), ...(o.sup || [])].filter((x) => x && isNum(x.price)).map((x) => {
         const far = x.price < rLo - rSp * 0.35 || x.price > rHi + rSp * 0.35;
-        return textW('RES ' + fmt(x.price, decOf(x.price, dec)), 12, true) + (far ? 14 : 0);
+        return textW('RES ' + fmtP(x.price), 12, true) + (far ? 14 : 0);
       }));
     const padL = 4, padR = Math.max(84, Math.ceil(tagMax) + 18), padT = 28, padB = 19, gap = 8;
     const volH = Math.round((H - padT - padB) * 0.16), mainH = H - padT - padB - volH - gap, vTop = padT + mainH + gap, mainB = padT + mainH;
@@ -224,7 +230,7 @@
       const isMajor = Math.abs(p / major - Math.round(p / major)) < 1e-6;
       s += tag('line', { x1: padL, x2: ax, y1: y, y2: y, stroke: isMajor ? 'rgba(62,230,255,.085)' : 'rgba(62,230,255,.035)' });
       s += tag('line', { x1: ax, x2: ax + (isMajor ? 5 : 3), y1: y, y2: y, stroke: C.tx3 });
-      if (isMajor && tagList.every((t) => Math.abs(t.ty - y) > 16)) s += text(ax + 10, y + 4, fmt(p, Mdec), { fill: C.tx2 });
+      if (isMajor && tagList.every((t) => Math.abs(t.ty - y) > 16)) s += text(ax + 10, y + 4, fmtP(p), { fill: C.tx2 });
     }
     s += tag('line', { x1: ax, x2: ax, y1: padT, y2: vTop + volH, stroke: 'rgba(62,230,255,.3)' });
     // 月の区切り
@@ -255,8 +261,8 @@
     tagList.forEach((t) => {
       if (t.k === 'NOW') return;
       const y = t.out ? t.ty : Y(t.price);
-      s += tag('path', { d: `M${f(ax + 2)} ${f(y)} L${f(ax + 8)} ${f(t.ty - 9)} H${f(ax + padR - 2)} V${f(t.ty + 9)} H${f(ax + 8)} Z`, fill: '#0b1824', stroke: 'rgba(216,231,239,.6)' });
-      s += text(ax + 12, t.ty + 4, `${t.k} ${fmt(t.price, decOf(t.price, dec))}${t.out ? (t.price > P1 ? ' ▲' : ' ▼') : ''}`, { fill: C.tx });
+      s += tag('path', { d: `M${f(ax + 2)} ${f(y)} L${f(ax + 8)} ${f(t.ty - 9)} H${f(ax + padR - 2)} V${f(t.ty + 9)} H${f(ax + 8)} Z`, fill: '#0b1824', stroke: 'rgba(216,231,239,.6)', class: 'tagbox' });
+      s += text(ax + 12, t.ty + 4, `${t.k} ${fmtP(t.price)}${t.out ? (t.price > P1 ? ' ▲' : ' ▼') : ''}`, { fill: C.tx, cls: 'st-t tagtxt' });
     });
     // 出来高
     s += '<g class="a-rv">';
@@ -265,7 +271,7 @@
       const y = VY(r.v);
       s += tag('rect', { x: X(i) - bw / 2, y, width: bw, height: vTop + volH - y, fill: r.c >= r.o ? 'rgba(62,230,255,.42)' : 'rgba(255,92,163,.5)' });
     });
-    s += '</g><g class="a-rv">';
+    s += '</g><g class="a-rv candles">';
     // ローソク足
     rows.forEach((r, i) => {
       const up = r.c >= r.o, x = X(i), col = up ? C.cy : C.mag;
@@ -280,44 +286,74 @@
     // 現在値
     const lt = tagList[0], lx = X(n - 1), ly = Y(lastC);
     s += tag('line', { x1: lx + 8, x2: ax, y1: ly, y2: ly, stroke: C.cy, 'stroke-dasharray': '2 3', opacity: 0.8 });
-    s += tag('path', { d: `M${f(ax + 2)} ${f(ly)} L${f(ax + 8)} ${f(lt.ty - 10)} H${f(ax + padR)} V${f(lt.ty + 10)} H${f(ax + 8)} Z`, fill: C.cy, filter: 'url(#kl-glow)' });
-    s += text(ax + 12, lt.ty + 4.5, fmt(lastC, dec), { fill: C.bg, style: 'font-weight:700' });
+    s += tag('path', { d: `M${f(ax + 2)} ${f(ly)} L${f(ax + 8)} ${f(lt.ty - 10)} H${f(ax + padR)} V${f(lt.ty + 10)} H${f(ax + 8)} Z`, fill: C.cy, filter: 'url(#kl-glow)', class: 'tagbox' });
+    s += text(ax + 12, lt.ty + 4.5, fmtP(lastC), { fill: C.bg, style: 'font-weight:700', cls: 'st-t tagtxt' });
     s += `<g stroke="${C.cy}" fill="none" stroke-width="1.2">` + tag('circle', { cx: lx, cy: ly, r: 8 }) + tag('circle', { cx: lx, cy: ly, r: 2, fill: C.cy })
       + tag('path', { d: `M${f(lx)} ${f(ly - 14)}v5M${f(lx)} ${f(ly + 9)}v5M${f(lx - 14)} ${f(ly)}h5` }) + '</g>';
-    // 注釈ピン：高値系は上、安値系は下。札はピンの左（左端に近ければ右）で、札の下の足を避ける
-    const boxes = [];
-    (o.pins || []).forEach((p) => {
-      if (!p || typeof p.date !== 'string' || !p.label) return;
-      const i = rows.findIndex((r) => r.d === p.date);
-      if (i < 0) return;
+    // 注釈ピン：高値系は上・安値系は下を優先し、札がローソク足・他のピン（札と引き出し線）・右端のタグ・現在値の照準に
+    // 重ならない一番近い位置を探す（ピンの左右どちらにも置ける）
+    const placed = [];
+    const hitCandle = (x0, x1, y0, y1) => {
+      for (let k = 0; k < n; k++) {
+        const cx = X(k);
+        if (cx + bw / 2 + 2 < x0 || cx - bw / 2 - 2 > x1) continue;
+        if (Y(rows[k].h) - 2 < y1 && Y(rows[k].l) + 2 > y0) return true;
+      }
+      return false;
+    };
+    // 札・引き出し線（縦：px で ya→ly、横：ly で hx0→hx1）との交差
+    const segHitsBox = (sx0, sy0, sx1, sy1, q) => Math.max(sx0, sx1) >= q.x0 - 3 && Math.min(sx0, sx1) <= q.x1 + 3 && Math.max(sy0, sy1) >= q.y0 - 3 && Math.min(sy0, sy1) <= q.y1 + 3;
+    const hitPlaced = (c) => placed.some((q) => {
+      if (c.x0 < q.x1 + 4 && c.x1 > q.x0 - 4 && c.y0 < q.y1 + 4 && c.y1 > q.y0 - 4) return true; // 札どうし
+      if (segHitsBox(q.px, q.ya, q.px, q.ly, c) || segHitsBox(q.hx0, q.ly, q.hx1, q.ly, c)) return true; // 他の引き出し線が札を横切る
+      return segHitsBox(c.px, c.ya, c.px, c.ly, q) || segHitsBox(c.hx0, c.ly, c.hx1, c.ly, q); // 自分の引き出し線が他の札を横切る
+    });
+    const pinRows = (o.pins || []).filter((p) => p && typeof p.date === 'string' && p.label)
+      .map((p) => ({ p, i: rows.findIndex((r) => r.d === p.date) })).filter((x) => x.i >= 0)
+      .sort((a, b) => a.i - b.i);
+    pinRows.forEach(({ p, i }) => {
       const r = rows[i], x = X(i);
       const low = /安値|底|急落|下落|割れ|安/.test(p.label) && !/高値/.test(p.label);
       const lab = /^\d{1,2}\/\d{1,2}/.test(p.label) ? p.label : md(p.date) + ' ' + p.label;
-      const tw = textW(lab, 12), bwid = tw + 18;
-      const right = x - 12 - bwid < padL + 2;
-      const bx = right ? x + 12 : x - 12 - bwid;
-      const xs = rows.map((_, k) => k).filter((k) => X(k) >= bx - st && X(k) <= bx + bwid + st);
+      const bwid = textW(lab, 12) + 22;
       const ya = Y(low ? r.l : r.h);
-      let ly2;
-      if (low) {
-        const trough = Math.min(r.l, ...xs.map((k) => rows[k].l));
-        ly2 = clamp(Math.max(ya + 26, Y(trough) + 16), padT + 12, mainB - 12);
-      } else {
-        const peak = Math.max(r.h, ...xs.map((k) => rows[k].h));
-        ly2 = clamp(Math.min(ya - 26, Y(peak) - 16), padT - 14, mainB - 12);
+      const yTop = padT - 14, yBot = mainB - 12;
+      // 候補：上下 × 左右 × 横へのずらし（0〜192px）× 縦の距離。近さ（縦＋横×0.7、逆方向は+40）で一番良いものを選ぶ
+      let best = null;
+      for (const strict of [true, false]) {
+        for (const dir of low ? [1, -1] : [-1, 1]) {
+          for (const side of ['L', 'R']) {
+            for (let off = 0; off <= 192; off += 24) {
+              const bx = side === 'R' ? x + 12 + off : x - 12 - bwid - off;
+              if (bx < padL + 2 || bx + bwid > ax - 4) continue;
+              for (let d = 22; d < mainH + 40; d += 3) {
+                const ly = ya + dir * d;
+                if (ly < yTop || ly > yBot) break;
+                const c = { x0: bx, x1: bx + bwid, y0: ly - 10, y1: ly + 10, px: x, ya, ly, hx0: Math.min(x, side === 'R' ? bx : bx + bwid), hx1: Math.max(x, side === 'R' ? bx : bx + bwid) };
+                if (strict && hitCandle(c.x0, c.x1, c.y0, c.y1)) continue;
+                if (hitPlaced(c)) continue;
+                if (c.x0 < lx + 16 && c.x1 > lx - 16 && Math.abs(ly - Y(lastC)) < 26) continue; // 現在値の照準
+                const score = d + off * 0.7 + (dir === (low ? 1 : -1) ? 0 : 40) + (side === 'L' ? 0 : 6);
+                if (!best || score < best.score) best = { score, c, side };
+                break;
+              }
+            }
+          }
+        }
+        if (best) break;
       }
-      for (let tries = 0; tries < 6; tries++) {
-        const hit = boxes.some((b) => bx < b.x1 + 4 && bx + bwid > b.x0 - 4 && Math.abs(ly2 - b.y) < 22);
-        if (!hit) break;
-        ly2 = clamp(ly2 + (low ? 24 : -24), padT - 14, mainB - 12);
+      if (!best) { // 置き場が無い時は従来の位置
+        const side = x - 12 - bwid < padL + 2 ? 'R' : 'L', bx = side === 'R' ? x + 12 : x - 12 - bwid, ly = clamp(ya + (low ? 26 : -26), yTop, yBot);
+        best = { side, c: { x0: bx, x1: bx + bwid, y0: ly - 10, y1: ly + 10, px: x, ya, ly, hx0: Math.min(x, side === 'R' ? bx : bx + bwid), hx1: Math.max(x, side === 'R' ? bx : bx + bwid) } };
       }
-      boxes.push({ x0: bx, x1: bx + bwid, y: ly2 });
+      const { side } = best, ly = best.c.ly, bx = best.c.x0;
+      placed.push(best.c);
       s += '<g class="a-fade pin">';
-      s += tag('path', { d: `M${f(x)} ${f(ya)} V${f(ly2)} H${f(right ? x + 12 : x - 12)}`, stroke: C.cy2, 'stroke-width': 1, fill: 'none', opacity: 0.85 });
+      s += tag('path', { d: `M${f(x)} ${f(ya)} V${f(ly)} H${f(side === 'R' ? bx : bx + bwid)}`, stroke: C.cy2, 'stroke-width': 1, fill: 'none', opacity: 0.85 });
       s += tag('path', { d: `M${f(x)} ${f(ya - 4)} l4 4 -4 4 -4 -4z`, fill: C.bg, stroke: C.cy, 'stroke-width': 1.5 });
-      s += tag('path', { d: `M${f(bx + 5)} ${f(ly2 - 10)} H${f(bx + bwid)} V${f(ly2 + 10)} H${f(bx)} V${f(ly2 - 5)} Z`, fill: '#071019', stroke: C.cy, 'stroke-width': 1 });
-      s += tag('rect', { x: bx, y: ly2 - 10, width: 3, height: 20, fill: C.cy });
-      s += text(bx + bwid - 8, ly2 + 4.5, lab, { cls: 'st-j', fill: C.tx, anchor: 'end' });
+      s += tag('path', { d: `M${f(bx + 5)} ${f(ly - 10)} H${f(bx + bwid)} V${f(ly + 10)} H${f(bx)} V${f(ly - 5)} Z`, fill: '#071019', stroke: C.cy, 'stroke-width': 1, class: 'pinbox' });
+      s += tag('rect', { x: bx, y: ly - 10, width: 3, height: 20, fill: C.cy });
+      s += text(bx + bwid - 9, ly + 4.5, lab, { cls: 'st-j', fill: C.tx, anchor: 'end' });
       s += '</g>';
     });
     return s + '</svg>';
@@ -503,6 +539,8 @@
     const gw = (W - pl - pr) / N, bw = Math.min(15, gw * 0.26);
     const BMAX = vmax > 0 ? vmax / 0.455 : 1;
     const BY = (v) => base - Math.max(0, v) / BMAX * ch;
+    // 買い残と売り残の差が大きくても、0でない棒は最低3pxの高さで見せる
+    const barY = (v) => (v > 0 ? Math.min(BY(v), base - 3) : base);
     const step = niceStep((vmax || 1) / 2.2, [1, 2, 2.5, 5, 10]);
     const ticks = [];
     for (let v = 0, k = 0; v <= Math.max(vmax * 1.15, 0) + 1e-9 && k < 6; k++, v = k * step) ticks.push(Number(v.toFixed(decOf(step, 4))));
@@ -517,20 +555,46 @@
       s += text(pl - DX - 6, BY(v) - DY * 0.5 + 4, v ? fmt(v, decOf(v, 2)) : '0', { anchor: 'end', fill: C.tx3 });
     });
     s += floor3d(pl, W - pr, base, DX, DY);
-    const pts = [];
+    const pts = [], obst = [];
     rows.forEach((r, i) => {
       const cx = pl + gw * (i + 0.5), last = i === rows.length - 1;
-      s += `<g class="a-grow" style="animation-delay:${f(i * 0.08)}s">`;
-      if (isNum(r.sell)) s += bar3d(cx + 2, BY(r.sell), bw, base, DX, DY, { front: 'url(#kl-sh)', side: 'rgba(90,110,122,.6)', top: 'rgba(200,215,225,.55)', fedge: 'rgba(157,179,194,.5)' });
-      if (isNum(r.buy)) s += bar3d(cx - bw - 2, BY(r.buy), bw, base, DX, DY, { front: last ? 'rgba(62,230,255,.8)' : 'rgba(62,230,255,.5)', side: last ? 'rgba(30,140,168,.9)' : 'rgba(28,120,145,.75)', top: 'rgba(166,243,255,.85)' });
+      if (isNum(r.sell)) obst.push([cx + 2 - DX, barY(r.sell) - DY, cx + 2 + bw, base]);
+      if (isNum(r.buy)) obst.push([cx - bw - 2 - DX, barY(r.buy) - DY, cx - 2, base]);
+      s += `<g class="a-grow bars" style="animation-delay:${f(i * 0.08)}s">`;
+      if (isNum(r.sell)) s += bar3d(cx + 2, barY(r.sell), bw, base, DX, DY, { front: 'url(#kl-sh)', side: 'rgba(90,110,122,.6)', top: 'rgba(200,215,225,.55)', fedge: 'rgba(157,179,194,.5)' });
+      if (isNum(r.buy)) s += bar3d(cx - bw - 2, barY(r.buy), bw, base, DX, DY, { front: last ? 'rgba(62,230,255,.8)' : 'rgba(62,230,255,.5)', side: last ? 'rgba(30,140,168,.9)' : 'rgba(28,120,145,.75)', top: 'rgba(166,243,255,.85)' });
       s += '</g>';
       if (isNum(r.ratio)) pts.push([cx - DX * 0.5, RY(r.ratio), r.ratio, last]);
     });
-    if (pts.length > 1) s += `<g class="a-rv" style="animation-delay:.5s">` + tube(pathD(pts), C.w, '#5d7686', 1.4) + '</g>';
+    if (pts.length > 1) s += `<g class="a-rv rline" style="animation-delay:.5s">` + tube(pathD(pts), C.w, '#5d7686', 1.4) + '</g>';
+    // 倍率ラベル：上を優先し、線・棒・他のラベル・枠にかかるなら下、左右へずらす
+    const segHit = (b) => pts.some((p, k) => {
+      if (!k) return false;
+      const q = pts[k - 1], len = Math.hypot(p[0] - q[0], p[1] - q[1]);
+      for (let t = 0; t <= len; t += 2) {
+        const x = q[0] + (p[0] - q[0]) * t / len, y = q[1] + (p[1] - q[1]) * t / len;
+        if (x > b[0] - 1 && x < b[2] + 1 && y > b[1] - 1 && y < b[3] + 1) return true;
+      }
+      return false;
+    });
+    const labs = [];
     pts.forEach((p) => {
       const last = p[3];
       s += tag('rect', { x: p[0] - 3.5, y: p[1] - 3.5, width: 7, height: 7, fill: last ? C.cy : '#0b1824', stroke: last ? C.wh : C.w, 'stroke-width': 1.4, transform: `rotate(45 ${f(p[0])} ${f(p[1])})`, filter: last ? 'url(#mglow)' : '' });
-      s += text(p[0], p[1] - 8, fmt(p[2], 2), { anchor: 'middle', fill: last ? C.cy : C.tx });
+    });
+    pts.forEach((p) => {
+      const last = p[3], str = fmt(p[2], 2), w = textW(str, 12, true);
+      const cands = [[0, -8], [0, 19], [w / 2 + 7, -6], [-(w / 2 + 7), -6], [w / 2 + 7, 10], [-(w / 2 + 7), 10], [0, -20]];
+      let pick = cands[0];
+      for (const c of cands) {
+        const bx = [p[0] + c[0] - w / 2 - 1, p[1] + c[1] - 12, p[0] + c[0] + w / 2 + 1, p[1] + c[1] + 4]; // 字形の上下（約16px）を見込む
+        if (bx[0] < pl - DX || bx[2] > W - 1 || bx[1] < 0 || bx[3] > base) continue;
+        if (obst.some((o) => bx[0] < o[2] && bx[2] > o[0] && bx[1] < o[3] && bx[3] > o[1])) continue;
+        if (labs.some((o) => bx[0] < o[2] + 2 && bx[2] > o[0] - 2 && bx[1] < o[3] && bx[3] > o[1])) continue;
+        if (segHit(bx)) continue;
+        pick = c; labs.push(bx); break;
+      }
+      s += text(p[0] + pick[0], p[1] + pick[1], str, { anchor: 'middle', fill: last ? C.cy : C.tx, cls: 'st-t rlab' });
     });
     s += text(pl - DX - 6, pt + 8, '倍率', { cls: 'st-j', anchor: 'end', fill: C.tx3 });
     return s + '</svg>';
@@ -555,7 +619,7 @@
     const all = [now, ...hist, bullP, bearP, bLo, bHi, baseP].filter(isNum);
     let lo = Math.min(...all), hi = Math.max(...all);
     const sp = hi - lo || Math.abs(now) * 0.05 || 1;
-    const pl = Math.max(44, Math.round(textW(fmt(hi, dec), 12, true) + 10)), pr = 6, pt = 12, pb = 20;
+    const pl = Math.max(44, Math.round(Math.max(...[now, bullP, bearP, bLo, bHi, baseP].filter(isNum).map((v) => textW(fmtP(v), 12, true))) + 10)), pr = 6, pt = 12, pb = 20;
     const P1 = hi + sp * 0.12, P0 = lo - sp * 0.08;
     const Y = (p) => pt + (P1 - p) / (P1 - P0 || 1) * (H - pt - pb);
     const nowX = pl + (W - pl - pr) * 0.4, endX = W - pr - 2;
@@ -567,7 +631,7 @@
     const my = spread(marks.map((m) => Y(m.p) + 4), 13, pt + 9, H - pb + 2);
     marks.forEach((m, i) => {
       s += tag('line', { x1: pl, x2: endX, y1: Y(m.p), y2: Y(m.p), stroke: m.isNow ? 'rgba(62,230,255,.35)' : 'rgba(62,230,255,.12)', 'stroke-dasharray': '2 4' });
-      s += text(pl - 5, my[i], fmt(m.p, decOf(m.p, dec)), { anchor: 'end', fill: m.isNow ? C.cy : C.tx2 });
+      s += text(pl - 5, my[i], fmtP(m.p), { anchor: 'end', fill: m.isNow ? C.cy : C.tx2 });
     });
     if (isNum(bLo) && isNum(bHi)) s += tag('rect', { x: nowX, y: Y(Math.max(bLo, bHi)), width: endX - nowX, height: Math.abs(Y(bLo) - Y(bHi)), fill: 'rgba(216,231,239,.035)' });
     const nowY = Y(now), plotH = H - pt - pb;
@@ -675,7 +739,7 @@
   }
 
   const api = {
-    C, SEG_COLORS, isNum, clamp, esc, fmt, fmtS, fmtVol, yenParts, jpAmountParts, decOf, priceDec, textW,
+    C, SEG_COLORS, isNum, clamp, esc, fmt, fmtP, fmtS, fmtVol, yenParts, jpAmountParts, decOf, priceDec, textW,
     niceStep, niceCeil, niceTicks, sma, deviation, spread, mmdd, md,
     priceChart, meter, meterLabelX, devCell, gauge, perf3d, supply3d, fan, donut, spark, checklist, stars, segs,
   };

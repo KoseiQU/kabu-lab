@@ -592,3 +592,18 @@ a.rl,a.tab,a.k{text-decoration:none}
 .h-nm{display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; min-width:7em}
 .gtr>span{flex:none; white-space:nowrap}
 .gtr em.ov{line-height:1}
+/* 稼ぎ頭：利益額の横棒（利益率なし）は中央の目盛りを出さない */
+.mbar.pbar{height:9px}
+.mbar.pbar .tr::after{display:none}
+/* 行Aも中身で伸ばす：4点診断の理由文（最大80字）が長いとき、メーターを潰さずに行を伸ばす（収まる時はモックと同じ高さ） */
+.rowA{height:auto; min-height:var(--rowA)}
+.rcol{grid-template-rows:minmax(auto,.8fr) 86px minmax(217px,1.2fr)}
+.rcol>.panel:first-child{min-height:auto}
+.rcol>.panel:first-child>.pi{min-height:172px}
+.diag,.dg{min-height:auto}
+.mt{min-height:56px}
+/* シナリオの目安：長い文はカードの幅で折り返す（数字のかたまりは改行しない） */
+.sch .tgt{white-space:normal; text-align:right; margin-left:auto; min-width:0}
+.sch .tgt em{white-space:nowrap}
+/* ホーム下段：今日の用語の定義（最大80字）が長いときは段を伸ばす */
+.h-b{height:auto; min-height:170px}

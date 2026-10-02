@@ -115,6 +115,8 @@
     }
     return { price: null, change: null, pct: null, date: '' };
   }
+  /** 価格の変化幅（+21 ／ −27.5）。価格と同じく小数部が0なら整数 */
+  const fmtSP = (v) => (isNum(v) ? fmtS(v, Number.isInteger(Math.round(v * 10) / 10) ? 0 : 1) : '—');
   const stockDec = (st, extra) => K.priceDec([...priceRows(st).slice(-60).map((r) => r.c), ...(extra || []).filter(isNum)]);
 
   /* ---------- ルーティング ---------- */
@@ -188,7 +190,7 @@
     Object.values(D.stocks).forEach((st) => {
       const q = quoteOf(st);
       if (!isNum(q.price)) return;
-      s += `<span class="it">${esc(st.code)} ${esc(st.name)} <b>${fmt(q.price, stockDec(st, [q.price]))}</b>${chg(null, q.pct, 0)}</span>`;
+      s += `<span class="it">${esc(st.code)} ${esc(st.name)} <b>${K.fmtP(q.price)}</b>${chg(null, q.pct, 0)}</span>`;
     });
     return s + '</div>';
   }
@@ -253,7 +255,7 @@
     return `<section class="panel" data-sec="geo"><div class="pi">${head}<div class="h-geo">${rows}<div class="geo-lg"><span>影響度</span><span>小 ◀ ━━ ▶ 大</span></div></div></div></section>`;
   }
   function libRow(st) {
-    const q = quoteOf(st), dec = stockDec(st, [q.price]);
+    const q = quoteOf(st);
     const ans = arr(st.analyses);
     const latest = ans[0] || null;
     const types = TYPES.filter((t) => ans.some((a) => a.type === t.key)).map((t) => `<span>${t.badge}</span>`).join('');
@@ -266,7 +268,7 @@
     return `<tr class="${go ? 'go' : 'lk'}" data-href="${hrefStock(st.code)}" tabindex="0" aria-label="${nm}の${go ? '分析' : '銘柄ページ'}を開く">`
       + `<td><span class="h-cd">${esc(st.code)}</span></td>`
       + `<td><span class="h-nm" title="${nm}">${nm}</span>${go ? '<span class="h-op">OPEN ›</span>' : '<span class="h-op na">未分析 ›</span>'}</td>`
-      + `<td class="r"><span class="h-px">${fmt(q.price, dec)}<small>円</small></span></td>`
+      + `<td class="r"><span class="h-px">${K.fmtP(q.price)}<small>円</small></span></td>`
       + `<td class="r"><span class="h-ch ${isNum(q.pct) ? (up ? 'up' : 'dn') : ''}">${isNum(q.pct) ? (up ? '▲ ' : '▼ ') + fmtS(q.pct, 2) + '%' : '—'}</span></td>`
       + `<td><div class="h-bd">${warn}${types || '<span class="na">未分析</span>'}</div></td>`
       + `<td><span class="h-dt">${latest ? mmdd(latest.date) : '—'}</span></td>`
@@ -344,7 +346,7 @@
     <div class="sh-id"><div class="ticker">${esc(code)}</div><div><h1>${esc(name)}</h1><div class="tags">${tags.join('')}</div></div></div>
     <div class="sh-price"><svg class="ret" aria-hidden="true"><use href="#ret"/></svg><div>
       <div class="lbl"><span>株価 ／ ${asOf ? esc(jpDate(asOf)) + '終値' : '基準日不明'}</span></div>
-      <div class="pxrow"><span class="px"><span class="num" data-count="${isNum(close) ? close : ''}" data-dec="${dec}">${fmt(close, dec)}</span><small>円</small></span><span class="chg ${up ? 'up' : dn ? 'dn' : ''}">${up ? '▲' : dn ? '▼' : '―'} <span>前日比</span> ${fmtS(ch, K.decOf(ch, dec))}<span>円</span> / ${fmtS(pct, 2)}%</span></div>
+      <div class="pxrow"><span class="px"><span class="num" data-count="${isNum(close) ? close : ''}" data-p="1">${K.fmtP(close)}</span><small>円</small></span><span class="chg ${up ? 'up' : dn ? 'dn' : ''}">${up ? '▲' : dn ? '▼' : '―'} <span>前日比</span> ${fmtSP(ch)}<span>円</span> / ${fmtS(pct, 2)}%</span></div>
     </div></div>
     <div class="sh-kv"><span>時価総額${mcDate}</span><b>${mparts ? jpParts(mparts) : '<span>未取得</span>'}</b></div>
     <div class="sh-kv"><span>最低購入額</span><b>${mp ? jpParts(mp) : '<span>未取得</span>'}</b></div>
@@ -389,16 +391,17 @@
     if (!win.length) return panel('price', 'SYS-02 / PRICE', '株価チャート（日足）', '', `<div class="pb">${noData('price', a, { def: '株価データ（prices.json）がありません' })}</div>`);
     const first = win[0].d, last = win[win.length - 1].d;
     const range = `${first.replace(/-/g, '.')} – ${first.slice(0, 4) === last.slice(0, 4) ? last.slice(5).replace('-', '.') : last.replace(/-/g, '.')}`;
+    const maP = (v) => (isNum(v) ? K.fmtP(dec === 0 ? Math.round(v) : v) : '—');
     const ma25 = ctx.ma25[ctx.ma25.length - 1], ma75 = ctx.ma75[ctx.ma75.length - 1];
     const chart = a.sections && a.sections.chart && typeof a.sections.chart === 'object' ? a.sections.chart : null;
     const lv = (list, name) => {
       const v = arr(list).filter((x) => x && isNum(x.price));
       if (!v.length) return '';
-      return `<span><i class="sw bd"></i>${name} <b>${fmt(v[0].price, dec)}円</b>${v[0].label ? `（${esc(v[0].label)}）` : ''}${v.length > 1 ? `<span class="cap">ほか${v.length - 1}</span>` : ''}</span>`;
+      return `<span><i class="sw bd"></i>${name} <b>${K.fmtP(v[0].price)}円</b>${v[0].label ? `（${esc(v[0].label)}）` : ''}${v.length > 1 ? `<span class="cap">ほか${v.length - 1}</span>` : ''}</span>`;
     };
     const legend = '<span><i class="sw cu"></i>陽線（上昇）</span><span><i class="sw cd"></i>陰線（下落）</span>'
-      + (isNum(ma25) ? `<span><i class="sw l25"></i>25日線 <b>${fmt(ma25, dec)}円</b></span>` : '')
-      + (isNum(ma75) ? `<span><i class="sw l75"></i>75日線 <b>${fmt(ma75, dec)}円</b></span>` : '')
+      + (isNum(ma25) ? `<span><i class="sw l25"></i>25日線 <b>${maP(ma25)}円</b></span>` : '')
+      + (isNum(ma75) ? `<span><i class="sw l75"></i>75日線 <b>${maP(ma75)}円</b></span>` : '')
       + (chart ? lv(chart.resistance, 'レジスタンス帯') + lv(chart.support, 'サポート帯') : `<span class="ndn" data-nodata="chart">サポレジ・注釈は未取得${missFor(a, 'chart') ? '（' + esc(missFor(a, 'chart')) + '）' : ''}</span>`);
     const closes = ctx.upto.map((r) => r.c);
     const dev = [[5, '乖離率 5日線'], [25, '25日線'], [75, '75日線'], [200, '200日線']].map(([n, l]) => K.devCell(l, K.deviation(closes, n))).join('');
@@ -447,20 +450,24 @@
       const rest = list.slice(3), sum = rest.reduce((s, x) => s + (isNum(x.profit) ? x.profit : 0), 0);
       rows = [...list.slice(0, 3), { name: `その他 ${rest.length}事業`, profit: sum, margin: null, note: '', other: true }];
     }
+    // 利益率が1つも無いとき（純利益だけの開示など）は、利益率の凡例とバーを出さず、利益額の横棒にする
+    const noMargin = list.every((x) => !isNum(x.margin));
+    const maxP = Math.max(1, ...rows.map((x) => (isNum(x.profit) ? x.profit : 0)));
     const maxM = Math.max(20, ...rows.map((x) => (isNum(x.margin) ? Math.ceil(x.margin / 5) * 5 : 0)));
     const colors = rows.map((x, i) => (x.other ? '#47606f' : K.SEG_COLORS[i % K.SEG_COLORS.length]));
     const donut = K.donut(rows.map((x, i) => ({ v: x.profit, color: colors[i] })));
     const rowsH = rows.map((x, i) => {
       const m = isNum(x.margin) ? x.margin : null;
-      const w = m != null ? K.clamp(m / maxM * 100, 0, 100) : 0;
+      const w = noMargin ? (isNum(x.profit) ? K.clamp(x.profit / maxP * 100, 0, 100) : 0) : m != null ? K.clamp(m / maxM * 100, 0, 100) : 0;
       return `<div class="srow" style="--k:${colors[i]}"><div class="srh"><i></i><span class="sn" title="${esc(x.name)}">${esc(x.name)}</span>${x.note ? `<span class="yoy">${esc(x.note)}</span>` : ''}<span class="pf${isNum(x.profit) && x.profit < 0 ? ' dn' : ''}">${fmt(x.profit)}<small>億円</small></span></div>`
-        + `<div class="mbar"><span class="tr"><u class="a-gx" style="width:${w.toFixed(1)}%"></u></span><b>${m != null ? fmt(m, 1) + '%' : '—'}</b></div></div>`;
+        + (noMargin ? `<div class="mbar pbar"><span class="tr"><u class="a-gx" style="width:${w.toFixed(1)}%"></u></span></div></div>`
+          : `<div class="mbar"><span class="tr"><u class="a-gx" style="width:${w.toFixed(1)}%"></u></span><b>${m != null ? fmt(m, 1) + '%' : '—'}</b></div></div>`);
     }).join('');
-    return panel('segments', 'SYS-07 / SEGMENT', '稼ぎ頭マップ', '', `<div class="pb"><div class="sg-top">${donut}<div class="t"><span class="code">PROFIT</span>円＝事業別の利益<br>バー＝利益率（0〜${maxM}%）</div></div><div class="sg-rows">${rowsH}</div></div>`);
+    return panel('segments', 'SYS-07 / SEGMENT', '稼ぎ頭マップ', '', `<div class="pb"><div class="sg-top">${donut}<div class="t"><span class="code">PROFIT</span>円＝事業別の利益<br>${noMargin ? 'バー＝利益の大きさ' : `バー＝利益率（0〜${maxM}%）`}</div></div><div class="sg-rows">${rowsH}</div></div>`);
   }
   function scenPanel(a, dec) {
     const close = a.price && isNum(a.price.close) ? a.price.close : null;
-    const pm = `<span class="jp">起点 <span class="u-wide">現在値 </span><span class="mono">${fmt(close, dec)}</span>円</span>`;
+    const pm = `<span class="jp">起点 <span class="u-wide">現在値 </span><span class="mono">${K.fmtP(close)}</span>円</span>`;
     if (secAbsent(a, 'scenarios')) return panel('scenarios', 'SYS-06 / SCENARIO', '3つのシナリオ', pm, `<div class="pb">${noData('scenarios', a)}</div>`);
     const list = arr(a.sections.scenarios);
     const order = [['bull', 'SCN-A', 'bull'], ['base', 'SCN-B', 'mid'], ['bear', 'SCN-C', 'bear']];
@@ -481,7 +488,8 @@
     const list = arr(a.sections.margin).filter((x) => x && typeof x === 'object');
     const n = list.length, lastI = n - 1;
     const hl = (i) => (i === lastI ? ' style="color:var(--cy2)"' : '');
-    const row = (lab, key, d) => `<tr><td>${lab}</td>${list.map((r, i) => `<td${hl(i)}>${fmt(r[key], d)}</td>`).join('')}</tr>`;
+    const shares = (v) => (isNum(v) && Math.abs(v) >= 10000 ? fmt(v, 0) : fmt(v, 1)); // 1万千株以上は小数を落とす
+    const row = (lab, key, d) => `<tr><td>${lab}</td>${list.map((r, i) => `<td${hl(i)}>${d === 2 ? fmt(r[key], 2) : shares(r[key])}</td>`).join('')}</tr>`;
     const table = `<table class="tbl sm"><thead><tr><th>日付</th>${list.map((r, i) => `<th${hl(i)}>${esc(mmdd(r.date))}</th>`).join('')}</tr></thead><tbody>${row('売り残', 'sell', 1)}${row('買い残', 'buy', 1)}${row('倍率', 'ratio', 2)}</tbody></table>`;
     return panel('margin', 'SYS-05 / MARGIN', '需給（信用残）', pm,
       `<div class="pb"><div class="legend"><span><i class="sw" style="background:rgba(62,230,255,.55)"></i>買い残</span><span><i class="sw" style="background:repeating-linear-gradient(135deg,#9db3c2 0 2px,transparent 2px 4px)"></i>売り残</span><span><i class="sw l25"></i>倍率</span>${n < 5 ? `<span class="few">取得できた${n}週のみ</span>` : ''}<span class="u-narrow">単位：千株</span></div><div class="host" id="supply" data-chart="supply"></div>${table}</div>`);
@@ -591,10 +599,16 @@
     });
     $$('.mt').forEach((h) => {
       const W = h.clientWidth, Hs = h.clientHeight - 15;
-      $$('.ml', h).forEach((sp) => {
+      const ls = $$('.ml', h);
+      ls.forEach((sp) => {
         const x = K.meterLabelX(W, Hs, sp.dataset.side === 'r' ? 1 : 0), w = sp.offsetWidth;
         sp.style.left = Math.max(w / 2, Math.min(W - w / 2, x)) + 'px';
       });
+      // 両端ラベルが重なりそうなら枠の左右端へ寄せる
+      if (ls.length === 2) {
+        const [l, r] = ls, lw = l.offsetWidth, rw = r.offsetWidth;
+        if (parseFloat(l.style.left) + lw / 2 + 6 > parseFloat(r.style.left) - rw / 2) { l.style.left = lw / 2 + 'px'; r.style.left = (W - rw / 2) + 'px'; }
+      }
     });
     if (document.body.classList.contains('anim')) setLens();
   }
@@ -616,15 +630,15 @@
       g.animate([{ transform: `rotate(${-180 * v}deg)` }, { transform: 'rotate(0deg)' }], { duration: 1300, delay: 300, easing: 'cubic-bezier(.3,.7,.2,1)', fill: 'backwards' });
     });
     $$('[data-count]').forEach((e) => {
-      const end = +e.dataset.count, d = +e.dataset.dec || 0;
+      const end = +e.dataset.count;
       if (!e.dataset.count || !isNum(end)) return;
       const t0 = performance.now(), dur = 1100, start = end * 0.94;
-      const step = (t) => { const k = Math.min(1, (t - t0) / dur), ev = 1 - Math.pow(1 - k, 3); e.textContent = fmt(start + (end - start) * ev, d); if (k < 1) requestAnimationFrame(step); };
+      const step = (t) => { const k = Math.min(1, (t - t0) / dur), ev = 1 - Math.pow(1 - k, 3); e.textContent = K.fmtP(start + (end - start) * ev); if (k < 1) requestAnimationFrame(step); };
       requestAnimationFrame(step);
-      setTimeout(() => { e.textContent = fmt(end, d); }, dur + 150);
+      setTimeout(() => { e.textContent = K.fmtP(end); }, dur + 150);
     });
     // 最終状態は既定のCSS。止まった環境でも必ず外す（アニメは加点要素）
-    S.animTimer = setTimeout(() => { document.body.classList.remove('anim'); $$('[data-count]').forEach((e) => { const v = +e.dataset.count; if (e.dataset.count && isNum(v)) e.textContent = fmt(v, +e.dataset.dec || 0); }); }, 2600);
+    S.animTimer = setTimeout(() => { document.body.classList.remove('anim'); $$('[data-count]').forEach((e) => { const v = +e.dataset.count; if (e.dataset.count && isNum(v)) e.textContent = K.fmtP(v); }); }, 2600);
   }
 
   /* =====================================================================
