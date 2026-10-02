@@ -1,0 +1,1512 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KABU LAB — 立体ホログラム</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&family=Orbitron:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#03060b;
+  --cy:#3ee6ff; --cy2:#a6f3ff; --cyd:rgba(62,230,255,.16); --cyl:rgba(62,230,255,.32);
+  --amber:#ffb340; --mag:#ff5ca3;
+  --tx:#d8e7ef; --tx2:#9db3c2; --tx3:#7f97a8;
+  --line:rgba(62,230,255,.14);
+  --glow:0 0 6px rgba(62,230,255,.65),0 0 18px rgba(62,230,255,.25);
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  --orb:"Orbitron","JetBrains Mono",sans-serif;
+  --jp:"Noto Sans JP",system-ui,sans-serif;
+  /* 押し出し（奥行きは左上へ抜ける約束） */
+  --e1:#2aa6c3; --e2:#1b7a90; --e3:#125668; --e4:#0c3d4a;
+  --x3:-1px -1px 0 var(--e1),-2px -2px 0 var(--e2),-3px -3px 0 var(--e3);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+html{background:var(--bg)}
+body{background:var(--bg); color:var(--tx); font:14px/1.6 var(--jp); overflow-x:hidden; -webkit-font-smoothing:antialiased}
+.mono,.num{font-family:var(--mono); font-variant-numeric:tabular-nums; letter-spacing:0}
+.up{color:var(--cy)} .dn{color:var(--mag)}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+
+/* ===== 空間（背景） ===== */
+#space{position:fixed; left:0; top:0; width:100vw; height:100vh; z-index:0; pointer-events:none; display:block}
+.fx-noise{position:fixed; inset:0; z-index:1; pointer-events:none; opacity:.06;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .55  0 0 0 0 .9  0 0 0 0 1  0 0 0 1.1 -.2'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
+.fx-vig{position:fixed; inset:0; z-index:1; pointer-events:none; background:radial-gradient(ellipse 85% 75% at 56% 48%,transparent 52%,rgba(0,0,0,.6))}
+.fx-sweep{position:fixed; left:0; right:0; top:0; height:2px; z-index:60; pointer-events:none; opacity:0;
+  background:linear-gradient(90deg,transparent,rgba(62,230,255,.9) 30%,#e8fdff 50%,rgba(62,230,255,.9) 70%,transparent);
+  box-shadow:0 0 18px 2px rgba(62,230,255,.55),0 -40px 60px rgba(62,230,255,.08)}
+.boot .fx-sweep{animation:sweep 1.25s .05s cubic-bezier(.55,0,.35,1) both}
+@keyframes sweep{0%{opacity:1; transform:translateY(0)} 88%{opacity:.9} 100%{opacity:0; transform:translateY(100vh)}}
+
+/* ===== shell ===== */
+.app{position:relative; z-index:2; display:grid; grid-template-columns:84px minmax(0,1fr); min-height:100vh}
+.app::before{content:""; position:absolute; left:0; top:0; bottom:0; width:80px; z-index:0; pointer-events:none;
+  background:linear-gradient(90deg,rgba(5,11,18,.96),rgba(9,22,33,.93)); box-shadow:inset -1px 0 0 rgba(62,230,255,.35)}
+.rail{position:sticky; top:0; height:100vh; z-index:30; perspective:620px; perspective-origin:760px 50%}
+.rail-w{position:absolute; top:0; bottom:0; left:0; width:78px; transform-origin:0 50%; transform:rotateY(11deg); transform-style:preserve-3d;
+  background:linear-gradient(90deg,rgba(5,11,18,.96),rgba(9,22,33,.93));
+  box-shadow:inset -1px 0 0 rgba(62,230,255,.5),inset -24px 0 34px -26px rgba(62,230,255,.45);
+  display:flex; flex-direction:column; align-items:center; gap:6px; padding:14px 0}
+.rail-w::after{content:""; position:absolute; top:0; bottom:0; left:100%; width:12px; transform-origin:0 50%; transform:rotateY(90deg);
+  background:linear-gradient(90deg,rgba(62,230,255,.45),rgba(10,40,52,.95) 40%,rgba(4,12,18,1)),repeating-linear-gradient(180deg,rgba(62,230,255,.25) 0 1px,transparent 1px 26px)}
+.logo{width:46px; height:52px; display:grid; place-items:center; margin-bottom:14px; position:relative}
+.logo svg{position:absolute; inset:0}
+.logo b{font:800 14px/1 var(--orb); color:var(--cy); text-shadow:var(--glow); letter-spacing:.06em; position:relative}
+.rl{width:62px; padding:10px 0 8px; display:flex; flex-direction:column; align-items:center; gap:5px; position:relative; color:var(--tx2);
+  clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
+.rl svg{width:22px; height:22px}
+.rl span{font:500 12px/1 var(--mono); letter-spacing:.04em}
+.rl:hover{color:var(--tx); background:rgba(62,230,255,.06)}
+.rl.on{color:var(--cy); background:linear-gradient(90deg,rgba(62,230,255,.2),rgba(62,230,255,.05))}
+.rl.on::before{content:""; position:absolute; left:0; top:8px; bottom:8px; width:2px; background:var(--cy); box-shadow:var(--glow)}
+.rl.on span{text-shadow:var(--glow)}
+.rail .sep{width:30px; height:1px; background:var(--line); margin:8px 0}
+.rail .foot{margin-top:auto; font:500 12px/1.3 var(--mono); color:var(--tx3); text-align:center}
+.rail .foot i{display:block; width:7px; height:7px; margin:0 auto 6px; background:var(--cy); box-shadow:var(--glow); transform:rotate(45deg)}
+
+.main{min-width:0}
+.top{position:sticky; top:0; z-index:40; height:48px; display:flex; align-items:center; gap:18px; padding:0 28px;
+  background:linear-gradient(180deg,rgba(3,7,12,.94),rgba(4,9,15,.84)); border-bottom:1px solid var(--line)}
+.top::after{content:""; position:absolute; left:28px; right:28px; bottom:-1px; height:1px;
+  background:linear-gradient(90deg,var(--cy),rgba(62,230,255,.15) 30%,rgba(62,230,255,.15) 70%,var(--cy)); transform-origin:50% 50%}
+.boot .top::after{animation:growx 1.1s .2s cubic-bezier(.3,.7,.2,1) both}
+.crumb{font:500 12px/1 var(--mono); color:var(--tx2); display:flex; gap:10px; align-items:center; letter-spacing:.04em}
+.crumb b{color:var(--cy); font-family:var(--orb); font-weight:700; letter-spacing:.14em; text-shadow:var(--glow)}
+.crumb em{font-style:normal; color:var(--tx)}
+.top .right{margin-left:auto; display:flex; gap:20px; font:500 12px/1 var(--mono); color:var(--tx2)}
+.top .right b{color:var(--tx); font-weight:500}
+.top .right .k{color:var(--tx3); margin-right:6px}
+
+.wrap{max-width:1680px; margin:0 auto; padding:24px 30px 34px}
+.view{display:none} .view.on{display:block}
+
+/* ===== 浮遊パネル（実体の厚み） ===== */
+.grid{display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); gap:20px 18px}
+.s3{grid-column:span 3}.s4{grid-column:span 4}.s5{grid-column:span 5}.s6{grid-column:span 6}.s7{grid-column:span 7}.s8{grid-column:span 8}.s9{grid-column:span 9}.s12{grid-column:span 12}
+.panel{--c:14px; --D:22px; position:relative; min-width:0; perspective:1200px}
+.panel::before{ /* 下方への光の投影 */
+  content:""; position:absolute; left:6%; right:6%; bottom:-30px; height:46px; z-index:-1; pointer-events:none;
+  background:radial-gradient(ellipse 50% 60% at 50% 0%,rgba(62,230,255,.16),rgba(62,230,255,.04) 55%,transparent 75%)}
+.panel::after{ /* 多層の影 */
+  content:""; position:absolute; inset:10px 4px 0; z-index:-2; pointer-events:none;
+  box-shadow:0 26px 40px -6px rgba(0,0,0,.72),0 8px 14px rgba(0,0,0,.5)}
+.slab{position:relative; height:100%; transform-style:preserve-3d; transition:transform .5s cubic-bezier(.2,.7,.2,1)}
+.panel:hover>.slab{transform:translateZ(16px)}
+.fc{position:absolute; display:block; pointer-events:none; backface-visibility:hidden; -webkit-backface-visibility:hidden}
+.fc.fb,.fc.fd1{background:linear-gradient(180deg,rgba(120,236,255,.75),rgba(30,120,148,.85) 12%,rgba(10,46,60,.96) 55%,rgba(3,12,18,.98)),
+  repeating-linear-gradient(90deg,rgba(62,230,255,.22) 0 1px,transparent 1px 28px)}
+.fc.ft,.fc.fd2{background:linear-gradient(0deg,rgba(120,236,255,.7),rgba(30,120,148,.8) 12%,rgba(10,46,60,.95) 55%,rgba(3,12,18,.98))}
+.fc.fb{left:0; right:var(--c); top:100%; height:var(--D); transform-origin:50% 0; transform:rotateX(-90deg)}
+.fc.ft{left:var(--c); right:0; bottom:100%; height:var(--D); transform-origin:50% 100%; transform:rotateX(90deg)}
+.fc.fr{top:0; bottom:var(--c); left:100%; width:var(--D); transform-origin:0 50%; transform:rotateY(90deg);
+  background:linear-gradient(90deg,rgba(120,236,255,.7),rgba(30,120,148,.8) 12%,rgba(10,46,60,.95) 55%,rgba(3,12,18,.98)),repeating-linear-gradient(180deg,rgba(62,230,255,.2) 0 1px,transparent 1px 28px)}
+.fc.fl{top:var(--c); bottom:0; right:100%; width:var(--D); transform-origin:100% 50%; transform:rotateY(-90deg);
+  background:linear-gradient(270deg,rgba(120,236,255,.7),rgba(30,120,148,.8) 12%,rgba(10,46,60,.95) 55%,rgba(3,12,18,.98)),repeating-linear-gradient(180deg,rgba(62,230,255,.2) 0 1px,transparent 1px 28px)}
+.fc.fd1{left:calc(100% - var(--c)); top:100%; width:calc(var(--c) * 1.4142); height:var(--D); transform-origin:0 0; transform:rotateZ(-45deg) rotateX(-90deg)}
+.fc.fd2{left:0; top:calc(var(--c) - var(--D)); width:calc(var(--c) * 1.4142); height:var(--D); transform-origin:0 100%; transform:rotateZ(-45deg) rotateX(90deg)}
+.face{position:relative; height:100%; padding:1px;
+  background:linear-gradient(160deg,rgba(150,240,255,.85),rgba(62,230,255,.22) 26%,rgba(62,230,255,.10) 62%,rgba(62,230,255,.46));
+  clip-path:polygon(var(--c) 0,100% 0,100% calc(100% - var(--c)),calc(100% - var(--c)) 100%,0 100%,0 var(--c))}
+.face>.pi{position:relative; z-index:1; height:100%; display:flex; flex-direction:column;
+  background:
+    linear-gradient(118deg,rgba(170,245,255,.075),rgba(170,245,255,.018) 24%,transparent 36%),
+    linear-gradient(180deg,rgba(12,28,41,.85),rgba(6,13,21,.84) 60%,rgba(5,11,18,.88));
+  clip-path:polygon(calc(var(--c) - .6px) 0,100% 0,100% calc(100% - var(--c) + .6px),calc(100% - var(--c) + .6px) 100%,0 100%,0 calc(var(--c) - .6px))}
+.face>.pi::before{ /* ガラス上端の屈折ハイライト */
+  content:""; position:absolute; left:var(--c); right:0; top:0; height:1px; z-index:3; pointer-events:none;
+  background:linear-gradient(90deg,rgba(230,253,255,.9),rgba(166,243,255,.25) 40%,transparent 80%)}
+.face::after{content:""; position:absolute; inset:0; z-index:2; pointer-events:none;
+  background:
+   linear-gradient(var(--cy),var(--cy)) right 0 top 0/18px 2px no-repeat,
+   linear-gradient(var(--cy),var(--cy)) right 0 top 0/2px 18px no-repeat,
+   linear-gradient(var(--cy),var(--cy)) left 0 bottom 0/18px 2px no-repeat,
+   linear-gradient(var(--cy),var(--cy)) left 0 bottom 0/2px 18px no-repeat}
+.ph{display:flex; align-items:center; gap:12px; padding:11px 16px 10px 20px; border-bottom:1px solid var(--line); position:relative}
+.ph::after{content:""; position:absolute; left:20px; bottom:-1px; width:56px; height:1px; background:var(--cy); box-shadow:var(--glow)}
+.code{font:700 12px/1 var(--orb); letter-spacing:.16em; color:var(--cy); white-space:nowrap;
+  text-shadow:-.6px 0 rgba(255,70,130,.55),.6px 0 rgba(70,225,255,.7),0 0 8px rgba(62,230,255,.55)}
+.ph h2{margin:0; font:700 15px/1.2 var(--jp); color:var(--tx); white-space:nowrap}
+.ph .pm{margin-left:auto; font:500 12px/1.2 var(--mono); color:var(--tx2); display:flex; gap:14px; align-items:center; flex-wrap:wrap; justify-content:flex-end}
+.pb{padding:14px 18px 16px; flex:1; min-height:0; position:relative}
+.cap{font:500 12px/1.4 var(--mono); color:var(--tx3); letter-spacing:.04em}
+
+/* ホログラム質感（見出し・主要数値のみ） */
+.holo{color:#effcff; text-shadow:-1px 0 rgba(255,64,128,.5),1px 0 rgba(64,220,255,.65),0 0 10px rgba(62,230,255,.5),0 0 26px rgba(62,230,255,.22)}
+.holo-ex{color:#8ff2ff; text-shadow:-1px -1px 0 #2295ad,-2px -2px 0 #187489,-3px -3px 0 #115667,-4px -4px 0 #0b3c48,-5px -5px 0 #072831,
+  -1.5px 0 1px rgba(255,64,128,.35),0 0 18px rgba(62,230,255,.45),-8px -8px 18px rgba(0,0,0,.6)}
+.scanl{position:relative}
+.scanl::after{content:""; position:absolute; inset:-2px -4px; pointer-events:none;
+  background:repeating-linear-gradient(180deg,rgba(2,7,12,.34) 0 1px,transparent 1px 3px)}
+
+/* 押し出しブロック（共通） */
+.x3{box-shadow:var(--x3),0 0 10px rgba(62,230,255,.35)}
+.x3a{--e1:#c98a2c; --e2:#9a6720; --e3:#6c4715; box-shadow:var(--x3),0 0 8px rgba(255,179,64,.35)}
+
+/* ===== stock header ===== */
+.panel.hd{--D:30px; --c:18px; margin-bottom:22px}
+.sh{position:relative; display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:stretch; height:100%}
+.sh::before{content:""; position:absolute; left:0; right:0; bottom:0; height:6px; pointer-events:none;
+  background:repeating-linear-gradient(90deg,rgba(62,230,255,.45) 0 1px,transparent 1px 8px); opacity:.5;
+  -webkit-mask:linear-gradient(90deg,#000,transparent 70%); mask:linear-gradient(90deg,#000,transparent 70%)}
+.sh-id{display:flex; align-items:center; gap:24px; padding:16px 26px}
+.ticker{font:800 36px/1 var(--orb); letter-spacing:.06em; padding:8px 18px 8px 4px; border-right:1px solid var(--cyl)}
+.sh-id h1{margin:0 0 6px; font:700 26px/1.1 var(--jp); letter-spacing:.04em}
+.tags{display:flex; gap:6px; flex-wrap:wrap}
+.tags span{font-size:12px; color:var(--tx2); border:1px solid rgba(157,179,194,.35); padding:1px 8px 2px; line-height:1.5; background:rgba(5,12,18,.5)}
+.sh-price{display:flex; align-items:center; gap:18px; padding:12px 30px; border-left:1px solid var(--line); position:relative}
+.sh-price .lbl{font:500 12px/1 var(--mono); color:var(--tx2); letter-spacing:.06em}
+.pxw{position:relative; margin:4px 0 2px}
+.pxw::before{content:""; position:absolute; left:-14px; right:-14px; bottom:-6px; height:64px; pointer-events:none;
+  background:radial-gradient(ellipse 55% 100% at 50% 100%,rgba(62,230,255,.26),rgba(62,230,255,.05) 60%,transparent 75%)}
+.pxw::after{content:""; position:absolute; left:6%; right:6%; bottom:-6px; height:2px; pointer-events:none;
+  background:linear-gradient(90deg,transparent,var(--cy) 30%,#e6fdff 50%,var(--cy) 70%,transparent); box-shadow:0 0 10px rgba(62,230,255,.8)}
+.px{position:relative; font:700 46px/1.05 var(--mono); letter-spacing:-.01em}
+.px small{font:500 16px var(--jp); color:var(--tx2); margin-left:4px; text-shadow:none}
+.chg{font:500 13px/1.2 var(--mono); margin-top:10px}
+.sh-meta{display:grid; align-content:center; gap:10px; padding:12px 30px; border-left:1px solid var(--line); min-width:250px}
+.kv{display:flex; justify-content:space-between; gap:18px; align-items:baseline}
+.kv span{font-size:12px; color:var(--tx2)}
+.kv b{font:500 15px/1 var(--mono); color:var(--tx)}
+/* ジャイロ（立体リング） */
+.gyro{position:relative; width:66px; height:66px; flex:none; perspective:240px; transform-style:preserve-3d}
+.gyro i{position:absolute; inset:0; border-radius:50%; border:1.5px dashed rgba(62,230,255,.75)}
+.gyro .g1{transform:rotateX(72deg); animation:gy1 22s linear infinite}
+.gyro .g2{inset:7px; border:1.5px solid; border-color:rgba(62,230,255,.6) transparent rgba(62,230,255,.25); transform:rotateY(66deg); animation:gy2 30s linear infinite}
+.gyro .g3{inset:15px; border:1px solid rgba(166,243,255,.55); transform:rotateX(28deg) rotateY(-36deg)}
+.gyro b{position:absolute; left:50%; top:50%; width:7px; height:7px; margin:-3.5px; border-radius:50%; background:#c9f8ff; box-shadow:0 0 6px #3ee6ff,0 0 16px rgba(62,230,255,.7)}
+@keyframes gy1{to{transform:rotateX(72deg) rotate(360deg)}}
+@keyframes gy2{to{transform:rotateY(66deg) rotate(-360deg)}}
+
+/* ===== 型タブ（押し出しキー） ===== */
+.tabs{display:flex; align-items:flex-end; gap:10px; margin:0 0 22px; padding:4px 0 0 6px; position:relative}
+.tabs::after{content:""; position:absolute; left:0; right:0; bottom:-7px; height:1px; background:linear-gradient(90deg,var(--cyl),var(--line) 40%,transparent)}
+.tab{position:relative; display:flex; align-items:center; gap:8px; padding:8px 18px 8px 14px; color:var(--tx2); font-size:14px;
+  background:linear-gradient(180deg,rgba(14,31,45,.95),rgba(7,15,23,.95)); border:1px solid rgba(62,230,255,.18);
+  box-shadow:-1px -1px 0 rgba(40,110,130,.7),-2px -2px 0 rgba(24,72,88,.8),-3px -3px 0 rgba(14,46,58,.85);
+  transition:transform .25s, box-shadow .25s, color .2s}
+.tab i{font:500 12px/1 var(--mono); font-style:normal; color:var(--tx3)}
+.tab:hover{color:var(--tx); transform:translate(1px,1px); box-shadow:-1px -1px 0 rgba(40,110,130,.8),-2px -2px 0 rgba(24,72,88,.85),-3px -3px 0 rgba(14,46,58,.9),-4px -4px 0 rgba(10,34,44,.9)}
+.tab.on{color:#effcff; font-weight:700; transform:translate(3px,3px); border-color:rgba(62,230,255,.75);
+  background:linear-gradient(180deg,rgba(62,230,255,.28),rgba(62,230,255,.08));
+  box-shadow:-1px -1px 0 #3fbad6,-2px -2px 0 #2a92ab,-3px -3px 0 #1e7186,-4px -4px 0 #165565,-5px -5px 0 #0f3d49,-6px -6px 0 #0b2e37,0 10px 22px -6px rgba(62,230,255,.55)}
+.tab.on i{color:var(--cy2)}
+.tab.on::after{content:""; position:absolute; left:8%; right:8%; bottom:-14px; height:10px; pointer-events:none;
+  background:radial-gradient(ellipse 50% 100% at 50% 0,rgba(62,230,255,.5),transparent 70%)}
+.tabs .note{margin-left:auto; padding-bottom:9px; font:500 12px/1 var(--mono); color:var(--tx2)}
+.tabs .note b{color:var(--cy); font-weight:500}
+
+/* ===== chart ===== */
+.legend{display:flex; flex-wrap:wrap; gap:6px 16px; font-size:12px; color:var(--tx2); margin-bottom:4px}
+.legend span{display:inline-flex; align-items:center; gap:6px; white-space:nowrap}
+.legend b{font:500 12px var(--mono); color:var(--tx)}
+.sw{display:inline-block; width:10px; height:12px}
+.sw.cu{border:1px solid var(--cy); background:rgba(62,230,255,.32); box-shadow:-2px -2px 0 rgba(166,243,255,.6)}
+.sw.cd{background:var(--mag); box-shadow:-2px -2px 0 #ffa9cf}
+.sw.l25{width:18px; height:3px; border-radius:2px; background:#f4fbff; box-shadow:0 0 6px rgba(244,251,255,.7)}
+.sw.l75{width:18px; height:3px; border-radius:2px; background:var(--amber); box-shadow:0 0 6px rgba(255,179,64,.7)}
+.sw.bd{width:18px; height:8px; border-top:1px dashed var(--tx2); border-bottom:1px dashed var(--tx2); background:rgba(216,231,239,.1); box-shadow:-3px -3px 0 rgba(216,231,239,.12)}
+#chart{width:100%; min-height:470px}
+#chart svg{display:block}
+.st-t{font:500 12px var(--mono); fill:var(--tx2)}
+.st-j{font:500 12px var(--jp); fill:var(--tx2)}
+.dev{display:grid; grid-template-columns:repeat(4,1fr); gap:0; margin-top:6px; border-top:1px solid var(--line)}
+.dv{padding:10px 14px 0; border-left:1px solid var(--line)}
+.dv:first-child{border-left:0; padding-left:4px}
+.dvh{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:9px}
+.dvh span{font-size:12px; color:var(--tx2)}
+.dvh b{font:700 16px var(--mono); color:var(--cy)}
+.dvt{position:relative; height:8px; margin-left:3px;
+  background:linear-gradient(90deg,rgba(255,179,64,.26) 0 6%,rgba(62,230,255,.08) 6% 94%,rgba(255,179,64,.26) 94%);
+  box-shadow:-1px -1px 0 rgba(62,230,255,.16),-2px -2px 0 rgba(62,230,255,.1),-3px -3px 0 rgba(62,230,255,.06)}
+.dvt::before{content:""; position:absolute; left:50%; top:-5px; bottom:-3px; width:1px; background:var(--tx2)}
+.dvt i{position:absolute; left:50%; top:0; bottom:0; width:calc(var(--v) * 4.7%); background:var(--cy); transform-origin:left;
+  box-shadow:-1px -1px 0 #9ff0ff,-2px -2px 0 #4cc8e0,-3px -3px 0 #2b93aa,0 0 10px rgba(62,230,255,.7)}
+.dvs{display:flex; justify-content:space-between; font:500 12px/1 var(--mono); color:var(--tx3); margin-top:6px}
+
+/* ===== 4点診断（立体リング） ===== */
+.diag{display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; height:100%}
+.dg{padding:14px 14px 14px; display:flex; flex-direction:column; border-color:var(--line); border-style:solid; border-width:0; min-width:0}
+.dg:nth-child(1){border-right-width:1px; border-bottom-width:1px}
+.dg:nth-child(2){border-bottom-width:1px}
+.dg:nth-child(3){border-right-width:1px}
+.dgh{display:flex; align-items:center; gap:8px; font-weight:700; font-size:14px}
+.dgh svg{width:20px; height:20px; color:var(--cy); flex:none}
+.dgh i{font:500 12px var(--mono); font-style:normal; color:var(--tx3); margin-left:auto}
+.holo-g{position:relative; width:100%; max-width:270px; margin:12px auto 0; aspect-ratio:240/150}
+.holo-g svg.disc{position:absolute; inset:0; width:100%; height:100%; overflow:visible}
+.ring3d{position:absolute; left:50%; top:61.33%; width:91.67%; aspect-ratio:1; pointer-events:none;
+  transform:translate(-50%,-50%) rotateX(61.31deg) rotate(0deg); animation:ringspin 40s linear infinite}
+.ring3d.r2{width:30%; animation-duration:24s; animation-direction:reverse}
+@keyframes ringspin{to{transform:translate(-50%,-50%) rotateX(61.31deg) rotate(360deg)}}
+.verdict{position:absolute; left:0; right:0; top:66.7%; transform:translateY(-50%); text-align:center; font:700 20px/1.2 var(--jp); white-space:nowrap; pointer-events:none}
+.lr{display:flex; justify-content:space-between; max-width:270px; width:100%; margin:2px auto 0; font-size:12px; color:var(--tx2); line-height:1.3}
+.lr span:first-child::before{content:"◀ "; color:var(--tx3)}
+.lr span:last-child::after{content:" ▶"; color:var(--tx3)}
+.dg p{margin:8px 0 0; font-size:13px; line-height:1.6; color:var(--tx2); text-align:center}
+.dg p .mono{color:var(--tx)}
+
+/* ===== tables ===== */
+table.t{width:100%; border-collapse:collapse; font-size:12px}
+.t th{font:500 12px var(--jp); color:var(--tx2); text-align:right; padding:5px 6px; border-bottom:1px solid var(--line); white-space:nowrap}
+.t th:first-child,.t td:first-child{text-align:left; padding-left:0}
+.t td{font:500 13px var(--mono); text-align:right; padding:5px 6px; border-bottom:1px solid rgba(62,230,255,.07); white-space:nowrap; color:var(--tx)}
+.t td:first-child{font-family:var(--jp); color:var(--tx2); font-size:12px}
+.t tr:last-child td{border-bottom:0}
+.t .fc2{color:var(--cy2)}
+.t td.jp{font:500 12px var(--jp); color:var(--tx)}
+.bar-c{display:inline-flex; align-items:center; gap:9px; justify-content:flex-end}
+.bar-c u{display:inline-block; height:6px; background:rgba(62,230,255,.5); border-right:2px solid var(--cy); text-decoration:none;
+  box-shadow:-1px -1px 0 rgba(120,220,240,.55),-2px -2px 0 rgba(40,130,152,.6)}
+
+/* ===== valuation gauges ===== */
+.gauges{display:flex; flex-direction:column; gap:20px; height:100%; justify-content:center}
+.gh{display:flex; align-items:baseline; gap:10px; margin-bottom:2px}
+.gh .nm{font:700 15px var(--mono); color:var(--tx); letter-spacing:.06em}
+.gh .vl{font:700 25px/1 var(--mono)}
+.gh .vl small{font:500 13px var(--jp); color:var(--tx2); text-shadow:none; margin-left:2px}
+.gh .ref{margin-left:auto; font-size:12px; color:var(--tx2)}
+svg.g3{display:block; width:100%; height:74px; overflow:visible}
+.gend{display:flex; justify-content:space-between; font-size:12px; color:var(--tx3); margin-top:-4px}
+
+.svgbox{width:100%}
+.svgbox svg{display:block}
+
+/* ===== scenario ===== */
+.scn{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.04fr); gap:16px; height:100%}
+.scards{display:flex; flex-direction:column; gap:10px}
+.sc{position:relative; padding:9px 12px 10px 16px; border:1px solid var(--line); margin-left:5px;
+  background:linear-gradient(100deg,color-mix(in srgb,var(--k) 12%,transparent),rgba(62,230,255,.02) 60%);
+  box-shadow:-1px -1px 0 rgba(62,230,255,.14),-2px -2px 0 rgba(62,230,255,.09),-3px -3px 0 rgba(62,230,255,.06),-4px -4px 0 rgba(62,230,255,.04)}
+.sc::before{content:""; position:absolute; left:-1px; top:-1px; bottom:-1px; width:3px; background:var(--k); box-shadow:0 0 12px var(--k)}
+.sc.bull{--k:#3ee6ff} .sc.mid{--k:#cfdde6} .sc.bear{--k:#ff5ca3}
+.sch{display:flex; align-items:baseline; gap:10px; margin-bottom:3px}
+.sch .scode{font:700 12px/1 var(--orb); letter-spacing:.12em; color:var(--k); text-shadow:0 0 8px var(--k)}
+.sch b{font-size:15px}
+.sch .tgt{margin-left:auto; font-size:12px; color:var(--tx2); white-space:nowrap}
+.sch .tgt em{font:700 14px var(--mono); font-style:normal; color:var(--tx)}
+.sc p{margin:0; font-size:13px; line-height:1.55; color:var(--tx)}
+.inv{display:flex; gap:8px; align-items:baseline; margin-top:5px; font-size:12px; color:var(--tx2); line-height:1.5}
+.inv span{flex:none; font:700 12px/1.5 var(--jp); color:var(--amber); border:1px solid rgba(255,179,64,.5); padding:0 6px; background:rgba(255,179,64,.07)}
+
+/* ===== segments ===== */
+.seg{display:grid; grid-template-columns:200px minmax(0,1fr); gap:14px; align-items:center; height:100%}
+.donut{position:relative; width:200px; height:128px}
+.donut svg{display:block; overflow:visible}
+.donut .c{position:absolute; left:0; right:0; top:36px; text-align:center; pointer-events:none}
+.donut .c b{display:block; font:700 12px/1.2 var(--orb); color:var(--cy); letter-spacing:.14em; text-shadow:var(--glow)}
+.donut .c span{font-size:12px; color:var(--tx)}
+.srow{padding:7px 0; border-bottom:1px solid rgba(62,230,255,.07)}
+.srow:last-child{border-bottom:0}
+.srh{display:flex; align-items:center; gap:8px; font-size:13px}
+.srh i{width:10px; height:10px; flex:none; background:var(--k); box-shadow:-2px -2px 0 color-mix(in srgb,var(--k) 55%,#000)}
+.srh .pf{margin-left:auto; font:700 14px var(--mono); color:var(--tx); white-space:nowrap}
+.srh .pf small{font:500 12px var(--jp); color:var(--tx2); margin-left:1px}
+.yoy{font:500 12px var(--mono); color:var(--cy); border:1px solid var(--cyl); padding:0 5px; margin-left:6px; white-space:nowrap}
+.mbar{display:flex; align-items:center; gap:10px; margin-top:6px}
+.mbar .tr{flex:1; height:6px; background:rgba(62,230,255,.07); position:relative; margin-left:3px; box-shadow:-2px -2px 0 rgba(62,230,255,.05)}
+.mbar .tr u{position:absolute; left:0; top:0; bottom:0; width:calc(var(--m) / 20 * 100%); background:var(--k); text-decoration:none; transform-origin:left;
+  box-shadow:-1px -1px 0 color-mix(in srgb,var(--k) 80%,#fff),-2px -2px 0 color-mix(in srgb,var(--k) 60%,#000),-3px -3px 0 color-mix(in srgb,var(--k) 40%,#000)}
+.mbar b{font:500 12px var(--mono); color:var(--tx2); width:92px; text-align:right}
+.mbar b em{font-style:normal; color:var(--tx)}
+
+/* ===== checklist（立体タイル） ===== */
+.ck-sum{display:flex; align-items:center; gap:18px; margin-bottom:14px; padding-left:5px}
+.ck-bar{display:flex; gap:4px; flex:1}
+.ck-bar i{flex:1; height:10px; border:1px solid rgba(62,230,255,.3); box-shadow:inset 1px 1px 0 rgba(0,0,0,.5)}
+.ck-bar i.d{background:var(--cy); border-color:var(--cy); transform:translate(2px,2px);
+  box-shadow:-1px -1px 0 #a6f3ff,-2px -2px 0 #2b9bb5,-3px -3px 0 #1a6c80,0 0 10px rgba(62,230,255,.55)}
+.ck-bar i.p{background:repeating-linear-gradient(135deg,rgba(62,230,255,.7) 0 3px,transparent 3px 6px); transform:translate(1px,1px);
+  box-shadow:-1px -1px 0 rgba(62,230,255,.55),-2px -2px 0 rgba(30,110,130,.6)}
+.ck-cnt{display:flex; gap:14px; font-size:12px; color:var(--tx2); white-space:nowrap}
+.ck-cnt b{font:700 18px var(--mono); color:var(--tx); margin-left:5px}
+.ck-cnt .d b{color:#effcff; text-shadow:var(--glow)}
+.ckg{display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:12px 12px; padding:6px 4px 4px 7px}
+.ck{position:relative; min-height:110px; padding:9px 10px 9px; display:flex; flex-direction:column; border:1px solid var(--line); background:rgba(3,8,13,.55);
+  box-shadow:inset 3px 3px 0 rgba(0,0,0,.45),inset 0 0 14px rgba(0,0,0,.35); transition:transform .25s}
+.ck .n{display:flex; justify-content:space-between; align-items:center; font:500 12px/1 var(--mono); color:var(--tx3)}
+.ck .n svg{width:20px; height:20px}
+.ck p{margin:7px 0 0; font-size:13px; line-height:1.45; color:var(--tx)}
+.ck .s{margin-top:auto; padding-top:6px; font:700 12px/1 var(--jp); color:var(--tx3)}
+.ck.d{transform:translate(4px,4px); border-color:rgba(62,230,255,.7);
+  background:linear-gradient(160deg,rgba(62,230,255,.22),rgba(62,230,255,.06) 55%,rgba(10,30,42,.9));
+  box-shadow:-1px -1px 0 #4fd2ec,-2px -2px 0 #2e9db6,-3px -3px 0 #237f94,-4px -4px 0 #1a6172,-5px -5px 0 #124654,-6px -6px 0 #0c303a,0 14px 22px -10px rgba(62,230,255,.5)}
+.ck.d .s{color:var(--cy)}
+.ck.d .n{color:var(--cy2)}
+.ck.p{transform:translate(2px,2px); border-color:rgba(62,230,255,.4);
+  background:repeating-linear-gradient(135deg,rgba(62,230,255,.07) 0 6px,rgba(8,20,30,.8) 6px 12px);
+  box-shadow:-1px -1px 0 rgba(62,230,255,.5),-2px -2px 0 rgba(36,120,140,.6),-3px -3px 0 rgba(20,72,86,.7)}
+.ck.p .s{color:var(--cy2)}
+.ck.x{border-style:dashed; border-color:rgba(127,151,168,.35)}
+.ck.x p{color:var(--tx2)}
+.ck-lg{display:flex; gap:16px; margin-top:10px; font-size:12px; color:var(--tx2)}
+.ck-lg span{display:inline-flex; align-items:center; gap:6px}
+.ck-lg svg{width:16px; height:16px}
+
+/* ===== notes ===== */
+.terms{display:flex; flex-direction:column; gap:10px}
+.term{display:grid; grid-template-columns:92px minmax(0,1fr); gap:14px; align-items:start; padding-bottom:10px; border-bottom:1px solid rgba(62,230,255,.07)}
+.chip{font:700 13px/1 var(--jp); color:#effcff; border:1px solid rgba(62,230,255,.6); background:linear-gradient(170deg,rgba(62,230,255,.26),rgba(62,230,255,.08)); padding:7px 8px; text-align:center; margin:4px 0 0 4px;
+  box-shadow:-1px -1px 0 #3fbad6,-2px -2px 0 #24869d,-3px -3px 0 #186073,-4px -4px 0 #0f414e,0 8px 14px -8px rgba(62,230,255,.6)}
+.term p{margin:0; font-size:13px; line-height:1.6}
+.fx{display:flex; align-items:center; gap:6px; margin-top:6px; font:500 12px var(--mono); color:var(--tx2); flex-wrap:wrap}
+.fx b{color:var(--tx); font-weight:500; border:1px solid rgba(157,179,194,.3); padding:1px 6px; box-shadow:-2px -2px 0 rgba(157,179,194,.12)}
+.fx .eq{color:var(--cy); border-color:var(--cyl); box-shadow:-2px -2px 0 rgba(62,230,255,.25)}
+.insight{position:relative; margin-top:12px; padding:12px 16px 12px 20px; background:linear-gradient(90deg,rgba(62,230,255,.14),rgba(62,230,255,.02))}
+.insight::before{content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--cy); box-shadow:0 0 12px var(--cy),6px 0 22px rgba(62,230,255,.25)}
+.insight .code{display:block; margin-bottom:6px}
+.insight p{margin:0; font-size:14px; line-height:1.7; color:#effcff}
+
+/* ===== empty state ===== */
+.empty{display:none}
+.empty.on{display:block}
+.emp{display:grid; grid-template-columns:auto minmax(0,1fr); gap:54px; align-items:center; padding:56px 64px; min-height:520px}
+.emp-g{position:relative; width:230px; height:230px; perspective:600px; transform-style:preserve-3d}
+.emp-g i{position:absolute; inset:0; border-radius:50%; border:1.5px dashed rgba(62,230,255,.55)}
+.emp-g .e1{transform:rotateX(70deg); animation:gy1 30s linear infinite}
+.emp-g .e2{inset:30px; border-style:solid; border-color:rgba(62,230,255,.5) transparent; transform:rotateY(62deg); animation:gy2 40s linear infinite}
+.emp-g .e3{inset:70px; border:1px solid rgba(62,230,255,.35)}
+.emp-g b{position:absolute; left:0; right:0; top:50%; transform:translateY(-50%); text-align:center; font:700 13px var(--orb); letter-spacing:.2em; color:var(--tx2)}
+.emp h3{margin:10px 0 8px; font:700 26px/1.3 var(--jp)}
+.emp p{margin:0 0 18px; color:var(--tx2)}
+.emp .cmdline{display:inline-flex; gap:10px; align-items:center; padding:10px 16px; border:1px solid var(--cyl); font:500 14px var(--mono); color:var(--tx); box-shadow:var(--x3)}
+.emp .cmdline em{color:var(--cy); font-style:normal}
+
+/* ===== footer ===== */
+.foot-b{margin-top:22px; padding:12px 4px 0; border-top:1px solid var(--line); display:flex; justify-content:space-between; gap:20px; font-size:12px; color:var(--tx2)}
+.foot-b .warn{color:var(--tx)}
+.foot-b .warn::before{content:"!"; display:inline-grid; place-items:center; width:16px; height:16px; margin-right:8px; font:700 12px/1 var(--mono); color:#05080d; background:var(--amber); clip-path:polygon(50% 0,100% 100%,0 100%); padding-top:3px}
+
+/* ===== home ===== */
+.hero{display:grid; grid-template-columns:minmax(0,1fr) minmax(420px,600px); gap:40px; align-items:center; padding:6px 0 24px; margin-bottom:20px; position:relative}
+.hero::after{content:""; position:absolute; left:0; right:0; bottom:0; height:1px; background:linear-gradient(90deg,var(--cy),var(--line) 25%,transparent)}
+.brand{display:flex; align-items:center; gap:24px}
+.brand h1{margin:0; font:800 44px/1 var(--orb); letter-spacing:.16em; padding:6px 0 0 6px}
+.brand .sub{font-size:15px; color:var(--tx)}
+.brand .date{font:500 13px var(--mono); color:var(--tx2); margin-top:4px}
+.brand .div{width:1px; align-self:stretch; background:var(--cyl)}
+.panel.cmdp{--c:12px; --D:16px}
+.cmd{display:flex; align-items:center; gap:12px; height:52px; padding:0 8px 0 16px; cursor:text}
+.cmd .pr{font:700 14px var(--mono); color:var(--cy); text-shadow:var(--glow)}
+.cmd input{flex:1; min-width:0; background:none; border:0; outline:0; color:var(--tx); font:500 16px var(--mono)}
+.cmd input::placeholder{color:var(--tx3)}
+.cmd kbd{font:500 12px var(--mono); color:var(--tx2); border:1px solid rgba(157,179,194,.35); padding:5px 10px; box-shadow:-2px -2px 0 rgba(157,179,194,.2)}
+.cmd-cap{display:flex; justify-content:space-between; margin-top:10px; font:500 12px var(--mono); color:var(--tx3)}
+
+.mkt{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); height:100%}
+.mk{padding:14px 18px 14px; border-color:var(--line); border-style:solid; border-width:0 1px 1px 0}
+.mk:nth-child(3n){border-right-width:0}
+.mk:nth-child(n+4){border-bottom-width:0}
+.mk .h{display:flex; justify-content:space-between; font-size:13px; color:var(--tx2)}
+.mk .h i{font:500 12px var(--mono); font-style:normal; color:var(--tx3)}
+.mk .v{font:700 27px/1.25 var(--mono); margin-top:4px}
+.mk .v small{font:500 13px var(--jp); color:var(--tx2); margin-left:3px; text-shadow:none}
+.mk .d{font:500 13px var(--mono); margin-bottom:12px}
+.mk .d.n{color:var(--tx2); font-family:var(--jp); font-size:12px}
+.mviz{position:relative; height:26px}
+.zt{position:absolute; left:3px; right:0; top:7px; height:6px; background:rgba(62,230,255,.08); box-shadow:-2px -2px 0 rgba(62,230,255,.05)}
+.zt::before{content:""; position:absolute; left:50%; top:-6px; bottom:-4px; width:1px; background:var(--tx3)}
+.zt u{position:absolute; left:50%; top:0; bottom:0; width:calc(var(--p) / 4 * 50%); background:var(--cy); text-decoration:none; transform-origin:left}
+.zs{position:absolute; left:0; right:0; top:17px; display:flex; justify-content:space-between; font:500 12px/1 var(--mono); color:var(--tx3)}
+.lv{position:absolute; left:3px; right:0; top:7px; height:6px; background:rgba(62,230,255,.08); box-shadow:-2px -2px 0 rgba(62,230,255,.05)}
+.lv u{position:absolute; left:0; top:0; bottom:0; width:var(--p); background:linear-gradient(90deg,rgba(62,230,255,.35),var(--cy)); text-decoration:none; transform-origin:left}
+.cmpb{display:grid; grid-template-columns:52px minmax(0,1fr) 56px; gap:7px 8px; align-items:center; font:500 12px var(--mono); color:var(--tx2)}
+.cmpb .b{height:6px; background:rgba(62,230,255,.08); position:relative; margin-left:3px}
+.cmpb .b u{position:absolute; left:0; top:0; bottom:0; width:var(--p); text-decoration:none; background:var(--cy); transform-origin:left}
+.cmpb .b.avg u{background:var(--tx2); --e1:#c3d3dd; --e2:#7d929f; --e3:#52626c}
+.cmpb span{font-family:var(--jp)}
+.cmpb em{font-style:normal; text-align:right; color:var(--tx)}
+.dir{display:flex; align-items:center; gap:10px; font-size:12px; color:var(--tx2)}
+.dir .ax{flex:1; height:3px; background:linear-gradient(90deg,rgba(157,179,194,.3),var(--cy)); position:relative; box-shadow:-2px -2px 0 rgba(62,230,255,.12)}
+.dir .ax::after{content:""; position:absolute; right:-2px; top:-5px; border:6.5px solid transparent; border-left:10px solid var(--cy); border-right:0}
+.dir .ax i{position:absolute; left:72%; top:-8px; width:3px; height:18px; background:#effcff; box-shadow:-2px -2px 0 #3ec3dc,var(--glow)}
+.dir b{color:var(--cy); font-weight:700}
+
+.geo{display:flex; flex-direction:column; gap:0}
+.gr{display:grid; grid-template-columns:24px minmax(0,1fr) auto; gap:5px 10px; align-items:center; padding:8px 0; border-bottom:1px solid rgba(62,230,255,.07)}
+.gr:last-child{border-bottom:0}
+.gr .r{font:700 13px var(--orb); color:var(--tx3)}
+.gr .gn{font-size:13px; line-height:1.4}
+.gr .lvl{font:500 12px var(--mono); color:var(--tx2)}
+.gr .lvl b{color:var(--amber); font-weight:700}
+.segs{grid-column:2 / 4; display:flex; gap:4px; padding-left:3px}
+.segs i{flex:1; height:8px; border:1px solid rgba(255,179,64,.28); box-shadow:inset 1px 1px 0 rgba(0,0,0,.5)}
+.segs i.on{background:var(--amber); border-color:#ffd08a; transform:translate(1px,1px);
+  box-shadow:-1px -1px 0 #ffd08a,-2px -2px 0 #b97d26,-3px -3px 0 #7d531a,0 0 8px rgba(255,179,64,.4)}
+.geo-lg{display:flex; justify-content:space-between; font-size:12px; color:var(--tx3); margin-top:6px}
+
+.lib{display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:18px}
+.panel.card{--c:12px; --D:16px}
+.panel.card[data-go]{cursor:pointer}
+.panel.card:focus-visible{outline:2px solid var(--cy); outline-offset:4px}
+.card-in{padding:14px 16px 12px}
+.card-in .ch{display:flex; align-items:center; justify-content:space-between}
+.card-in .cd{font:800 19px/1 var(--orb); letter-spacing:.08em}
+.card-in .open{font:500 12px var(--mono); color:var(--cy2)}
+.card-in .cn{font-size:15px; font-weight:700; margin:7px 0 4px}
+.card-in .cpr{display:flex; align-items:baseline; gap:10px}
+.card-in .cpr b{font:700 22px/1.2 var(--mono); color:#effcff}
+.card-in .cpr b small{font:500 12px var(--jp); color:var(--tx2); margin-left:2px}
+.card-in .cpr span{font:500 13px var(--mono)}
+.card-in svg.sp{display:block; width:100%; height:58px; margin:8px 0 8px}
+.bdg{display:flex; flex-wrap:wrap; gap:5px; min-height:24px; padding-left:2px}
+.bdg span{font-size:12px; line-height:1.5; color:var(--cy2); border:1px solid var(--cyl); padding:0 6px; background:rgba(62,230,255,.07); box-shadow:-2px -2px 0 rgba(62,230,255,.16)}
+.bdg span.w{color:var(--amber); border-color:rgba(255,179,64,.6); background:rgba(255,179,64,.1); font-weight:700; box-shadow:-2px -2px 0 rgba(255,179,64,.3),0 0 10px rgba(255,179,64,.2)}
+.card-in .ft{display:flex; justify-content:space-between; margin-top:auto; padding-top:10px; font:500 12px var(--mono); color:var(--tx3)}
+.card-in .ft b{color:var(--tx2); font-weight:500}
+
+.menu{display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:0; height:100%}
+.mi{padding:14px 12px; border-right:1px solid var(--line); display:flex; flex-direction:column; gap:6px}
+.mi:last-child{border-right:0}
+.emi{position:relative; width:40px; height:36px; margin-bottom:2px}
+.emi svg{position:relative; z-index:1; width:26px; height:26px; color:var(--cy); margin:0 0 0 7px; filter:drop-shadow(0 0 4px rgba(62,230,255,.6))}
+.emi::before{content:""; position:absolute; left:0; right:0; bottom:0; height:12px; border-radius:50%; border:1px solid rgba(62,230,255,.55);
+  background:radial-gradient(ellipse at 50% 50%,rgba(62,230,255,.4),transparent 70%)}
+.emi::after{content:""; position:absolute; left:8px; right:8px; bottom:6px; height:26px; background:linear-gradient(0deg,rgba(62,230,255,.22),transparent); clip-path:polygon(15% 100%,85% 100%,100% 0,0 0)}
+.mi b{font-size:14px}
+.mi p{margin:0; font-size:12px; line-height:1.5; color:var(--tx2)}
+.wt{display:flex; align-items:center; gap:7px; margin-top:auto; font-size:12px; color:var(--tx2); padding-left:3px}
+.wt i{display:inline-flex; gap:3px}
+.wt i u{width:7px; height:10px; border:1px solid var(--cyl); text-decoration:none}
+.wt i u.on{background:var(--cy); border-color:var(--cy); box-shadow:-1px -1px 0 #a6f3ff,-2px -2px 0 #2a92ab}
+.term-day .w{font:800 46px/1 var(--orb); letter-spacing:.1em; margin:8px 0 12px 6px}
+.term-day p{margin:0 0 14px; font-size:14px; line-height:1.7}
+.perviz{display:flex; flex-direction:column; gap:8px; font-size:12px; color:var(--tx2)}
+.perviz .row{display:flex; align-items:center; gap:8px}
+.perviz .row > span{width:76px; flex:none}
+.perviz .unit{width:22px; height:14px; background:var(--cy); box-shadow:-1px -1px 0 #a6f3ff,-2px -2px 0 #2a92ab,-3px -3px 0 #1a6476,0 0 10px rgba(62,230,255,.5)}
+.perviz .px2{flex:1; height:14px; background:repeating-linear-gradient(90deg,rgba(62,230,255,.5) 0 21px,transparent 21px 24px); box-shadow:-3px -3px 0 rgba(62,230,255,.12)}
+.perviz .x{font:500 12px var(--mono); color:var(--cy)}
+
+/* ===== 動き ===== */
+@keyframes rv{from{clip-path:inset(0 100% 0 0)}}
+@keyframes dash{from{stroke-dashoffset:var(--len)}}
+@keyframes grow{from{transform:scaleY(0)}}
+@keyframes growx{from{transform:scaleX(0)}}
+@keyframes fade{from{opacity:0}}
+@keyframes rise3d{from{transform:translateZ(-560px) rotateX(9deg)}}
+.anim .a-rv{animation:rv 1.5s .35s cubic-bezier(.3,.6,.2,1) both}
+.anim .a-dash{stroke-dasharray:var(--len); animation:dash 1.6s .5s cubic-bezier(.4,.1,.2,1) both}
+.anim .a-grow{transform-box:fill-box; transform-origin:50% 100%; animation:grow .9s .4s cubic-bezier(.3,.7,.2,1) both}
+.anim .a-gx{animation:growx 1s .5s cubic-bezier(.3,.7,.2,1) both}
+.anim .a-fade{animation:fade .8s 1.1s both}
+.anim .slab{animation:rise3d 1.05s var(--d,0s) cubic-bezier(.14,.8,.2,1) backwards}
+.anim .slab>*{animation:fade .7s var(--d,0s) backwards}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important; transition:none!important}
+}
+</style>
+</head>
+<body>
+<canvas id="space" aria-hidden="true"></canvas>
+<div class="fx-noise" aria-hidden="true"></div>
+<div class="fx-vig" aria-hidden="true"></div>
+<div class="fx-sweep" aria-hidden="true"></div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7.5" height="7.5"/><rect x="13.5" y="3" width="7.5" height="7.5"/><rect x="3" y="13.5" width="7.5" height="7.5"/><path d="M13.5 13.5h7.5v7.5h-7.5z" stroke-dasharray="2 2"/></symbol>
+    <symbol id="i-stock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 3v4M6 15v5M12 6v3M12 17v3M18 2v4M18 12v4"/><rect x="4" y="7" width="4" height="8"/><rect x="10" y="9" width="4" height="8"/><rect x="16" y="6" width="4" height="6"/></symbol>
+    <symbol id="i-quick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3.5 16a8.5 8.5 0 0 1 17 0"/><path d="M12 16l4.5-5"/><circle cx="12" cy="16" r="1.5"/><path d="M5 20h14"/></symbol>
+    <symbol id="i-kessan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 2.5h10l4 4V21.5H5z"/><path d="M15 2.5v4h4"/><path d="M8.5 18v-3M12 18v-6M15.5 18v-4"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 20h18"/><path d="M4 16l5-5 4 3 7-8"/><path d="M16 6h4v4"/></symbol>
+    <symbol id="i-news" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16"/><path d="M6.5 8h11M6.5 12h5M6.5 16h5"/><rect x="13.5" y="11.5" width="4" height="4.5"/></symbol>
+    <symbol id="i-hansei" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4 3.5v4h4"/><path d="M12 8v4.5l3 2"/></symbol>
+    <symbol id="i-market" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.6 2.5 3.8 5.3 3.8 8.5s-1.2 6-3.8 8.5M12 3.5C9.4 6 8.2 8.8 8.2 12s1.2 6 3.8 8.5"/></symbol>
+    <symbol id="i-yogo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4.5h6.5A2.5 2.5 0 0 1 12 6v14a2 2 0 0 0-2-2H4z"/><path d="M20 4.5h-6.5A2.5 2.5 0 0 0 12 6v14a2 2 0 0 1 2-2h6z"/></symbol>
+    <symbol id="i-q" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2.5l8.2 4.75v9.5L12 21.5l-8.2-4.75v-9.5z"/><path d="M8.3 12.2l2.6 2.6 4.8-5.2"/></symbol>
+    <symbol id="i-price" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 12.5V3h9.5l8.5 8.5-9.5 9.5z"/><circle cx="7.5" cy="7.5" r="1.5"/></symbol>
+    <symbol id="i-supply" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3v18M7 21h10M4 7h16"/><path d="M4 7l-2.5 6h5zM20 7l-2.5 6h5z"/></symbol>
+    <symbol id="i-flow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 18l6-6 4 3 8-9"/><path d="M15 6h6v6"/></symbol>
+    <symbol id="st-d" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.5" fill="rgba(62,230,255,.2)" stroke="#3ee6ff" stroke-width="1.5"/><path d="M6.5 10.2l2.4 2.4 4.6-5" fill="none" stroke="#a6f3ff" stroke-width="1.8"/></symbol>
+    <symbol id="st-p" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.5" fill="none" stroke="rgba(62,230,255,.45)" stroke-width="1.5"/><path d="M10 2.5a7.5 7.5 0 0 1 0 15z" fill="rgba(62,230,255,.7)"/></symbol>
+    <symbol id="st-x" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.5" fill="none" stroke="#7f97a8" stroke-width="1.3" stroke-dasharray="2.5 2.2"/></symbol>
+    <symbol id="ring-t" viewBox="0 0 220 220"><circle cx="110" cy="110" r="108" fill="none" stroke="rgba(62,230,255,.42)" stroke-width="1.2" stroke-dasharray="2 7"/><circle cx="110" cy="110" r="102" fill="none" stroke="rgba(62,230,255,.55)" stroke-width="2.2" stroke-dasharray="26 14 4 14"/></symbol>
+    <symbol id="ring-s" viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="none" stroke="rgba(166,243,255,.6)" stroke-width="2.4" stroke-dasharray="18 10"/></symbol>
+  </defs>
+</svg>
+
+<div class="app">
+  <aside class="rail" aria-label="ナビゲーション">
+    <div class="rail-w">
+      <div class="logo" title="KABU LAB">
+        <svg viewBox="0 0 46 52" fill="none"><path d="M23 2l20 11.5v25L23 50 3 38.5v-25z" stroke="#3ee6ff" stroke-width="1.2" opacity=".8"/><path d="M23 8l15 8.7v18.6L23 44 8 35.3V16.7z" stroke="#3ee6ff" stroke-width=".8" opacity=".35"/></svg>
+        <b>KL</b>
+      </div>
+      <button class="rl" data-go="home"><svg><use href="#i-home"/></svg><span>HOME</span></button>
+      <button class="rl on" data-go="stock"><svg><use href="#i-stock"/></svg><span>6501</span></button>
+      <div class="sep"></div>
+      <div class="foot"><i></i>SYS<br>OK</div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="top">
+      <div class="crumb" id="crumb"></div>
+      <div class="right"><span><span class="k">DATE</span><b>2026-10-01</b></span><span><span class="k">MODE</span><b>LEARN</b></span></div>
+    </header>
+
+    <!-- ================= STOCK VIEW ================= -->
+    <main class="wrap view on" id="v-stock">
+      <section class="panel hd"><div class="slab"><div class="face"><div class="pi">
+        <div class="sh">
+          <div class="sh-id">
+            <div class="ticker holo-ex">6501</div>
+            <div>
+              <h1>日立製作所</h1>
+              <div class="tags"><span>東証プライム</span><span>電気機器</span><span>日経225採用</span></div>
+            </div>
+          </div>
+          <div class="sh-price">
+            <div class="gyro" aria-hidden="true"><i class="g1"></i><i class="g2"></i><i class="g3"></i><b></b></div>
+            <div>
+              <div class="lbl">株価 ／ 10月1日終値</div>
+              <div class="pxw"><div class="px holo scanl"><span class="num" data-count="5510">5,510</span><small>円</small></div></div>
+              <div class="chg up">▲ 前日比 +21円 / +0.38%</div>
+            </div>
+          </div>
+          <div class="sh-meta">
+            <div class="kv"><span>時価総額</span><b>24兆9,909億円</b></div>
+            <div class="kv"><span>最低購入額</span><b>55万1,000円</b></div>
+          </div>
+        </div>
+      </div></div></div></section>
+
+      <nav class="tabs" aria-label="分析の型">
+        <button class="tab on" data-tab="クイック診断"><i>T-01</i>クイック診断</button>
+        <button class="tab" data-tab="決算"><i>T-02</i>決算</button>
+        <button class="tab" data-tab="チャート"><i>T-03</i>チャート</button>
+        <button class="tab" data-tab="ニュース"><i>T-04</i>ニュース</button>
+        <button class="tab" data-tab="反省"><i>T-05</i>反省</button>
+        <div class="note">ANALYSIS <b>QUICK</b> ／ 10/01</div>
+      </nav>
+
+      <div id="quick">
+      <div class="grid">
+        <!-- ② chart -->
+        <section class="panel s8"><div class="slab"><div class="face"><div class="pi">
+          <div class="ph"><span class="code">SYS-02 / PRICE</span><h2>株価チャート（日足）</h2>
+            <div class="pm"><span>2026.04.02 – 10.01</span><span>122本</span></div></div>
+          <div class="pb">
+            <div class="legend">
+              <span><i class="sw cu"></i>陽線（上昇）</span>
+              <span><i class="sw cd"></i>陰線（下落）</span>
+              <span><i class="sw l25"></i>25日線 <b>5,387円</b></span>
+              <span><i class="sw l75"></i>75日線 <b>5,117円</b></span>
+              <span><i class="sw bd"></i>レジスタンス帯 <b>5,830円</b>（8月14日高値）</span>
+              <span><i class="sw bd"></i>サポート帯 <b>5,040円</b>（9月11日安値）</span>
+            </div>
+            <div id="chart"></div>
+            <div class="dev">
+              <div class="dv"><div class="dvh"><span>乖離率 5日線</span><b>+0.12%</b></div><div class="dvt"><i class="a-gx" style="--v:.12"></i></div><div class="dvs"><span>−10%</span><span>0</span><span>+10%</span></div></div>
+              <div class="dv"><div class="dvh"><span>25日線</span><b>+2.29%</b></div><div class="dvt"><i class="a-gx" style="--v:2.29"></i></div><div class="dvs"><span>−10%</span><span>0</span><span>+10%</span></div></div>
+              <div class="dv"><div class="dvh"><span>75日線</span><b>+7.68%</b></div><div class="dvt"><i class="a-gx" style="--v:7.68"></i></div><div class="dvs"><span>−10%</span><span>0</span><span>+10%</span></div></div>
+              <div class="dv"><div class="dvh"><span>200日線</span><b>+9.13%</b></div><div class="dvt"><i class="a-gx" style="--v:9.13"></i></div><div class="dvs"><span>−10%</span><span>0</span><span>+10%</span></div></div>
+            </div>
+          </div>
+        </div></div></div></section>
+
+        <!-- ① 4点診断 -->
+        <section class="panel s4"><div class="slab"><div class="face"><div class="pi">
+          <div class="ph"><span class="code">SYS-01 / DIAG</span><h2>4点診断</h2><div class="pm"><span>評価メーター</span></div></div>
+          <div class="diag">
+            <div class="dg">
+              <div class="dgh"><svg><use href="#i-q"/></svg>会社の質<i>Q-1</i></div>
+              <div class="holo-g"><svg class="disc" data-v=".86" aria-hidden="true"></svg><svg class="ring3d" viewBox="0 0 220 220" aria-hidden="true"><use href="#ring-t"/></svg><div class="verdict holo">高</div></div>
+              <div class="lr"><span>低</span><span>高</span></div>
+              <p>3期連続の増収増益</p>
+            </div>
+            <div class="dg">
+              <div class="dgh"><svg><use href="#i-price"/></svg>値段<i>Q-2</i></div>
+              <div class="holo-g"><svg class="disc" data-v=".7" aria-hidden="true"></svg><svg class="ring3d" viewBox="0 0 220 220" aria-hidden="true"><use href="#ring-t"/></svg><div class="verdict holo">やや高い</div></div>
+              <div class="lr"><span>安い</span><span>高い</span></div>
+              <p><span class="mono">PER 27.3</span>倍・<span class="mono">PBR 3.73</span>倍。成長を先に織り込んだ水準</p>
+            </div>
+            <div class="dg">
+              <div class="dgh"><svg><use href="#i-supply"/></svg>需給<i>Q-3</i></div>
+              <div class="holo-g"><svg class="disc" data-v=".5" aria-hidden="true"></svg><svg class="ring3d" viewBox="0 0 220 220" aria-hidden="true"><use href="#ring-t"/></svg><div class="verdict holo">中立</div></div>
+              <div class="lr"><span>売り優勢</span><span>買い優勢</span></div>
+              <p>信用倍率 <span class="mono">7.56</span>倍。買い残は2週間で<span class="mono">60</span>万株減</p>
+            </div>
+            <div class="dg">
+              <div class="dgh"><svg><use href="#i-flow"/></svg>流れ<i>Q-4</i></div>
+              <div class="holo-g"><svg class="disc" data-v=".88" aria-hidden="true"></svg><svg class="ring3d" viewBox="0 0 220 220" aria-hidden="true"><use href="#ring-t"/></svg><div class="verdict holo">上昇トレンド</div></div>
+              <div class="lr"><span>下降</span><span>上昇</span></div>
+              <p>株価は5日・25日・75日・200日線すべての上</p>
+            </div>
+          </div>
+        </div></div></div></section>
+
+        <!-- ③ 業績推移 -->
+        <section class="panel s5"><div class="slab"><div class="face"><div class="pi">
+          <div class="ph"><span class="code">SYS-03 / EARNINGS</span><h2>業績推移</h2>
+            <div class="pm"><span><i class="sw" style="width:10px;height:10px;background:rgba(62,230,255,.45);border-top:2px solid #3ee6ff;box-shadow:-2px -2px 0 rgba(166,243,255,.5)"></i> 売上高</span><span><i class="sw l25" style="vertical-align:middle"></i> 最終利益</span></div></div>
+          <div class="pb">
+            <div class="svgbox" id="perf"></div>
+            <table class="t" style="margin-top:6px">
+              <thead><tr><th>決算期</th><th>2025.3</th><th>2026.3</th><th class="fc2">2027.3予</th></tr></thead>
+              <tbody>
+                <tr><td>売上高(億円)</td><td>97,833</td><td>105,867</td><td class="fc2">117,000</td></tr>
+                <tr><td>最終利益(億円)</td><td>6,157</td><td>8,023</td><td class="fc2">9,000</td></tr>
+                <tr><td>1株利益(円)</td><td><span class="bar-c"><u class="a-gx" style="width:40px"></u>133.9</span></td><td><span class="bar-c"><u class="a-gx" style="width:53px"></u>176.8</span></td><td class="fc2"><span class="bar-c"><u class="a-gx" style="width:60px"></u>202.2</span></td></tr>
+                <tr><td>1株配当(円)</td><td><span class="bar-c"><u class="a-gx" style="width:26px"></u>43</span></td><td><span class="bar-c"><u class="a-gx" style="width:30px"></u>50</span></td><td class="jp fc2">中間28・期末未定</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div></div></div></section>
+
+        <!-- ④ 割高・割安 -->
+        <section class="panel s4"><div class="slab"><div class="face"><div class="pi">
+          <div class="ph"><span class="code">SYS-04 / VALUE</span><h2>割高・割安ゲージ</h2></div>
+          <div class="pb">
+            <div class="gauges">
+              <div class="gg">
+                <div class="gh"><span class="nm">PER</span><span class="vl holo"><span data-count="27.3" data-dec="1">27.3</span><small>倍</small></span><span class="ref">日経平均 16.95倍と比較</span></div>
+                <svg class="g3" data-max="40" data-ticks="0,10,20,30,40" data-v="27.3" data-ref="16.95" data-rl="日経平均 16.95" aria-label="PER 27.3倍、日経平均16.95倍"></svg>
+              </div>
+              <div class="gg">
+                <div class="gh"><span class="nm">PBR</span><span class="vl holo"><span data-count="3.73" data-dec="2">3.73</span><small>倍</small></span><span class="ref">1倍＝解散価値</span></div>
+                <svg class="g3" data-max="5" data-ticks="0,1,2,3,4,5" data-v="3.73" data-ref="1" data-rl="1倍＝解散価値" aria-label="PBR 3.73倍"></svg>
+              </div>
+              <div class="gg">
+                <div class="gh"><span class="nm">PSR</span><span class="vl holo"><span data-count="2.10" data-dec="2">2.10</span><small>倍</small></span></div>
+                <svg class="g3" data-max="5" data-ticks="0,1,2,3,4,5" data-v="2.10" aria-label="PSR 2.10倍"></svg>
+              </div>
+              <div class="gend"><span>◀ 割安寄り</span><span>割高寄り ▶</span></div>
+            </div>
+          </div>
+        </div></div></div></section>
+
+        <!-- ⑦ 需給 -->
+        <section class="panel s3"><div class="slab"><div class="face"><div class="pi">
+          <div class="ph"><span class="code">SYS-05 / MARGIN</span><h2>需給（信用残）</h2></div>
+          <div class="pb">
+            <div class="legend" style="margin-bottom:2px"><span><i class="sw" style="background:rgba(62,230,255,.55);box-shadow:-2px -2px 0 #a6f3ff"></i>買い残</span><span><i class="sw" style="background:repeating-linear-gradient(135deg,#9db3c2 0 2px,transparent 2px 4px);box-shadow:-2px -2px 0 rgba(157,179,194,.5)"></i>売り残</span><span><i class="sw l25"></i>倍率</span></div>
+            <div class="svgbox" id="supply"></div>
+            <table class="t">
+              <thead><tr><th>日付</th><th>売り残</th><th>買い残</th><th>倍率</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">08/28</td><td>703.6</td><td>3,824.2</td><td>5.44</td></tr>
+                <tr><td class="mono">09/04</td><td>511.5</td><td>3,945.4</td><td>7.71</td></tr>
+                <tr><td class="mono">09/11</td><td>362.2</td><td>4,101.6</td><td>11.32</td></tr>
+                <tr><td class="mono">09/18</td><td>442.3</td><td>3,678.2</td><td>8.32</td></tr>
+                <tr><td class="mono">09/25</td><td>465.5</td><td>3,518.8</td><td>7.56</td></tr>
+              </tbody>
+            </table>
+            <div class="cap" style="margin-top:4px">単位：千株</div>
+          </div>
+        </div></div></div></section>
+
+        <!-- ⑥ シナリオ -->
+        <section class="panel s7"><div class="slab"><div class="face"><div class="pi">
+          <div class="ph"><span class="code">SYS-06 / SCENARIO</span><h2>3つのシナリオ</h2><div class="pm"><span>起点 現在値 5,510円</span></div></div>
+          <div class="pb">
+            <div class="scn">
+              <div class="svgbox" id="fan"></div>
+              <div class="scards">
+                <div class="sc bull">
+                  <div class="sch"><span class="scode">SCN-A</span><b>強気</b><span class="tgt">目安 <em>5,830円</em>の高値更新</span></div>
+                  <p>送電とAI需要が続き上方修正が重なる。</p>
+                  <div class="inv"><span>崩れる条件</span>米IT大手のAI投資減速</div>
+                </div>
+                <div class="sc mid">
+                  <div class="sch"><span class="scode">SCN-B</span><b>中立</b><span class="tgt"><em>5,040〜5,830円</em>のレンジ</span></div>
+                  <div class="inv"><span>崩れる条件</span>円高が進み想定レート160円を大きく下回る</div>
+                </div>
+                <div class="sc bear">
+                  <div class="sch"><span class="scode">SCN-C</span><b>弱気</b><span class="tgt">目安 75日線 <em>5,117円</em>割れ</span></div>
+                  <p>中東情勢の悪化で大型案件が遅れる。</p>
+                  <div class="inv"><span>崩れる条件</span>受注の伸びが決算で確認され続ける</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div></div></div></section>
+
+        <!-- ⑤ 稼ぎ頭 -->
+        <section class="panel s5"><div class="slab"><div class="face"><div class="pi">
+          <div class="ph"><span class="code">SYS-07 / SEGMENT</span><h2>稼ぎ頭マップ</h2><div class="pm"><span>円＝利益　バー＝利益率</span></div></div>
+          <div class="pb">
+            <div class="seg">
+              <div class="donut"><svg id="donut" width="236" height="150" viewBox="0 0 236 150" role="img" aria-label="事業別の利益の立体ドーナツ"></svg><div class="c"><b>PROFIT</b><span>事業別の利益</span></div></div>
+              <div>
+                <div class="srow" style="--k:#3ee6ff"><div class="srh"><i></i>デジタルシステム＆サービス<span class="pf">4,501<small>億円</small></span></div><div class="mbar"><span class="tr"><u class="a-gx" style="--m:16.3"></u></span><b>利益率 <em>16.3%</em></b></div></div>
+                <div class="srow" style="--k:#8ff0ff"><div class="srh"><i></i>エナジー<span class="yoy">前年比 +65%</span><span class="pf">4,160<small>億円</small></span></div><div class="mbar"><span class="tr"><u class="a-gx" style="--m:13.0"></u></span><b>利益率 <em>13.0%</em></b></div></div>
+                <div class="srow" style="--k:#2a9fc4"><div class="srh"><i></i>コネクティブインダストリーズ<span class="pf">3,674<small>億円</small></span></div><div class="mbar"><span class="tr"><u class="a-gx" style="--m:12.2"></u></span><b>利益率 <em>12.2%</em></b></div></div>
+                <div class="srow" style="--k:#6f93a8"><div class="srh"><i></i>モビリティ<span class="pf">1,081<small>億円</small></span></div><div class="mbar"><span class="tr"><u class="a-gx" style="--m:8.2"></u></span><b>利益率 <em>8.2%</em></b></div></div>
+                <div class="cap" style="margin-top:6px; display:flex; justify-content:space-between"><span>利益率 0%</span><span>10%</span><span>20%</span></div>
+              </div>
+            </div>
+          </div>
+        </div></div></div></section>
+
+        <!-- ⑧ チェックリスト -->
+        <section class="panel s7"><div class="slab"><div class="face"><div class="pi">
+          <div class="ph"><span class="code">SYS-08 / PATTERN</span><h2>チャート型チェックリスト</h2></div>
+          <div class="pb">
+            <div class="ck-sum">
+              <div class="ck-bar" aria-hidden="true"><i class="d"></i><i class="d"></i><i class="d"></i><i class="d"></i><i class="d"></i><i class="p"></i><i class="p"></i><i></i><i></i><i></i></div>
+              <div class="ck-cnt"><span class="d">完成済み<b>5</b></span><span>進行中<b>2</b></span><span>なし<b>3</b></span></div>
+            </div>
+            <div class="ckg" id="ckg"></div>
+            <div class="ck-lg"><span><svg><use href="#st-d"/></svg>完成済み（せり上がり）</span><span><svg><use href="#st-p"/></svg>進行中</span><span><svg><use href="#st-x"/></svg>なし（くぼみ）</span></div>
+          </div>
+        </div></div></div></section>
+
+        <!-- ⑨ 学びノート -->
+        <section class="panel s5"><div class="slab"><div class="face"><div class="pi">
+          <div class="ph"><span class="code">SYS-09 / NOTE</span><h2>学びノート</h2></div>
+          <div class="pb">
+            <div class="terms">
+              <div class="term"><span class="chip">PER</span><div><p>株価が1年分の利益の何倍か</p><div class="fx"><b>株価</b>÷<b>1株利益</b>=<b class="eq">PER</b></div></div></div>
+              <div class="term"><span class="chip">信用倍率</span><div><p>借金して買っている株数 ÷ 空売りの株数。高いと将来の売り圧力</p><div class="fx"><b>買い残</b>÷<b>売り残</b>=<b class="eq">信用倍率</b></div></div></div>
+              <div class="term"><span class="chip">乖離率</span><div><p>移動平均線からどれだけ離れているか。±10%超は過熱の目安</p><div class="fx"><b>−10%</b><span style="flex:1;max-width:150px;height:6px;background:linear-gradient(90deg,rgba(255,179,64,.55),rgba(62,230,255,.14) 20% 80%,rgba(255,179,64,.55));box-shadow:-2px -2px 0 rgba(62,230,255,.12)"></span><b>+10%</b><span style="color:var(--amber)">過熱</span></div></div></div>
+            </div>
+            <div class="insight"><span class="code">INSIGHT / 今回の気づき</span><p>「PER 27倍は割高ではなく、成長を先に織り込んだ値段。成長が鈍ると下がりやすい」</p></div>
+          </div>
+        </div></div></div></section>
+      </div>
+      </div>
+
+      <div class="empty" id="empty">
+        <section class="panel"><div class="slab"><div class="face"><div class="pi">
+          <div class="ph"><span class="code" id="emp-code">SYS-T02 / STANDBY</span><h2 id="emp-h">決算</h2><div class="pm"><span>STATUS: 未実行</span></div></div>
+          <div class="emp">
+            <div class="emp-g" aria-hidden="true"><i class="e1"></i><i class="e2"></i><i class="e3"></i><b>NO SIGNAL</b></div>
+            <div>
+              <span class="code">MODULE STANDBY</span>
+              <h3><span id="emp-name">決算</span>は未実行です</h3>
+              <p>この型の分析はまだ走らせていません。実行すると、ここに図解つきの結果が並びます。</p>
+              <div class="cmdline"><em>KL:~$</em>/kabu 日立 <span id="emp-cmd">決算</span></div>
+            </div>
+          </div>
+        </div></div></div></section>
+      </div>
+
+      <footer class="foot-b">
+        <span>出典：株探・Yahoo!ファイナンス・日立IR</span>
+        <span class="warn">本ツールは学習用の分析であり、売買の推奨ではありません</span>
+      </footer>
+    </main>
+
+    <!-- ================= HOME VIEW ================= -->
+    <main class="wrap view" id="v-home">
+      <section class="hero">
+        <div class="brand">
+          <h1 class="holo-ex">KABU LAB</h1>
+          <span class="div"></span>
+          <div><div class="sub">銘柄分析 × 学習ノート</div><div class="date">2026-10-01</div></div>
+        </div>
+        <div>
+          <div class="panel cmdp"><div class="slab"><div class="face"><div class="pi">
+            <label class="cmd"><span class="pr">KL:~$</span><input type="text" placeholder="/kabu 日立 決算" aria-label="コマンド入力"><kbd>ENTER</kbd></label>
+          </div></div></div></div>
+          <div class="cmd-cap"><span>COMMAND INPUT</span><span>LIBRARY 5</span></div>
+        </div>
+      </section>
+
+      <div class="grid">
+        <section class="panel s8"><div class="slab"><div class="face"><div class="pi">
+          <div class="ph"><span class="code">MKT-01 / MARKET</span><h2>市場パネル</h2></div>
+          <div class="mkt">
+            <div class="mk"><div class="h">日経平均<i>N225</i></div><div class="v holo"><span data-count="68956.72" data-dec="2">68,956.72</span></div><div class="d up">+2,203.00 / +3.30%</div>
+              <div class="mviz"><div class="zt"><u class="a-gx x3" style="--p:3.30"></u></div><div class="zs"><span>−4%</span><span>0</span><span>+4%</span></div></div></div>
+            <div class="mk"><div class="h">TOPIX<i>TPX</i></div><div class="v holo"><span data-count="4111.65" data-dec="2">4,111.65</span></div><div class="d up">+0.07%</div>
+              <div class="mviz"><div class="zt"><u class="a-gx x3" style="--p:.07"></u></div><div class="zs"><span>−4%</span><span>0</span><span>+4%</span></div></div></div>
+            <div class="mk"><div class="h">ドル円<i>USDJPY</i></div><div class="v holo"><span data-count="158.40" data-dec="2">158.40</span></div><div class="d n">円安方向</div>
+              <div class="dir"><span>円高</span><span class="ax"><i></i></span><b>円安</b></div></div>
+            <div class="mk"><div class="h">予想PER<i>N225</i></div><div class="v holo"><span data-count="16.95" data-dec="2">16.95</span><small>倍</small></div><div class="d n">5年平均 15.47倍</div>
+              <div class="cmpb"><span>現在</span><span class="b"><u class="a-gx x3" style="--p:84.75%"></u></span><em>16.95</em><span>5年平均</span><span class="b avg"><u class="a-gx x3" style="--p:77.35%"></u></span><em>15.47</em></div></div>
+            <div class="mk"><div class="h">米10年金利<i>US10Y</i></div><div class="v holo"><span data-count="5.28" data-dec="2">5.28</span><small>%</small></div><div class="d n">&nbsp;</div>
+              <div class="mviz"><div class="lv"><u class="a-gx x3" style="--p:88%"></u></div><div class="zs"><span>0%</span><span>3%</span><span>6%</span></div></div></div>
+            <div class="mk"><div class="h">ブレント原油<i>BRENT</i></div><div class="v holo"><span data-count="98">98</span><small>ドル</small></div><div class="d n">&nbsp;</div>
+              <div class="mviz"><div class="lv"><u class="a-gx x3" style="--p:81.7%"></u></div><div class="zs"><span>0</span><span>60</span><span>120</span></div></div></div>
+          </div>
+        </div></div></div></section>
+
+        <section class="panel s4"><div class="slab"><div class="face"><div class="pi">
+          <div class="ph"><span class="code">MKT-02 / GEO-RISK</span><h2>地政学リスク</h2><div class="pm"><span>影響度 5段階</span></div></div>
+          <div class="pb">
+            <div class="geo" id="geo"></div>
+            <div class="geo-lg"><span>小 ◀</span><span>影響度</span><span>▶ 大</span></div>
+          </div>
+        </div></div></div></section>
+
+        <section class="panel s12"><div class="slab"><div class="face"><div class="pi">
+          <div class="ph"><span class="code">LIB-01 / LIBRARY</span><h2>銘柄ライブラリ</h2><div class="pm"><span>分析済み 5銘柄</span><span><span class="up">▲ 上昇</span>　<span class="dn">▼ 下落</span></span></div></div>
+          <div class="pb"><div class="lib" id="lib"></div></div>
+        </div></div></div></section>
+
+        <section class="panel s9"><div class="slab"><div class="face"><div class="pi">
+          <div class="ph"><span class="code">OPS-01 / MENU</span><h2>分析メニュー</h2><div class="pm"><span>重さ　□ 極軽 ─ ■■■■ 重</span></div></div>
+          <div class="menu" id="menu"></div>
+        </div></div></div></section>
+
+        <section class="panel s3"><div class="slab"><div class="face"><div class="pi">
+          <div class="ph"><span class="code">EDU-01 / TERM</span><h2>今日の用語カード</h2></div>
+          <div class="pb term-day">
+            <div class="w holo-ex">PER</div>
+            <p>株価が1年分の利益の何倍か。高いほど成長を先に織り込んで買われている</p>
+            <div class="perviz" aria-hidden="true">
+              <div class="row"><span>1年分の利益</span><i class="unit"></i></div>
+              <div class="row"><span>株価</span><i class="px2"></i><span class="x">×N</span></div>
+            </div>
+          </div>
+        </div></div></div></section>
+      </div>
+
+      <footer class="foot-b">
+        <span>出典：株探・Yahoo!ファイナンス・日立IR</span>
+        <span class="warn">本ツールは学習用の分析であり、売買の推奨ではありません</span>
+      </footer>
+    </main>
+  </div>
+</div>
+<script type="application/json" id="ohlc">[{"d":"2026-04-02","o":4802,"h":4844,"l":4639,"c":4675,"v":12344100},{"d":"2026-04-03","o":4800,"h":4840,"l":4780,"c":4811,"v":7658200},{"d":"2026-04-06","o":4805,"h":4811,"l":4719,"c":4719,"v":7853200},{"d":"2026-04-07","o":4718,"h":4787,"l":4712,"c":4764,"v":7102400},{"d":"2026-04-08","o":4954,"h":4955,"l":4850,"c":4915,"v":13616600},{"d":"2026-04-09","o":4945,"h":4946,"l":4818,"c":4843,"v":13677900},{"d":"2026-04-10","o":4830,"h":4859,"l":4770,"c":4810,"v":11797600},{"d":"2026-04-13","o":4880,"h":4945,"l":4826,"c":4848,"v":12164800},{"d":"2026-04-14","o":4930,"h":4957,"l":4855,"c":4957,"v":12203300},{"d":"2026-04-15","o":5060,"h":5233,"l":5025,"c":5220,"v":22050700},{"d":"2026-04-16","o":5210,"h":5274,"l":5157,"c":5220,"v":15083400},{"d":"2026-04-17","o":5167,"h":5210,"l":5109,"c":5157,"v":10437400},{"d":"2026-04-20","o":5193,"h":5257,"l":5117,"c":5153,"v":8848200},{"d":"2026-04-21","o":5110,"h":5189,"l":5097,"c":5189,"v":8784900},{"d":"2026-04-22","o":5129,"h":5138,"l":5034,"c":5034,"v":11183900},{"d":"2026-04-23","o":5185,"h":5298,"l":5130,"c":5203,"v":18639900},{"d":"2026-04-24","o":5230,"h":5235,"l":5095,"c":5229,"v":10572600},{"d":"2026-04-27","o":5333,"h":5422,"l":5258,"c":5356,"v":18121800},{"d":"2026-04-28","o":5200,"h":5202,"l":4990,"c":5047,"v":29820000},{"d":"2026-04-30","o":4947,"h":5018,"l":4828,"c":4882,"v":22771900},{"d":"2026-05-01","o":4800,"h":4861,"l":4775,"c":4795,"v":11393000},{"d":"2026-05-07","o":4900,"h":4981,"l":4850,"c":4850,"v":25537000},{"d":"2026-05-08","o":4844,"h":4973,"l":4806,"c":4938,"v":16696700},{"d":"2026-05-11","o":4920,"h":5012,"l":4795,"c":4887,"v":15801200},{"d":"2026-05-12","o":4892,"h":4959,"l":4812,"c":4868,"v":11607400},{"d":"2026-05-13","o":4775,"h":4844,"l":4702,"c":4750,"v":14259600},{"d":"2026-05-14","o":4700,"h":4736,"l":4646,"c":4671,"v":14167400},{"d":"2026-05-15","o":4690,"h":4845,"l":4683,"c":4812,"v":15316500},{"d":"2026-05-18","o":4755,"h":4818,"l":4723,"c":4808,"v":9951800},{"d":"2026-05-19","o":4900,"h":5019,"l":4863,"c":4944,"v":17371300},{"d":"2026-05-20","o":4883,"h":4934,"l":4814,"c":4908,"v":13438800},{"d":"2026-05-21","o":4907,"h":5123,"l":4882,"c":5123,"v":17823800},{"d":"2026-05-22","o":5105,"h":5153,"l":4995,"c":5002,"v":13406000},{"d":"2026-05-25","o":5050,"h":5102,"l":5000,"c":5054,"v":9871700},{"d":"2026-05-26","o":5095,"h":5134,"l":5024,"c":5056,"v":8934400},{"d":"2026-05-27","o":5100,"h":5108,"l":4955,"c":4960,"v":10796000},{"d":"2026-05-28","o":4963,"h":5194,"l":4962,"c":5174,"v":17942700},{"d":"2026-05-29","o":5374,"h":5375,"l":5166,"c":5166,"v":27362800},{"d":"2026-06-01","o":5200,"h":5274,"l":5076,"c":5126,"v":13201200},{"d":"2026-06-02","o":5126,"h":5140,"l":4987,"c":5083,"v":10393900},{"d":"2026-06-03","o":5139,"h":5375,"l":5129,"c":5270,"v":15132500},{"d":"2026-06-04","o":5180,"h":5215,"l":5131,"c":5183,"v":8401300},{"d":"2026-06-05","o":5146,"h":5369,"l":5141,"c":5300,"v":11799100},{"d":"2026-06-08","o":5095,"h":5148,"l":4968,"c":5031,"v":14584100},{"d":"2026-06-09","o":5113,"h":5113,"l":4864,"c":4882,"v":14980900},{"d":"2026-06-10","o":4906,"h":4924,"l":4782,"c":4784,"v":15252700},{"d":"2026-06-11","o":4641,"h":4679,"l":4579,"c":4655,"v":15175900},{"d":"2026-06-12","o":4682,"h":4740,"l":4585,"c":4657,"v":18882700},{"d":"2026-06-15","o":4704,"h":4828,"l":4703,"c":4737,"v":13258100},{"d":"2026-06-16","o":4741,"h":4798,"l":4646,"c":4747,"v":11238700},{"d":"2026-06-17","o":4692,"h":4736,"l":4670,"c":4701,"v":11385900},{"d":"2026-06-18","o":4680,"h":4805,"l":4680,"c":4800,"v":13329600},{"d":"2026-06-19","o":4805,"h":4854,"l":4690,"c":4764,"v":18577100},{"d":"2026-06-22","o":4702,"h":4914,"l":4702,"c":4864,"v":10220000},{"d":"2026-06-23","o":4930,"h":4948,"l":4750,"c":4750,"v":12304900},{"d":"2026-06-24","o":4719,"h":4747,"l":4632,"c":4691,"v":11616300},{"d":"2026-06-25","o":4714,"h":4717,"l":4554,"c":4554,"v":12236600},{"d":"2026-06-26","o":4484,"h":4547,"l":4478,"c":4478,"v":13899700},{"d":"2026-06-29","o":4530,"h":4541,"l":4435,"c":4486,"v":11492800},{"d":"2026-06-30","o":4494,"h":4499,"l":4422,"c":4471,"v":12297000},{"d":"2026-07-01","o":4550,"h":4555,"l":4476,"c":4496,"v":11138200},{"d":"2026-07-02","o":4595,"h":4719,"l":4520,"c":4669,"v":16571400},{"d":"2026-07-03","o":4711,"h":4713,"l":4571,"c":4615,"v":9892300},{"d":"2026-07-06","o":4699,"h":4805,"l":4682,"c":4805,"v":11352800},{"d":"2026-07-07","o":4822,"h":5004,"l":4790,"c":4942,"v":20014200},{"d":"2026-07-08","o":4872,"h":4890,"l":4769,"c":4778,"v":11272800},{"d":"2026-07-09","o":4750,"h":4810,"l":4703,"c":4758,"v":7238600},{"d":"2026-07-10","o":4725,"h":4768,"l":4686,"c":4700,"v":11624900},{"d":"2026-07-13","o":4700,"h":4775,"l":4686,"c":4716,"v":9347200},{"d":"2026-07-14","o":4724,"h":4817,"l":4714,"c":4802,"v":8776800},{"d":"2026-07-15","o":4795,"h":4812,"l":4651,"c":4796,"v":13914900},{"d":"2026-07-16","o":4771,"h":4894,"l":4726,"c":4828,"v":13955100},{"d":"2026-07-17","o":4688,"h":4779,"l":4616,"c":4717,"v":12028800},{"d":"2026-07-21","o":4696,"h":4832,"l":4675,"c":4792,"v":11059300},{"d":"2026-07-22","o":4789,"h":4872,"l":4762,"c":4807,"v":9137700},{"d":"2026-07-23","o":4827,"h":4889,"l":4813,"c":4854,"v":8471800},{"d":"2026-07-24","o":4840,"h":4873,"l":4795,"c":4850,"v":7130900},{"d":"2026-07-27","o":4920,"h":5034,"l":4910,"c":5023,"v":11712100},{"d":"2026-07-28","o":4923,"h":4946,"l":4797,"c":4890,"v":12339000},{"d":"2026-07-29","o":4911,"h":4993,"l":4885,"c":4957,"v":13881100},{"d":"2026-07-30","o":5200,"h":5267,"l":4990,"c":5255,"v":24607900},{"d":"2026-07-31","o":5299,"h":5362,"l":5170,"c":5267,"v":19901100},{"d":"2026-08-03","o":5181,"h":5336,"l":5167,"c":5301,"v":14071300},{"d":"2026-08-04","o":5390,"h":5527,"l":5312,"c":5412,"v":15277700},{"d":"2026-08-05","o":5425,"h":5498,"l":5314,"c":5476,"v":14031000},{"d":"2026-08-06","o":5425,"h":5595,"l":5424,"c":5500,"v":11584500},{"d":"2026-08-07","o":5503,"h":5620,"l":5475,"c":5620,"v":12076900},{"d":"2026-08-10","o":5590,"h":5689,"l":5575,"c":5620,"v":11815200},{"d":"2026-08-12","o":5589,"h":5697,"l":5537,"c":5669,"v":11575200},{"d":"2026-08-13","o":5677,"h":5764,"l":5657,"c":5702,"v":9441100},{"d":"2026-08-14","o":5670,"h":5830,"l":5670,"c":5767,"v":10672600},{"d":"2026-08-17","o":5668,"h":5688,"l":5568,"c":5571,"v":9693800},{"d":"2026-08-18","o":5500,"h":5552,"l":5472,"c":5514,"v":11545800},{"d":"2026-08-19","o":5322,"h":5376,"l":5216,"c":5225,"v":13005100},{"d":"2026-08-20","o":5273,"h":5354,"l":5233,"c":5263,"v":9035500},{"d":"2026-08-21","o":5263,"h":5298,"l":5186,"c":5196,"v":10673600},{"d":"2026-08-24","o":5278,"h":5336,"l":5248,"c":5266,"v":8736100},{"d":"2026-08-25","o":5243,"h":5300,"l":5166,"c":5300,"v":7142800},{"d":"2026-08-26","o":5320,"h":5396,"l":5306,"c":5307,"v":8709500},{"d":"2026-08-27","o":5361,"h":5465,"l":5314,"c":5433,"v":9614800},{"d":"2026-08-28","o":5512,"h":5645,"l":5486,"c":5550,"v":15398000},{"d":"2026-08-31","o":5452,"h":5480,"l":5395,"c":5438,"v":10725200},{"d":"2026-09-01","o":5420,"h":5573,"l":5407,"c":5541,"v":8838600},{"d":"2026-09-02","o":5453,"h":5478,"l":5312,"c":5335,"v":11452000},{"d":"2026-09-03","o":5377,"h":5428,"l":5319,"c":5352,"v":7544400},{"d":"2026-09-04","o":5425,"h":5426,"l":5330,"c":5377,"v":8019400},{"d":"2026-09-07","o":5418,"h":5445,"l":5350,"c":5358,"v":6868400},{"d":"2026-09-08","o":5300,"h":5312,"l":5187,"c":5187,"v":7749800},{"d":"2026-09-09","o":5150,"h":5233,"l":5121,"c":5173,"v":8454600},{"d":"2026-09-10","o":5130,"h":5182,"l":5130,"c":5182,"v":7143900},{"d":"2026-09-11","o":5044,"h":5200,"l":5040,"c":5199,"v":9761900},{"d":"2026-09-14","o":5219,"h":5387,"l":5167,"c":5325,"v":9012800},{"d":"2026-09-15","o":5281,"h":5301,"l":5196,"c":5221,"v":8785600},{"d":"2026-09-16","o":5263,"h":5410,"l":5250,"c":5372,"v":7394100},{"d":"2026-09-17","o":5399,"h":5510,"l":5390,"c":5475,"v":8733900},{"d":"2026-09-18","o":5497,"h":5530,"l":5425,"c":5524,"v":15940600},{"d":"2026-09-24","o":5582,"h":5590,"l":5452,"c":5497,"v":13495800},{"d":"2026-09-25","o":5512,"h":5578,"l":5485,"c":5536,"v":9858600},{"d":"2026-09-28","o":5490,"h":5621,"l":5490,"c":5518,"v":10745800},{"d":"2026-09-29","o":5504,"h":5572,"l":5441,"c":5465,"v":10745100},{"d":"2026-09-30","o":5465,"h":5514,"l":5393,"c":5489,"v":14102000},{"d":"2026-10-01","o":5460,"h":5520,"l":5443,"c":5510,"v":13032100}]</script>
+<script>
+(function(){
+'use strict';
+const D = JSON.parse(document.getElementById('ohlc').textContent);
+const NS = 'http://www.w3.org/2000/svg';
+const RM = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const fmt = (v,d=0) => v.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+function el(tag, at, p){ const e=document.createElementNS(NS,tag); if(at) for(const k in at) e.setAttribute(k, at[k]); if(p) p.appendChild(e); return e; }
+function tx(p, x, y, s, at){ at=Object.assign({}, at||{}); const f=at.fill; delete at.fill; const t=el('text', Object.assign({x, y}, at), p); if(f) t.style.fill=f; t.textContent=s; return t; }
+const C = {cy:'#3ee6ff', cy2:'#a6f3ff', mag:'#ff5ca3', amb:'#ffb340', tx:'#d8e7ef', tx2:'#9db3c2', tx3:'#7f97a8', w:'#f4fbff', bg:'#05080d'};
+const pts2d = a => a.map(p=>p[0].toFixed(1)+' '+p[1].toFixed(1));
+const poly = a => 'M'+pts2d(a).join('L')+'Z';
+const line = a => 'M'+pts2d(a).join('L');
+const anim = () => !RM && document.body.classList.contains('anim');
+
+function sma(arr, n){ return arr.map((_, i) => i < n-1 ? null : arr.slice(i-n+1, i+1).reduce((a,b)=>a+b,0)/n); }
+const closes = D.map(r=>r.c);
+const ma25 = sma(closes, 25), ma75 = sma(closes, 75);
+function pathOf(vals, X, Y){ let d='', on=false; vals.forEach((v,i)=>{ if(v==null) return; d += (on?'L':'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); on=true; }); return d; }
+
+/* ---------- 共有 defs（グラデーション・発光） ---------- */
+(function(){
+  const s=el('svg',{width:0,height:0,style:'position:absolute','aria-hidden':'true'},document.body); const d=el('defs',null,s);
+  const glow=(id,sd)=>{ const f=el('filter',{id,x:'-40%',y:'-40%',width:'180%',height:'180%'},d); el('feGaussianBlur',{stdDeviation:sd,result:'b'},f); const m=el('feMerge',null,f); el('feMergeNode',{in:'b'},m); el('feMergeNode',{in:'SourceGraphic'},m); };
+  glow('glow',2); glow('glow4',4); glow('mglow',2.2); glow('cglow',1.3);
+  const lg=(id,dir,stops)=>{ const g=el('linearGradient',Object.assign({id},dir),d); stops.forEach(([o,c,a])=>el('stop',{offset:o,'stop-color':c,'stop-opacity':a},g)); };
+  const V={x1:0,y1:0,x2:0,y2:1}, Hh={x1:0,y1:0,x2:1,y2:0}, UP={x1:0,y1:1,x2:0,y2:0};
+  lg('gFloor',V,[[0,'#3ee6ff',.02],[1,'#3ee6ff',.12]]);
+  lg('gBeamUp',UP,[[0,'#3ee6ff',.55],[.6,'#3ee6ff',.12],[1,'#3ee6ff',0]]);
+  lg('gMagF',V,[[0,'#ff7cb6',1],[1,'#d43c80',1]]);
+  lg('gCyF',V,[[0,'#3ee6ff',.42],[1,'#3ee6ff',.2]]);
+  lg('gBarF',V,[[0,'#3ee6ff',.5],[1,'#3ee6ff',.14]]);
+  lg('gBarL',V,[[0,'#2aa8c6',.85],[1,'#0e4352',.85]]);
+  lg('gTrack',Hh,[[0,'#3ee6ff',.12],[.5,'#3ee6ff',.24],[1,'#ffb340',.36]]);
+  lg('gVal',Hh,[[0,'#1fb6d6',1],[1,'#a6f3ff',1]]);
+  lg('gShade',V,[[0,'#000',0],[1,'#000',.5]]);
+  lg('gPillar',UP,[[0,'#effcff',1],[1,'#3ee6ff',0]]);
+  const rg=(id,stops)=>{ const g=el('radialGradient',{id,cx:.5,cy:.5,r:.5},d); stops.forEach(([o,c,a])=>el('stop',{offset:o,'stop-color':c,'stop-opacity':a},g)); };
+  rg('gPool',[[0,'#3ee6ff',.35],[.6,'#3ee6ff',.08],[1,'#3ee6ff',0]]);
+  rg('gOrb',[[0,'#ffffff',1],[.35,'#a6f3ff',1],[1,'#3ee6ff',.2]]);
+  rg('gOrbW',[[0,'#ffffff',1],[.4,'#f4fbff',.9],[1,'#9db3c2',.25]]);
+  const hp=el('pattern',{id:'hatch',width:6,height:6,patternUnits:'userSpaceOnUse',patternTransform:'rotate(45)'},d);
+  el('rect',{width:6,height:6,fill:'rgba(216,231,239,.05)'},hp); el('line',{x1:0,y1:0,x2:0,y2:6,stroke:'rgba(216,231,239,.22)','stroke-width':1},hp);
+  const fp=el('pattern',{id:'fch',width:6,height:6,patternUnits:'userSpaceOnUse',patternTransform:'rotate(45)'},d);
+  el('line',{x1:0,y1:0,x2:0,y2:6,stroke:'rgba(62,230,255,.5)','stroke-width':2},fp);
+  const sp=el('pattern',{id:'sh',width:4,height:4,patternUnits:'userSpaceOnUse',patternTransform:'rotate(45)'},d);
+  el('rect',{width:4,height:4,fill:'rgba(157,179,194,.12)'},sp); el('line',{x1:0,y1:0,x2:0,y2:4,stroke:'#9db3c2','stroke-width':1.6},sp);
+})();
+
+/* 発光チューブ（移動平均線など） */
+function tube(p, d, col, dark, w){
+  w=w||2.2;
+  const g=el('g',{fill:'none','stroke-linejoin':'round','stroke-linecap':'round'},p);
+  el('path',{d,stroke:col,'stroke-width':w*3.4,opacity:.14},g);
+  el('path',{d,stroke:dark,'stroke-width':w*1.75},g);
+  el('path',{d,stroke:col,'stroke-width':w},g);
+  el('path',{d,stroke:'#ffffff','stroke-width':Math.max(.6,w*.32),opacity:.75,transform:'translate(-.4,-.7)'},g);
+  return g;
+}
+
+/* ---------- 株価チャート（立体の箱） ---------- */
+function drawChart(){
+  const host = $('#chart'); host.innerHTML='';
+  const W = host.clientWidth; if(!W) return;
+  const DX=22, DY=15;
+  const padL=8+DX, padR=94, padT=62, mainH=300, gap=28, volH=56, refH=17;
+  const B=padT+mainH, vTop=B+gap, vBot=vTop+volH, H=vBot+refH+24;
+  const svg = el('svg', {width:W, height:H, viewBox:`0 0 ${W} ${H}`, role:'img', 'aria-label':'日立製作所 日足チャート 2026年4月2日から10月1日'}, host);
+  const defs = el('defs', null, svg);
+  const rm = el('linearGradient',{id:'rfm',x1:0,y1:0,x2:0,y2:1},defs);
+  el('stop',{offset:0,'stop-color':'#fff','stop-opacity':.55},rm); el('stop',{offset:1,'stop-color':'#fff','stop-opacity':0},rm);
+  const mk = el('mask',{id:'rfmask',maskUnits:'userSpaceOnUse',x:0,y:vBot,width:W,height:refH+2},defs);
+  el('rect',{x:0,y:vBot,width:W,height:refH+2,fill:'url(#rfm)'},mk);
+
+  const n = D.length, pw = W-padL-padR, st = pw/n, bw = Math.max(2, Math.min(7, st*.58));
+  const cdx = Math.min(3, st*.42), cdy = cdx*.7;
+  const X = i => padL + st*(i+.5);
+  const P0=4350, P1=5950;
+  const Y = p => padT + (P1-p)/(P1-P0)*mainH;
+  const VMAX = 30e6, VY = v => vBot - v/VMAX*volH;
+  const ax = W-padR;
+
+  const g = el('g', null, svg);
+  /* 箱：奥の壁・左の壁・床 */
+  function box(top, bot){
+    el('rect',{x:padL-DX,y:top-DY,width:pw,height:bot-top,fill:'rgba(62,230,255,.025)',stroke:'rgba(62,230,255,.16)'},g);
+    el('path',{d:poly([[padL,top],[padL-DX,top-DY],[padL-DX,bot-DY],[padL,bot]]),fill:'rgba(62,230,255,.04)',stroke:'rgba(62,230,255,.2)'},g);
+    el('path',{d:poly([[padL,bot],[ax,bot],[ax-DX,bot-DY],[padL-DX,bot-DY]]),fill:'url(#gFloor)',stroke:'rgba(62,230,255,.26)'},g);
+    [.34,.67].forEach(f=>el('line',{x1:padL-DX*f,x2:ax-DX*f,y1:bot-DY*f,y2:bot-DY*f,stroke:'rgba(62,230,255,.12)'},g));
+    el('line',{x1:ax-DX,y1:top-DY,x2:ax,y2:top,stroke:'rgba(62,230,255,.22)'},g);
+    el('line',{x1:padL,x2:ax,y1:top,y2:top,stroke:'rgba(62,230,255,.1)'},g);
+  }
+  box(padT,B); box(vTop,vBot);
+  /* 価格の格子：奥の壁に引き、右壁で手前の目盛へつなぐ */
+  const tagPrices = [5830, 5040, 5510];
+  for(let p=4400; p<=5800; p+=200){
+    const y=Y(p);
+    el('line', {x1:padL-DX, x2:ax-DX, y1:y-DY, y2:y-DY, stroke:'rgba(62,230,255,.10)'}, g);
+    el('line', {x1:ax-DX, x2:ax, y1:y-DY, y2:y, stroke:'rgba(62,230,255,.2)'}, g);
+    el('line', {x1:padL-DX, x2:padL, y1:y-DY, y2:y, stroke:'rgba(62,230,255,.12)'}, g);
+    el('line', {x1:ax, x2:ax+5, y1:y, y2:y, stroke:C.tx3}, g);
+    if(tagPrices.every(t => Math.abs(Y(t)-y) > 14)) tx(g, ax+10, y+4, fmt(p), {class:'st-t'});
+  }
+  el('line', {x1:ax, x2:ax, y1:padT, y2:vBot, stroke:'rgba(62,230,255,.4)'}, g);
+  el('line', {x1:padL, x2:ax, y1:B, y2:B, stroke:'rgba(62,230,255,.5)'}, g);
+  el('line', {x1:padL, x2:ax, y1:vBot, y2:vBot, stroke:'rgba(62,230,255,.45)'}, g);
+  /* 月の区切り：床を奥へ走り、奥の壁を立ち上がる */
+  const dateY = vBot+refH+18;
+  D.forEach((r,i)=>{
+    if(i===0 || r.d.slice(5,7)!==D[i-1].d.slice(5,7)){
+      const x = X(i)-st/2;
+      el('path', {d:`M${x} ${B}L${x-DX} ${B-DY}V${padT-DY}`, fill:'none', stroke:'rgba(62,230,255,.1)', 'stroke-dasharray':'2 4'}, g);
+      el('path', {d:`M${x} ${vBot}L${x-DX} ${vBot-DY}V${vTop-DY}`, fill:'none', stroke:'rgba(62,230,255,.08)', 'stroke-dasharray':'2 4'}, g);
+      el('line', {x1:x, x2:x, y1:vBot, y2:vBot+4, stroke:C.tx3}, g);
+      if(x < ax-40) tx(g, x+4, dateY, (i===0?'2026年 ':'') + (+r.d.slice(5,7)) + '月', {class:'st-j'});
+    }
+  });
+  tx(g, ax-2, dateY, '10/01', {class:'st-t', 'text-anchor':'end', fill:C.cy2});
+  tx(g, padL+6, vTop+14, '出来高', {class:'st-j'});
+  tx(g, ax+10, vTop+5, '3,000万', {class:'st-t'});
+  el('line', {x1:ax, x2:ax+5, y1:vTop, y2:vTop, stroke:C.tx3}, g);
+
+  /* 移動平均線の残像（奥の壁へ投影） */
+  const echo = el('g',{transform:`translate(${-DX} ${-DY})`, fill:'none', 'stroke-width':1, opacity:.32},svg);
+  el('path',{d:pathOf(ma75,X,Y),stroke:C.amb},echo);
+  el('path',{d:pathOf(ma25,X,Y),stroke:C.w},echo);
+
+  /* サポート/レジスタンス：空間を貫く光の板 */
+  [[5830,'RES'],[5040,'SUP']].forEach(([p,k])=>{
+    const y1=Y(p+18), y2=Y(p-18), y=Y(p);
+    el('path',{d:poly([[padL,y1],[ax,y1],[ax-DX,y1-DY],[padL-DX,y1-DY]]),fill:'rgba(216,231,239,.10)',stroke:'rgba(216,231,239,.28)','stroke-width':.8},g);
+    el('path',{d:poly([[padL,y1],[padL-DX,y1-DY],[padL-DX,y2-DY],[padL,y2]]),fill:'rgba(216,231,239,.16)'},g);
+    el('rect',{x:padL,y:y1,width:pw,height:y2-y1,fill:'url(#hatch)'},g);
+    el('line',{x1:padL,x2:ax,y1:y2,y2:y2,stroke:'rgba(216,231,239,.18)'},g);
+    el('line',{x1:padL,x2:ax,y1:y,y2:y,stroke:'rgba(216,231,239,.6)','stroke-dasharray':'5 4'},g);
+    el('path',{d:`M${ax+2} ${y} l7 -10 h${padR-12} v20 h-${padR-12} z`, fill:'#0b1824', stroke:'rgba(216,231,239,.6)'},g);
+    tx(g, ax+13, y+4, k+' '+fmt(p), {class:'st-t', fill:C.tx});
+  });
+
+  /* 出来高：小さな角柱＋ガラス床への反射 */
+  const vg = el('g', {class:'a-rv'}, svg);
+  const refl = el('g', {transform:`matrix(1 0 0 -0.3 0 ${(vBot*1.3).toFixed(1)})`, mask:'url(#rfmask)', opacity:.9}, svg);
+  for(let i=n-1;i>=0;i--){
+    const r=D[i], upb = r.c>=r.o, y=VY(r.v), x=X(i), x0=x-bw/2;
+    const fcol = upb?'rgba(62,230,255,.42)':'rgba(255,92,163,.52)';
+    el('path',{d:poly([[x0,y],[x0+bw,y],[x0+bw-cdx,y-cdy],[x0-cdx,y-cdy]]),fill:upb?'rgba(166,243,255,.75)':'rgba(255,169,207,.8)'},vg);
+    el('path',{d:poly([[x0,y],[x0-cdx,y-cdy],[x0-cdx,vBot-cdy],[x0,vBot]]),fill:upb?'rgba(30,130,160,.6)':'rgba(150,40,90,.6)'},vg);
+    el('rect', {x:x0.toFixed(1), y:y.toFixed(1), width:bw.toFixed(1), height:(vBot-y).toFixed(1), fill:fcol}, vg);
+    el('rect', {x:x0.toFixed(1), y:y.toFixed(1), width:bw.toFixed(1), height:(vBot-y).toFixed(1), fill:upb?'#3ee6ff':'#ff5ca3'}, refl);
+  }
+  /* ローソク足：面・側面・天面を持つ発光体 */
+  const cg = el('g', {class:'a-rv', filter:'url(#cglow)'}, svg);
+  for(let i=n-1;i>=0;i--){
+    const r=D[i], upb = r.c>=r.o, x=X(i), col = upb?C.cy:C.mag, x0=x-bw/2;
+    el('line', {x1:(x-cdx/2).toFixed(1), x2:(x-cdx/2).toFixed(1), y1:(Y(r.h)-cdy/2).toFixed(1), y2:(Y(r.l)-cdy/2).toFixed(1), stroke:col, 'stroke-width':1, opacity:.9}, cg);
+    const yt = Y(Math.max(r.o,r.c)), hh = Math.max(1.2, Math.abs(Y(r.o)-Y(r.c)));
+    el('path',{d:poly([[x0,yt],[x0-cdx,yt-cdy],[x0-cdx,yt+hh-cdy],[x0,yt+hh]]),fill:upb?'rgba(28,140,170,.85)':'#a52c64'},cg);
+    el('path',{d:poly([[x0,yt],[x0+bw,yt],[x0+bw-cdx,yt-cdy],[x0-cdx,yt-cdy]]),fill:upb?'#bff7ff':'#ffb0d3'},cg);
+    el('rect', {x:x0.toFixed(1), y:yt.toFixed(1), width:bw.toFixed(1), height:hh.toFixed(1), fill: upb?'url(#gCyF)':'url(#gMagF)', stroke:col, 'stroke-width':.9}, cg);
+  }
+  /* 移動平均：発光チューブ */
+  const mg = el('g',{class:'a-rv'},svg); mg.style.animationDelay='.6s';
+  tube(mg, pathOf(ma75,X,Y), C.amb, '#7a4a0c', 2);
+  tube(mg, pathOf(ma25,X,Y), C.w, '#5d7686', 2);
+
+  /* 現在値：床のエミッターからの投影ビーム */
+  const li=n-1, lx=X(li), ly=Y(D[li].c), ex=lx-DX*.5, ey=B-DY*.5;
+  const bm = el('g',{class:'a-fade'},svg);
+  el('path',{d:poly([[ex-9,ey],[ex+9,ey],[lx+2,ly+8],[lx-2,ly+8]]),fill:'url(#gBeamUp)',opacity:.85},bm);
+  el('line',{x1:ex,y1:ey,x2:lx,y2:ly+8,stroke:'#c9f8ff','stroke-width':1,opacity:.8},bm);
+  el('ellipse',{cx:ex,cy:ey,rx:13,ry:4.5,fill:'url(#gPool)'},bm);
+  el('ellipse',{cx:ex,cy:ey,rx:8,ry:2.8,fill:'none',stroke:C.cy,'stroke-width':1.2},bm);
+  el('line', {x1:lx+12, x2:ax, y1:ly, y2:ly, stroke:C.cy, 'stroke-dasharray':'2 3', opacity:.85}, svg);
+  el('path', {d:`M${ax+2} ${ly} l7 -11 h${padR-10} v22 h-${padR-10} z`, fill:C.cy, filter:'url(#glow)'}, svg);
+  tx(svg, ax+13, ly+4.5, fmt(D[li].c), {class:'st-t', fill:C.bg, style:'font-weight:700'});
+  const rt = el('g', {fill:'none', 'stroke-width':1.2}, svg);
+  el('ellipse', {cx:lx, cy:ly, rx:12, ry:4.4, stroke:C.cy}, rt);
+  el('ellipse', {cx:lx, cy:ly, rx:18, ry:6.6, stroke:'rgba(62,230,255,.55)', 'stroke-dasharray':'3 3'}, rt);
+  el('path', {d:`M${lx} ${ly-6}l5 6-5 6-5-6z`, fill:'#effcff', stroke:C.cy, filter:'url(#glow)'}, rt);
+
+  /* 注釈ピン */
+  const idx = ds => D.findIndex(r=>r.d===ds);
+  function pin(ds, anchor, labelY, label){
+    const i = idx(ds); if(i<0) return;
+    const x = X(i), ya = Y(anchor);
+    const pg = el('g', {class:'a-fade'}, svg);
+    el('path', {d:`M${x} ${ya} V${labelY} H${x-14}`, stroke:C.cy2, 'stroke-width':1, fill:'none', opacity:.85}, pg);
+    el('path', {d:`M${x} ${ya-5} l5 5 -5 5 -5 -5z`, fill:C.bg, stroke:C.cy, 'stroke-width':1.5}, pg);
+    const t = tx(pg, 0, labelY+4.5, label, {class:'st-j', fill:C.tx, 'text-anchor':'end'});
+    const tw = t.getComputedTextLength();
+    const bx = x-14-tw-20, bwid = tw+20;
+    t.setAttribute('x', x-24);
+    const depth = el('path', {d:poly([[bx,labelY-5],[bx+6,labelY-11],[bx+6-4,labelY-14],[bx-4,labelY-8],[bx-4,labelY+8],[bx,labelY+11]]), fill:'rgba(30,110,135,.7)'}, pg);
+    const box2 = el('path', {d:`M${bx+6} ${labelY-11} H${bx+bwid} V${labelY+11} H${bx} V${labelY-5} Z`, fill:'rgba(6,16,25,.94)', stroke:C.cy, 'stroke-width':1}, pg);
+    pg.insertBefore(depth, t); pg.insertBefore(box2, t);
+    el('rect', {x:bx, y:labelY-5, width:3, height:16, fill:C.cy}, pg);
+  }
+  pin('2026-07-29', 4993, Y(5640), '7/29 決算・上方修正');
+  pin('2026-08-14', 5830, padT-DY-18, '8/14 高値 5,830');
+  pin('2026-09-11', 5040, Y(4850), '9/11 安値 5,040');
+}
+
+/* ---------- 4点診断：横たわるホログラム円盤 ---------- */
+function drawDiscs(){
+  $$('.disc').forEach(s=>{
+    s.innerHTML=''; s.setAttribute('viewBox','0 0 240 150');
+    const v=+s.dataset.v, cx=120, cy=92, k=.48;
+    const P=(a,r,h)=>[cx+r*Math.cos(a), cy-r*Math.sin(a)*k-(h||0)];
+    const arc=(a0,a1,r,h)=>{ const o=[], m=Math.max(2,Math.ceil(Math.abs(a1-a0)/.05)); for(let j=0;j<=m;j++) o.push(P(a0+(a1-a0)*j/m,r,h)); return o; };
+    el('ellipse',{cx,cy,rx:116,ry:116*k+4,fill:'url(#gPool)',opacity:.55},s);
+    el('ellipse',{cx,cy,rx:70,ry:70*k,fill:'none',stroke:'rgba(62,230,255,.18)'},s);
+    el('ellipse',{cx,cy,rx:42,ry:42*k,fill:'none',stroke:'rgba(62,230,255,.16)','stroke-dasharray':'1 3'},s);
+    /* 目盛（円盤の奥側） */
+    for(let t=0;t<=10;t++){ const a=Math.PI*(1-t/10), q0=P(a,103), q1=P(a,t%5===0?111:107); el('line',{x1:q0[0],y1:q0[1],x2:q1[0],y2:q1[1],stroke:C.tx3,'stroke-width':1},s); }
+    const R0=84, R1=99, hT=3, hV=8;
+    /* 土台の帯（5区画） */
+    for(let q=0;q<5;q++){
+      const a0=Math.PI*(1-q/5)-.012, a1=Math.PI*(1-(q+1)/5)+.012;
+      el('path',{d:poly(arc(a0,a1,R0,hT).concat(arc(a1,a0,R0,0))),fill:'rgba(14,60,74,.9)'},s);
+      el('path',{d:poly(arc(a0,a1,R1,hT).concat(arc(a1,a0,R0,hT))),fill:'rgba(62,230,255,.14)',stroke:'rgba(62,230,255,.22)','stroke-width':.6},s);
+    }
+    /* 値の帯：押し出して持ち上げる */
+    const av=Math.PI*(1-v);
+    el('path',{d:poly(arc(Math.PI,av,R0,hV).concat(arc(av,Math.PI,R0,0))),fill:'#11677a'},s);
+    const ea=P(av,R0,hV), eb=P(av,R1,hV), ec=P(av,R1,0), ed=P(av,R0,0);
+    el('path',{d:poly([ea,eb,ec,ed]),fill:'#1b8aa1'},s);
+    el('path',{d:poly(arc(Math.PI,av,R1,hV).concat(arc(av,Math.PI,R0,hV))),fill:'url(#gVal)',filter:'url(#mglow)'},s);
+    /* 針：盤面上の点線＋立ち上がる光柱 */
+    const pc=P(av,(R0+R1)/2,hV);
+    el('line',{x1:cx,y1:cy,x2:P(av,R0)[0],y2:P(av,R0)[1],stroke:'rgba(239,252,255,.55)','stroke-width':1,'stroke-dasharray':'2 2'},s);
+    el('rect',{x:pc[0]-1.6,y:pc[1]-28,width:3.2,height:28,fill:'url(#gPillar)'},s);
+    el('path',{d:`M${pc[0]} ${pc[1]-35}l5 5-5 5-5-5z`,fill:'#effcff',stroke:C.cy,'stroke-width':1,filter:'url(#glow)'},s);
+    el('ellipse',{cx:pc[0],cy:pc[1],rx:8,ry:3,fill:'url(#gPool)'},s);
+    /* 中心のエミッターと投影の円錐 */
+    el('path',{d:poly([[cx-15,cy],[cx+15,cy],[cx+44,cy-24],[cx-44,cy-24]]),fill:'url(#gBeamUp)',opacity:.4},s);
+    el('ellipse',{cx,cy,rx:15,ry:15*k,fill:'url(#gPool)'},s);
+    el('ellipse',{cx,cy,rx:9,ry:9*k,fill:'none',stroke:C.cy,'stroke-width':1.2},s);
+    el('circle',{cx,cy,r:2.2,fill:'#effcff'},s);
+    if(anim()){
+      s.querySelectorAll('path,rect,line').forEach((e,i)=>{ e.style.animation=`fade .6s ${(.5+i*.012).toFixed(3)}s both`; });
+    }
+  });
+}
+
+/* ---------- 業績：アイソメ風の立体棒＋浮遊する折れ線 ---------- */
+function drawPerf(){
+  const host=$('#perf'); host.innerHTML=''; const W=host.clientWidth; if(!W) return;
+  const DX=16, DY=11, H=200, pl=10+DX, pr=10, pt=40, pb=26, base=H-pb, ch=base-pt;
+  const svg=el('svg',{width:W,height:H,viewBox:`0 0 ${W} ${H}`,role:'img','aria-label':'売上高と最終利益の推移'},host);
+  const rows=[['2025.3',97833,6157,false],['2026.3',105867,8023,false],['2027.3予',117000,9000,true]];
+  const gw=(W-pl-pr)/3, bwid=Math.min(72,gw*.42);
+  const RY=v=>base-v/130000*ch, PY=v=>base-v/16000*ch;
+  // 奥の壁の目盛＋床
+  [0,.25,.5,.75].forEach(f=>{ const y=pt+ch*f; el('line',{x1:pl-DX,x2:W-pr-DX,y1:y-DY,y2:y-DY,stroke:'rgba(62,230,255,.08)'},svg); });
+  el('path',{d:poly([[pl,base],[W-pr,base],[W-pr-DX,base-DY],[pl-DX,base-DY]]),fill:'url(#gFloor)',stroke:'rgba(62,230,255,.3)'},svg);
+  el('line',{x1:pl-DX,x2:pl-DX,y1:pt-DY,y2:base-DY,stroke:'rgba(62,230,255,.14)'},svg);
+  const pts=[];
+  rows.forEach((r,i)=>{
+    const cx=pl+gw*(i+.5), y=RY(r[1]), x0=cx-bwid/2, x1=cx+bwid/2, f=r[3];
+    const bg=el('g',{class:'a-grow'},svg); bg.style.animationDelay=(.4+i*.12)+'s';
+    el('path',{d:poly([[x0,y],[x0-DX,y-DY],[x0-DX,base-DY],[x0,base]]),fill:f?'rgba(62,230,255,.07)':'url(#gBarL)',stroke:f?C.cy:'none','stroke-dasharray':f?'3 3':'','stroke-width':.8},bg);
+    el('path',{d:poly([[x0,y],[x1,y],[x1-DX,y-DY],[x0-DX,y-DY]]),fill:f?'rgba(62,230,255,.16)':'rgba(166,243,255,.85)',stroke:f?C.cy:'none','stroke-dasharray':f?'3 3':'','stroke-width':.8},bg);
+    el('rect',{x:x0,y,width:bwid,height:base-y,fill:f?'url(#fch)':'url(#gBarF)',stroke:f?C.cy:'rgba(62,230,255,.6)','stroke-dasharray':f?'4 3':'','stroke-width':1},bg);
+    if(!f) el('rect',{x:x0,y,width:bwid,height:2,fill:'#effcff',filter:'url(#mglow)'},bg);
+    tx(svg,cx-DX/2,y-DY-8,fmt(r[1]),{class:'st-t','text-anchor':'middle',fill:C.tx});
+    tx(svg,cx,H-7,r[0],{class:'st-t','text-anchor':'middle',fill:f?C.cy2:C.tx2});
+    pts.push([cx,PY(r[2]),r[2]]);
+  });
+  // 浮遊する利益線：床への落下線と影
+  pts.forEach(p=>{
+    el('line',{x1:p[0],x2:p[0],y1:p[1]+5,y2:base-DY*.5,stroke:'rgba(244,251,255,.35)','stroke-dasharray':'2 3'},svg);
+    el('ellipse',{cx:p[0],cy:base-DY*.5,rx:10,ry:3.4,fill:'url(#gPool)'},svg);
+  });
+  const lg=el('g',{class:'a-rv'},svg); lg.style.animationDelay='.8s';
+  tube(lg,'M'+pts.map(p=>p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' L'),C.w,'#5d7686',2);
+  pts.forEach(p=>{
+    el('circle',{cx:p[0],cy:p[1],r:5.5,fill:'url(#gOrbW)',filter:'url(#glow)'},svg);
+    const lab=fmt(p[2]); const w=lab.length*7.4+12;
+    el('path',{d:poly([[p[0]+10,p[1]-9],[p[0]+7,p[1]-12],[p[0]+7+w,p[1]-12],[p[0]+10+w,p[1]-9]]),fill:'rgba(244,251,255,.25)'},svg);
+    el('rect',{x:p[0]+10,y:p[1]-9,width:w,height:18,fill:'rgba(6,14,22,.95)',stroke:'rgba(244,251,255,.5)'},svg);
+    tx(svg,p[0]+16,p[1]+4,lab,{class:'st-t',fill:C.w});
+  });
+}
+
+/* ---------- 割高・割安：押し出しのレール＋光柱 ---------- */
+function drawGauges(){
+  $$('svg.g3').forEach(s=>{
+    s.innerHTML=''; const W=s.clientWidth; if(!W) return;
+    s.setAttribute('viewBox',`0 0 ${W} 74`);
+    const max=+s.dataset.max, v=+s.dataset.v, DX=8, DY=6, x0=4+DX, x1=W-14, ty=36, th=10;
+    const X=t=>x0+(x1-x0)*t/max;
+    el('path',{d:poly([[x0,ty],[x1,ty],[x1-DX,ty-DY],[x0-DX,ty-DY]]),fill:'rgba(62,230,255,.12)',stroke:'rgba(62,230,255,.3)','stroke-width':.6},s);
+    el('path',{d:poly([[x0,ty],[x0-DX,ty-DY],[x0-DX,ty+th-DY],[x0,ty+th]]),fill:'rgba(62,230,255,.3)'},s);
+    el('rect',{x:x0,y:ty,width:x1-x0,height:th,fill:'url(#gTrack)',stroke:'rgba(62,230,255,.35)'},s);
+    // 値までの充填（天面を明るく）
+    const xv=X(v);
+    const fg=el('g',{class:'a-gx'},s); fg.style.transformOrigin=`${x0}px 0`;
+    el('path',{d:poly([[x0,ty],[xv,ty],[xv-DX,ty-DY],[x0-DX,ty-DY]]),fill:'rgba(166,243,255,.32)'},fg);
+    el('rect',{x:x0,y:ty,width:xv-x0,height:th,fill:'rgba(62,230,255,.22)'},fg);
+    s.dataset.ticks.split(',').map(Number).forEach(t=>{
+      const x=X(t); el('line',{x1:x,x2:x,y1:ty+th,y2:ty+th+5,stroke:C.tx3},s);
+      tx(s,x,ty+th+18,String(t),{class:'st-t','text-anchor':'middle',fill:C.tx3});
+    });
+    if(s.dataset.ref){
+      const xr=X(+s.dataset.ref);
+      el('path',{d:poly([[xr,ty-9],[xr-DX,ty-9-DY],[xr-DX,ty+th-DY+3],[xr,ty+th+3]]),fill:'rgba(216,231,239,.12)'},s);
+      el('line',{x1:xr,x2:xr,y1:ty-9,y2:ty+th+3,stroke:C.tx,'stroke-dasharray':'2 2'},s);
+      tx(s,xr-DX/2,ty-DY-8,s.dataset.rl,{class:'st-j','text-anchor':'middle',fill:C.tx});
+    }
+    // 光柱マーカー
+    const mg=el('g',{class:'a-fade'},s);
+    const bx=xv-DX/2, by=ty-DY/2;
+    el('ellipse',{cx:bx,cy:by,rx:10,ry:3.5,fill:'url(#gPool)'},mg);
+    el('rect',{x:bx-1.5,y:by-24,width:3,height:24,fill:'url(#gPillar)'},mg);
+    el('path',{d:`M${bx} ${by-31}l5 5-5 5-5-5z`,fill:'#effcff',stroke:C.cy,filter:'url(#glow)'},mg);
+    el('line',{x1:xv,x2:xv,y1:ty,y2:ty+th,stroke:'#effcff','stroke-width':2,filter:'url(#glow)'},mg);
+  });
+}
+
+/* ---------- 需給：角柱＋倍率チューブ ---------- */
+function drawSupply(){
+  const host=$('#supply'); host.innerHTML=''; const W=host.clientWidth; if(!W) return;
+  const rows=[['08/28',703.6,3824.2,5.44],['09/04',511.5,3945.4,7.71],['09/11',362.2,4101.6,11.32],['09/18',442.3,3678.2,8.32],['09/25',465.5,3518.8,7.56]];
+  const H=150, pt=22, pb=18, base=H-pb, ch=base-pt, DX=6, DY=4.5, pl=4+DX, pr=4;
+  const svg=el('svg',{width:W,height:H,viewBox:`0 0 ${W} ${H}`,role:'img','aria-label':'信用残と信用倍率の推移'},host);
+  el('path',{d:poly([[pl,base],[W-pr,base],[W-pr-DX,base-DY],[pl-DX,base-DY]]),fill:'url(#gFloor)',stroke:'rgba(62,230,255,.3)'},svg);
+  const gw=(W-pl-pr)/rows.length, bw=Math.min(15,gw*.26);
+  const BY=v=>base-v/8200*ch, RY=v=>pt+12+(12-v)/(12-5)*ch*.4;
+  const prism=(x0,y,w,front,top,side,p)=>{
+    el('path',{d:poly([[x0,y],[x0-DX,y-DY],[x0-DX,base-DY],[x0,base]]),fill:side},p);
+    el('path',{d:poly([[x0,y],[x0+w,y],[x0+w-DX,y-DY],[x0-DX,y-DY]]),fill:top},p);
+    el('rect',{x:x0,y,width:w,height:base-y,fill:front},p);
+  };
+  const pts=[];
+  rows.forEach((r,i)=>{
+    const cx=pl+gw*(i+.5);
+    const g1=el('g',{class:'a-grow'},svg); g1.style.animationDelay=(.4+i*.08)+'s';
+    prism(cx+2,BY(r[1]),bw,'url(#sh)','rgba(200,215,225,.55)','rgba(90,110,122,.6)',g1);
+    prism(cx-bw-2,BY(r[2]),bw,'rgba(62,230,255,.55)','rgba(166,243,255,.85)','rgba(28,120,145,.8)',g1);
+    tx(svg,cx,H-3,r[0],{class:'st-t','text-anchor':'middle'});
+    pts.push([cx,RY(r[3]),r[3]]);
+  });
+  const lg=el('g',{class:'a-rv'},svg); lg.style.animationDelay='.8s';
+  tube(lg,'M'+pts.map(p=>p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' L'),C.w,'#5d7686',1.6);
+  pts.forEach((p,i)=>{
+    const last=i===4;
+    el('rect',{x:p[0]-4,y:p[1]-4,width:8,height:8,fill:last?C.cy:'#0b1824',stroke:last?'#effcff':C.w,'stroke-width':1.5,transform:`rotate(45 ${p[0]} ${p[1]})`,filter:last?'url(#glow)':''},svg);
+    tx(svg,p[0],p[1]-10,p[2].toFixed(2),{class:'st-t','text-anchor':'middle',fill:last?C.cy:C.tx});
+  });
+}
+
+/* ---------- シナリオ：現在値から放たれる光の円錐 ---------- */
+function drawFan(){
+  const host=$('#fan'); host.innerHTML=''; const W=host.clientWidth; if(!W) return;
+  const H=Math.max(300, host.parentElement.clientHeight);
+  const pl=52, pr=10, pt=22, pb=30, P0=4950, P1=5990;
+  const Y=p=>pt+(P1-p)/(P1-P0)*(H-pt-pb);
+  const svg=el('svg',{width:W,height:H,viewBox:`0 0 ${W} ${H}`,role:'img','aria-label':'現在値から3方向に分かれるシナリオ図'},host);
+  const defs=el('defs',null,svg);
+  const hist=D.slice(-20), nowX=pl+(W-pl-pr)*.38, endX=W-pr-12, nowY=Y(5510);
+  const HX=i=>pl+(nowX-pl)*(i/(hist.length-1));
+  const cg=(id,col,a0,a1)=>{ const g=el('linearGradient',{id,gradientUnits:'userSpaceOnUse',x1:nowX,y1:0,x2:endX,y2:0},defs); el('stop',{offset:0,'stop-color':col,'stop-opacity':a0},g); el('stop',{offset:1,'stop-color':col,'stop-opacity':a1},g); };
+  cg('cnU','#3ee6ff',.42,.12); cg('cnN','#cfdde6',.2,.06); cg('cnD','#ff5ca3',.42,.12);
+  const mk=(id,col)=>{ const m=el('marker',{id,viewBox:'0 0 10 10',refX:8,refY:5,markerWidth:7,markerHeight:7,orient:'auto-start-reverse'},defs); el('path',{d:'M0 0L10 5L0 10z',fill:col},m); };
+  mk('arU',C.cy); mk('arD',C.mag); mk('arN','#cfdde6');
+  // 放射状の床ガイド（NOWを消失点に）
+  for(let k=0;k<=8;k++){ const yy=pt+(H-pt-pb)*k/8; el('line',{x1:nowX,y1:nowY,x2:endX+10,y2:yy,stroke:'rgba(62,230,255,.06)'},svg); }
+  [.33,.66].forEach(f=>{ const x=nowX+(endX-nowX)*f; el('line',{x1:x,x2:x,y1:pt,y2:H-pb,stroke:'rgba(62,230,255,.08)','stroke-dasharray':'2 5'},svg); });
+  [[5830,'5,830'],[5510,'5,510'],[5117,'5,117'],[5040,'5,040']].forEach(([p,l])=>{
+    el('line',{x1:pl,x2:endX,y1:Y(p),y2:Y(p),stroke:'rgba(62,230,255,.1)','stroke-dasharray':'2 4'},svg);
+    tx(svg,pl-6,Y(p)+(p===5040?12:p===5117?-2:4),l,{class:'st-t','text-anchor':'end',fill:p===5510?C.cy:C.tx2});
+  });
+  const L=endX-nowX;
+  const cone=(yT,yB,grad,col)=>{
+    const g=el('g',{class:'a-rv'},svg); g.style.animationDelay='.7s';
+    el('path',{d:`M${nowX} ${nowY} C${nowX+L*.38} ${nowY}, ${endX-L*.34} ${yT}, ${endX} ${yT} L${endX} ${yB} C${endX-L*.34} ${yB}, ${nowX+L*.38} ${nowY}, ${nowX} ${nowY}Z`,fill:`url(#${grad})`},g);
+    el('path',{d:`M${nowX} ${nowY} C${nowX+L*.38} ${nowY}, ${endX-L*.34} ${yT}, ${endX} ${yT}`,fill:'none',stroke:col,'stroke-opacity':.45,'stroke-width':.8},g);
+    el('path',{d:`M${nowX} ${nowY} C${nowX+L*.38} ${nowY}, ${endX-L*.34} ${yB}, ${endX} ${yB}`,fill:'none',stroke:col,'stroke-opacity':.45,'stroke-width':.8},g);
+    const ry=(yB-yT)/2, rx=Math.max(5,ry*.22);
+    el('ellipse',{cx:endX+2,cy:(yT+yB)/2,rx,ry,fill:'none',stroke:col,'stroke-opacity':.35,'stroke-width':3},g);
+    el('ellipse',{cx:endX,cy:(yT+yB)/2,rx,ry,fill:col,'fill-opacity':.1,stroke:col,'stroke-width':1.4},g);
+    return g;
+  };
+  cone(Y(5830),Y(5040),'cnN','#cfdde6');
+  cone(Y(5117),Y(4985),'cnD',C.mag);
+  cone(Y(5935),Y(5830),'cnU',C.cy);
+  // 直近20日の軌跡
+  tube(svg,'M'+hist.map((r,i)=>HX(i).toFixed(1)+' '+Y(r.c).toFixed(1)).join(' L'),C.tx2,'#3a4a55',1.4);
+  tx(svg,pl+4,H-8,'直近20日',{class:'st-j'});
+  // 3本のビーム
+  const rays=[
+    [`M${nowX} ${nowY} C${nowX+L*.38} ${nowY-4}, ${endX-L*.34} ${Y(5882)}, ${endX-8} ${Y(5882)}`,C.cy,'arU'],
+    [`M${nowX} ${nowY} L${endX-8} ${nowY}`,'#cfdde6','arN'],
+    [`M${nowX} ${nowY} C${nowX+L*.38} ${nowY+4}, ${endX-L*.34} ${Y(5051)}, ${endX-8} ${Y(5051)}`,C.mag,'arD']];
+  rays.forEach(([d,col,m],k)=>{
+    const g=el('g',{class:'a-rv'},svg); g.style.animationDelay=(.8+k*.12)+'s';
+    el('path',{d,fill:'none',stroke:col,'stroke-width':6,opacity:.16},g);
+    el('path',{d,fill:'none',stroke:col,'stroke-width':2,'marker-end':`url(#${m})`,'stroke-dasharray':k===1?'6 5':''},g);
+  });
+  tx(svg,endX-16,Y(5935)-8,'強気',{class:'st-j','text-anchor':'end',fill:C.cy,style:'font-weight:700'});
+  tx(svg,endX-16,nowY-9,'中立',{class:'st-j','text-anchor':'end',fill:'#dfe9ef',style:'font-weight:700'});
+  tx(svg,endX-16,Y(4985)+16,'弱気',{class:'st-j','text-anchor':'end',fill:C.mag,style:'font-weight:700'});
+  // NOW：床からの光柱＋浮遊リング
+  el('path',{d:poly([[nowX-7,H-pb],[nowX+7,H-pb],[nowX+1.5,nowY+6],[nowX-1.5,nowY+6]]),fill:'url(#gBeamUp)',opacity:.7},svg);
+  el('ellipse',{cx:nowX,cy:H-pb,rx:14,ry:4,fill:'url(#gPool)'},svg);
+  el('ellipse',{cx:nowX,cy:nowY,rx:15,ry:5.5,fill:'none',stroke:C.cy,'stroke-width':1.2},svg);
+  el('ellipse',{cx:nowX,cy:nowY,rx:22,ry:8,fill:'none',stroke:'rgba(62,230,255,.5)','stroke-dasharray':'3 3'},svg);
+  el('circle',{cx:nowX,cy:nowY,r:5,fill:'url(#gOrb)',filter:'url(#glow)'},svg);
+  tx(svg,nowX,nowY+30,'NOW',{class:'st-t','text-anchor':'middle',fill:C.cy,style:'font-family:Orbitron;letter-spacing:.14em'});
+}
+
+/* ---------- 稼ぎ頭：厚みのある3Dドーナツ ---------- */
+function drawDonut(){
+  const s=$('#donut'); s.innerHTML='';
+  const vals=[[4501,'#3ee6ff','#1797b3','#0b4f60'],[4160,'#8ff0ff','#4cb9cc','#1d6977'],[3674,'#2a9fc4','#1a6f8c','#0e4255'],[1081,'#6f93a8','#4a6575','#2a3a44']];
+  s.setAttribute('viewBox','0 0 236 150'); s.setAttribute('width',200); s.setAttribute('height',128);
+  const tot=vals.reduce((a,b)=>a+b[0],0), cx=118, cy=84, R=104, r=58, k=.44, Hh=22;
+  const P=(a,rad,h)=>[cx+rad*Math.cos(a), cy+rad*Math.sin(a)*k-(h||0)];
+  const arc=(a0,a1,rad,h)=>{ const m=Math.max(2,Math.ceil(Math.abs(a1-a0)/.04)), o=[]; for(let j=0;j<=m;j++) o.push(P(a0+(a1-a0)*j/m,rad,h)); return o; };
+  const inter=(a0,a1,b0,b1)=>{ const lo=Math.max(a0,b0), hi=Math.min(a1,b1); return hi>lo?[lo,hi]:null; };
+  // 床の投影
+  el('ellipse',{cx,cy:cy+4,rx:R+14,ry:(R+14)*k,fill:'url(#gPool)',opacity:.7},s);
+  el('ellipse',{cx,cy:cy+4,rx:R+10,ry:(R+10)*k,fill:'none',stroke:'rgba(62,230,255,.35)','stroke-dasharray':'2 5'},s);
+  let a=-Math.PI/2;
+  const segs=vals.map(([v,...cols])=>{ const da=v/tot*2*Math.PI; const o={a0:a,a1:a+da,cols}; a+=da; return o; });
+  const g=el('g',{class:'a-fade'},s); g.style.animationDelay='.6s';
+  // 穴の内壁（奥側）
+  segs.forEach(sg=>[[-Math.PI/2,0],[Math.PI,1.5*Math.PI]].forEach(br=>{ const q=inter(sg.a0,sg.a1,br[0],br[1]); if(!q) return;
+    el('path',{d:poly(arc(q[0],q[1],r,Hh).concat(arc(q[1],q[0],r,0))),fill:sg.cols[2]},g); }));
+  // 外壁（手前側）
+  segs.forEach(sg=>{ const q=inter(sg.a0,sg.a1,0,Math.PI); if(!q) return;
+    const d=poly(arc(q[0],q[1],R,Hh).concat(arc(q[1],q[0],R,0)));
+    el('path',{d,fill:sg.cols[1]},g); el('path',{d,fill:'url(#gShade)'},g); });
+  segs.forEach(sg=>{ if(sg.a0>0 && sg.a0<Math.PI){ const t=P(sg.a0,R,Hh), b=P(sg.a0,R,0); el('line',{x1:t[0],y1:t[1],x2:b[0],y2:b[1],stroke:'#04101a','stroke-width':1.5},g); } });
+  // 天面
+  segs.forEach(sg=>{
+    el('path',{d:poly(arc(sg.a0,sg.a1,R,Hh).concat(arc(sg.a1,sg.a0,r,Hh))),fill:sg.cols[0],'fill-opacity':.93,stroke:'#04101a','stroke-width':1.4},g);
+  });
+  el('path',{d:line(arc(0,Math.PI,R,Hh)),fill:'none',stroke:'rgba(255,255,255,.55)','stroke-width':1},g);
+  el('path',{d:line(arc(Math.PI*1.05,Math.PI*1.95,R,Hh)),fill:'none',stroke:'rgba(255,255,255,.35)','stroke-width':1},g);
+}
+
+/* ---------- チェックリスト ---------- */
+function buildChecklist(){
+  const items=[['サポートラインへのタッチと反発','p'],['ダブルボトム','d'],['逆三尊','x'],['ボックス相場の下限での反発','x'],['底練りからのレジスタンスライン突破','d'],['サポレジ転換','p'],['三角持ち合いからの上抜け','x'],['ゴールデンクロス後の初押し','d'],['75日移動平均線のサポート・上抜け','d'],['200日移動平均線での押し','d']];
+  const lab={d:'完成済み',p:'進行中',x:'なし'};
+  $('#ckg').innerHTML=items.map((it,i)=>`<div class="ck ${it[1]}"><div class="n"><span>C-${String(i+1).padStart(2,'0')}</span><svg><use href="#st-${it[1]}"/></svg></div><p>${it[0]}</p><div class="s">${lab[it[1]]}</div></div>`).join('');
+}
+
+/* ---------- ホーム ---------- */
+function synth(seed,n,drift,vol,endUp){
+  let x=seed, v=100, out=[];
+  const rnd=()=>{ x=(x*16807)%2147483647; return x/2147483647-.5; };
+  for(let i=0;i<n;i++){ v+=drift+rnd()*vol; out.push(v); }
+  out[n-1]=out[n-2]*(endUp?1.012:0.994);
+  return out;
+}
+function spark(vals,up,id){
+  const n=vals.length, mn=Math.min(...vals), mx=Math.max(...vals);
+  const X=i=>6+i/(n-1)*192, Y=v=>38-(v-mn)/(mx-mn||1)*30, BASE=42;
+  const f=vals.map((v,i)=>[X(i),Y(v)]), b=f.map(p=>[p[0]-5,p[1]-4]).reverse();
+  const col=up?'62,230,255':'255,92,163', hex=up?C.cy:C.mag;
+  const dl=line(f), rf='M'+f.map(p=>p[0].toFixed(1)+' '+(BASE+(BASE-p[1])*.32).toFixed(1)).join('L');
+  return `<svg class="sp" viewBox="0 0 200 58" preserveAspectRatio="none" aria-hidden="true">
+    <defs><linearGradient id="sa${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgb(${col})" stop-opacity=".22"/><stop offset="1" stop-color="rgb(${col})" stop-opacity="0"/></linearGradient>
+    <linearGradient id="sr${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgb(${col})" stop-opacity=".35"/><stop offset="1" stop-color="rgb(${col})" stop-opacity="0"/></linearGradient></defs>
+    <path d="${poly([[1,BASE-4],[195,BASE-4],[200,BASE],[6,BASE]])}" fill="rgba(62,230,255,.06)"/>
+    <path d="${dl} L198 ${BASE} L6 ${BASE}Z" fill="url(#sa${id})"/>
+    <path d="${'M'+pts2d(f).join('L')+'L'+pts2d(b).join('L')+'Z'}" fill="rgba(${col},.16)"/>
+    <path d="${line(b.slice().reverse())}" fill="none" stroke="rgba(${col},.4)" stroke-width="1" vector-effect="non-scaling-stroke"/>
+    <path d="${rf}" fill="none" stroke="url(#sr${id})" stroke-width="1.4" vector-effect="non-scaling-stroke"/>
+    <line x1="6" x2="198" y1="${BASE}.5" y2="${BASE}.5" stroke="rgba(62,230,255,.35)" vector-effect="non-scaling-stroke"/>
+    <path d="${dl}" fill="none" stroke="${hex}" stroke-width="2" vector-effect="non-scaling-stroke" style="filter:drop-shadow(0 0 3px ${hex})"/>
+  </svg>`;
+}
+function buildHome(){
+  const lib=[
+    ['6501','日立製作所','5,510','+0.38%',true,['クイック','決算','3点読み'],'10/01',null,closes.slice(-40)],
+    ['8001','伊藤忠商事','2,202.5','−0.23%',false,['決算','サポレジ','チェックリスト'],'10/01',null,synth(11,40,.05,2.2,false)],
+    ['8058','三菱商事','4,769','+2.85%',true,['チャート','反省'],'09/30',null,synth(29,40,.12,2.0,true)],
+    ['6594','ニデック','2,355','+4.67%',true,['ニュース'],'09/30','監査意見不表明',synth(47,40,-.08,2.8,true)],
+    ['4666','パーク24','1,864','+0.27%',true,['ニュース'],'09/30',null,synth(83,40,.02,1.6,true)]];
+  $('#lib').innerHTML=lib.map((c,k)=>{
+    const go = c[0]==='6501';
+    return `<div class="panel card"${go?' data-go="stock" role="button" tabindex="0" aria-label="日立製作所の分析を開く"':''}><div class="slab"><div class="face"><div class="pi card-in">
+      <div class="ch"><span class="cd holo">${c[0]}</span>${go?'<span class="open">OPEN ›</span>':''}</div>
+      <div class="cn">${c[1]}</div>
+      <div class="cpr"><b>${c[2]}<small>円</small></b><span class="${c[4]?'up':'dn'}">${c[4]?'▲':'▼'} ${c[3]}</span></div>
+      ${spark(c[8],c[4],k)}
+      <div class="bdg">${c[7]?`<span class="w">⚠ ${c[7]}</span>`:''}${c[5].map(b=>`<span>${b}</span>`).join('')}</div>
+      <div class="ft"><span>最終分析日</span><b>${c[6]}</b></div>
+    </div></div></div></div>`;}).join('');
+  const geo=[['米イラン戦争・ホルムズ海峡封鎖',5],['日中関係の悪化（レアアース・渡航）',4],['米中対立（半導体・AI規制）',4],['トランプ関税・日米合意',2],['ロシア・ウクライナ戦争',2]];
+  $('#geo').innerHTML=geo.map((g,i)=>`<div class="gr"><span class="r">${String(i+1).padStart(2,'0')}</span><span class="gn">${g[0]}</span><span class="lvl" aria-label="影響度${g[1]}段階中${g[1]}"><b>${'★'.repeat(g[1])}</b>${'☆'.repeat(5-g[1])}</span><span class="segs">${[1,2,3,4,5].map(k=>`<i class="${k<=g[1]?'on':''}"></i>`).join('')}</span></div>`).join('');
+  const menu=[['i-quick','クイック診断','4点で全体像','軽',2],['i-kessan','決算','業績と予想を読む','重',4],['i-chart','チャート','形と節目を確認','中',3],['i-news','ニュース','材料の影響を整理','中',3],['i-hansei','反省','過去の読みを検証','軽',2],['i-market','市場','地合いとリスク','中',3],['i-yogo','用語','言葉を1つ覚える','極軽',1]];
+  $('#menu').innerHTML=menu.map(m=>`<div class="mi"><div class="emi"><svg><use href="#${m[0]}"/></svg></div><b>${m[1]}</b><p>${m[2]}</p><div class="wt"><i>${[1,2,3,4].map(k=>`<u class="${k<=m[4]?'on':''}"></u>`).join('')}</i>${m[3]}</div></div>`).join('');
+}
+
+/* ---------- パネルに厚み（側面）を与える ---------- */
+function addFaces(){
+  $$('.slab').forEach(s=>{ if(s.dataset.f) return; s.dataset.f='1';
+    s.insertAdjacentHTML('afterbegin','<i class="fc ft"></i><i class="fc fb"></i><i class="fc fl"></i><i class="fc fr"></i><i class="fc fd1"></i><i class="fc fd2"></i>'); });
+}
+
+/* ---------- 視差：各パネルの視点を画面中央（＋マウス）に合わせる ---------- */
+let MX=0, MY=0, TX=0, TY=0, panels=[];
+const LIM=440;
+function updPO(){
+  const vw=innerWidth, vh=innerHeight, cx=vw*.55+MX*210, cy=vh*.5+MY*150;
+  panels.forEach(p=>{
+    const r=p.getBoundingClientRect(); if(!r.width) return;
+    const ox=Math.max(-LIM,Math.min(r.width+LIM,cx-r.left)), oy=Math.max(-LIM,Math.min(r.height+LIM,cy-r.top));
+    p.style.perspectiveOrigin=ox.toFixed(1)+'px '+oy.toFixed(1)+'px';
+  });
+}
+function collectPanels(){ panels=$$('.view.on .panel').filter(p=>!p.closest('.empty:not(.on)') && !(p.closest('#quick') && $('#quick').style.display==='none')); }
+
+/* ---------- 背景：遠近の床・巨大リング・粒子（Canvas 2D） ---------- */
+const cv=$('#space'), g2=cv.getContext('2d');
+let CW=0, CH=0, DPR=1, stars=[], dust=[], t0=performance.now(), rafAlive=false;
+function seedSpace(){
+  let s=7; const rnd=()=>{ s=(s*16807)%2147483647; return s/2147483647; };
+  stars=Array.from({length:150},()=>({x:rnd(),y:rnd()*.62,z:.3+rnd()*.7,r:.4+rnd()*1.1}));
+  dust=Array.from({length:46},()=>({x:rnd(),y:rnd(),z:.4+rnd()*.6,v:.004+rnd()*.008}));
+}
+function sizeSpace(){ DPR=Math.min(2,window.devicePixelRatio||1); CW=innerWidth; CH=innerHeight; cv.width=Math.round(CW*DPR); cv.height=Math.round(CH*DPR); g2.setTransform(DPR,0,0,DPR,0,0); }
+function drawSpace(t, boot){
+  const g=g2, sec=t/1000;
+  g.clearRect(0,0,CW,CH);
+  const hy=CH*.62 - MY*10, vx=CW*.56 - MX*34;
+  const sky=g.createLinearGradient(0,0,0,CH);
+  sky.addColorStop(0,'#02050a'); sky.addColorStop(.45,'#05101c'); sky.addColorStop(.62,'#0a2133'); sky.addColorStop(.63,'#061522'); sky.addColorStop(1,'#020509');
+  g.fillStyle=sky; g.fillRect(0,0,CW,CH);
+  // 星屑
+  stars.forEach(s=>{ const x=((s.x*CW - MX*14*s.z) % CW + CW) % CW, y=s.y*CH - MY*8*s.z; if(y>hy-4) return;
+    g.fillStyle=`rgba(190,240,255,${(.18+.5*s.z)*boot})`; g.fillRect(x,y,s.r,s.r); });
+  // 奥の巨大リング（地平線に半分沈む）
+  const rcx=vx+CW*.04, rcy=hy-CH*.04, R=Math.min(CW,CH*1.6)*.36;
+  g.save(); g.globalAlpha=boot;
+  g.lineWidth=24; g.strokeStyle='rgba(62,230,255,.025)'; g.beginPath(); g.ellipse(rcx,rcy,R*1.04,R,0,0,Math.PI*2); g.stroke();
+  g.lineWidth=1.5; g.strokeStyle='rgba(62,230,255,.16)'; g.beginPath(); g.ellipse(rcx,rcy,R*1.04,R,0,0,Math.PI*2); g.stroke();
+  g.lineWidth=1; g.strokeStyle='rgba(62,230,255,.10)'; g.beginPath(); g.ellipse(rcx,rcy,R*.92,R*.885,0,0,Math.PI*2); g.stroke();
+  g.setLineDash([3,14]); g.lineDashOffset=-sec*6; g.lineWidth=4; g.strokeStyle='rgba(62,230,255,.14)';
+  g.beginPath(); g.ellipse(rcx,rcy,R*.98,R*.94,0,0,Math.PI*2); g.stroke(); g.setLineDash([]);
+  g.restore();
+  // 地平線のにじみ
+  const hg=g.createRadialGradient(vx,hy,0,vx,hy,CW*.6);
+  hg.addColorStop(0,`rgba(62,230,255,${.20*boot})`); hg.addColorStop(.35,`rgba(62,230,255,${.06*boot})`); hg.addColorStop(1,'rgba(62,230,255,0)');
+  g.fillStyle=hg; g.fillRect(0,hy-CH*.25,CW,CH*.5);
+  // 床（地平線より下を覆う）
+  const fl=g.createLinearGradient(0,hy,0,CH); fl.addColorStop(0,'rgba(4,14,22,.55)'); fl.addColorStop(1,'rgba(2,6,10,.92)');
+  g.fillStyle=fl; g.fillRect(0,hy,CW,CH-hy);
+  const K=(CH-hy)*1.0, Kx=CW*.11, S=.5, zf=26, off=(sec*.18)%S;
+  g.lineWidth=1;
+  for(let z=1+S-off; z<zf; z+=S){ const y=hy+K/z, a=Math.min(1,1.6/z)*.32*boot; if(a<.01) continue;
+    g.strokeStyle=`rgba(62,230,255,${a.toFixed(3)})`; g.beginPath(); g.moveTo(0,y); g.lineTo(CW,y); g.stroke(); }
+  for(let X=-26; X<=26; X++){
+    const xb=vx+X*Kx, xt=vx+X*Kx/zf;
+    const grd=g.createLinearGradient(0,CH,0,hy); grd.addColorStop(0,`rgba(62,230,255,${.26*boot})`); grd.addColorStop(1,'rgba(62,230,255,0)');
+    g.strokeStyle=grd; g.beginPath(); g.moveTo(xb,CH+K*.0); g.lineTo(xt,hy+K/zf); g.stroke();
+  }
+  // 床に投影された円（ホロパッド）
+  g.strokeStyle=`rgba(62,230,255,${.12*boot})`; g.setLineDash([2,8]); g.lineDashOffset=sec*4;
+  g.beginPath(); g.ellipse(vx,hy+K/3,CW*.3,(K/2.4-K/3.6)*1.2,0,0,Math.PI*2); g.stroke(); g.setLineDash([]);
+  // 地平線
+  const hw=CW*.5*boot;
+  const hl=g.createLinearGradient(vx-hw,0,vx+hw,0); hl.addColorStop(0,'rgba(62,230,255,0)'); hl.addColorStop(.5,'rgba(166,243,255,.85)'); hl.addColorStop(1,'rgba(62,230,255,0)');
+  g.fillStyle=hl; g.fillRect(vx-hw,hy-.5,hw*2,1.2);
+  // 漂う粒子
+  dust.forEach(p=>{ const y=((p.y - sec*p.v) % 1 + 1) % 1, x=p.x*CW - MX*30*p.z, yy=y*CH - MY*16*p.z;
+    g.fillStyle=`rgba(166,243,255,${(.10+.25*p.z)*boot})`; g.beginPath(); g.arc(x,yy,.6+p.z*1.1,0,Math.PI*2); g.fill(); });
+}
+let lastPO='';
+function loop(t){
+  rafAlive=true;
+  MX+=(TX-MX)*.06; MY+=(TY-MY)*.06;
+  const boot=Math.min(1,(t-t0)/1400), e=1-Math.pow(1-boot,3);
+  drawSpace(t, e);
+  const key=MX.toFixed(3)+','+MY.toFixed(3);
+  if(key!==lastPO){ lastPO=key; updPO(); }
+  requestAnimationFrame(loop);
+}
+
+/* ---------- count up ---------- */
+function countUp(root){
+  if(RM) return;
+  root.querySelectorAll('[data-count]').forEach(e=>{
+    const end=+e.dataset.count, d=+(e.dataset.dec||0), t1=performance.now(), dur=1300, start=end*.94; let done=false;
+    const step=()=>{ if(done) return; const k=Math.max(0,Math.min(1,(performance.now()-t1)/dur)), ev=1-Math.pow(1-k,3); e.textContent=fmt(start+(end-start)*ev,d); if(k<1) requestAnimationFrame(step); else done=true; };
+    requestAnimationFrame(step);
+    setTimeout(()=>{ done=true; e.textContent=fmt(end,d); }, dur+400);
+  });
+}
+
+/* ---------- views ---------- */
+const crumbs={
+  stock:'<b>SYS</b><span>›</span><span>6501</span><em>日立製作所</em><span>›</span><span id="crumb-tab">クイック診断</span>',
+  home:'<b>SYS</b><span>›</span><em>ホーム</em><span>›</span><span>銘柄ライブラリ</span>'};
+const seen={};
+function renderStock(){ drawChart(); drawDiscs(); drawPerf(); drawGauges(); drawSupply(); drawFan(); drawDonut(); }
+function stagger(){ $$('.view.on .panel').forEach((p,i)=>{ const s=p.querySelector(':scope>.slab'); if(s) s.style.setProperty('--d',(.08+Math.min(i,10)*.07).toFixed(2)+'s'); }); }
+function show(v){
+  $$('.view').forEach(x=>x.classList.toggle('on', x.id==='v-'+v));
+  $$('.rl').forEach(x=>x.classList.toggle('on', x.dataset.go===v));
+  $('#crumb').innerHTML=crumbs[v];
+  const first=!seen[v]; seen[v]=true;
+  document.body.classList.toggle('anim', first && !RM);
+  stagger();
+  if(v==='stock') renderStock();
+  if(first) countUp($('#v-'+v));
+  window.scrollTo(0,0);
+  collectPanels(); updPO();
+}
+document.addEventListener('click',e=>{
+  const g=e.target.closest('[data-go]'); if(g){ show(g.dataset.go); return; }
+  const t=e.target.closest('.tab'); if(t){
+    $$('.tab').forEach(x=>x.classList.toggle('on',x===t));
+    const name=t.dataset.tab, q=name==='クイック診断';
+    document.body.classList.remove('anim');
+    $('#quick').style.display=q?'':'none';
+    $('#empty').classList.toggle('on',!q);
+    if(!q){ $('#emp-h').textContent=name; $('#emp-name').textContent=name; $('#emp-cmd').textContent=name; $('#emp-code').textContent='SYS-'+t.querySelector('i').textContent+' / STANDBY'; }
+    const c=$('#crumb-tab'); if(c) c.textContent=name;
+    $('.tabs .note b').textContent = q ? 'QUICK' : 'STANDBY';
+    if(q) renderStock();
+    collectPanels(); updPO();
+  }
+});
+document.addEventListener('keydown',e=>{ if((e.key==='Enter'||e.key===' ') && e.target.matches('.card[data-go]')){ e.preventDefault(); show(e.target.dataset.go); } });
+if(!RM) window.addEventListener('pointermove',e=>{ TX=(e.clientX/innerWidth-.5)*2; TY=(e.clientY/innerHeight-.5)*2; },{passive:true});
+window.addEventListener('scroll',updPO,{passive:true});
+
+addFaces(); buildChecklist(); buildHome(); addFaces(); seedSpace(); sizeSpace();
+if(!RM) document.body.classList.add('boot');
+show('stock');
+drawSpace(performance.now(), RM?1:0);
+if(!RM){ requestAnimationFrame(t=>{ t0=t; loop(t); }); setTimeout(()=>{ if(!rafAlive) drawSpace(performance.now(),1); },1800); }
+let rt; window.addEventListener('resize',()=>{ clearTimeout(rt); rt=setTimeout(()=>{ sizeSpace(); if(RM||!rafAlive) drawSpace(performance.now(),1); document.body.classList.remove('anim'); if($('#v-stock').classList.contains('on')) renderStock(); updPO(); },150); });
+if(document.fonts && document.fonts.ready) document.fonts.ready.then(()=>{ if($('#v-stock').classList.contains('on')){ const a=document.body.classList.contains('anim'); if(!a) renderStock(); else setTimeout(()=>{ document.body.classList.remove('anim'); renderStock(); updPO(); }, 2600); } });
+})();
+</script>
+</body>
+</html>
