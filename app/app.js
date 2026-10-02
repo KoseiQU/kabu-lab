@@ -699,11 +699,12 @@
       if (!nowDone && isNum(close) && mid(L) < close) { pre = nowRow; nowDone = true; }
       const r = L.kind === 'resistance';
       const lo = Math.min(L.low, L.high), hi = Math.max(L.low, L.high);
-      const price = lo === hi ? `<span class="mono">${K.fmtP(lo)}</span>` : `<span class="mono">${K.fmtP(lo)}</span><small>〜</small><span class="mono">${K.fmtP(hi)}</span>`;
+      // 折り返すのは「〜」の後だけ（「円」だけが次の行に落ちないよう、数値と後ろの文字をひとかたまりにする）
+      const price = lo === hi ? `<span class="nw"><span class="mono">${K.fmtP(lo)}</span><small>円</small></span>` : `<span class="nw"><span class="mono">${K.fmtP(lo)}</span><small>〜</small></span><span class="nw"><span class="mono">${K.fmtP(hi)}</span><small>円</small></span>`;
       const basis = arr(L.basis).filter((b) => typeof b === 'string' && b).map((b) => `<span>${esc(b)}</span>`).join('');
       return `${pre}<button type="button" class="lvr ${r ? 'r' : 's'}" data-lv="${L.i}" aria-pressed="false" aria-label="${r ? 'レジスタンス' : 'サポート'} ${esc(lo === hi ? K.fmtP(lo) : K.fmtP(lo) + '〜' + K.fmtP(hi))}円 ${esc(L.label || '')}。押すとチャートの線を強調">`
         + `<span class="lvk"><b>${r ? 'RES' : 'SUP'}<i>${lo === hi ? '線' : '帯'}</i></b><small>${r ? '上値の壁' : '下値の支え'}</small></span>`
-        + `<span class="lp"><span class="lpv">${price}<small>円</small></span>${dist(L)}</span>`
+        + `<span class="lp"><span class="lpv">${price}</span>${dist(L)}</span>`
         + `<span class="lvs" title="強さ ${esc(L.strength)}／5">${K.segs(L.strength)}<small>強さ</small></span>`
         + `<span class="ll"><b>${esc(L.label || '')}</b><span class="lb">${basis}</span></span></button>`;
     }).join('') + (!nowDone && isNum(close) ? nowRow : '');
