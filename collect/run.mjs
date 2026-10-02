@@ -1,33 +1,45 @@
-// 入口: node collect/run.mjs <code> [--type quick]
+// 入口: node collect/run.mjs <code> [--type quick] [--if-stale]
+// --if-stale: digest.md が最新（直近の大引け以降に作成、または作成から3時間以内）なら収集を省く。
 // 株価(Yahoo)と株探を取得し、指標を計算して data/stocks/<code>/ に prices.json・profile.json・digest.md を書く。
 import { join } from 'node:path';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, statSync, existsSync } from 'node:fs';
 import { fetchPrices, pricesPath } from './prices.mjs';
 import { fetchKabutan, profilePath } from './kabutan.mjs';
 import { computeAll } from './lib/indicators.mjs';
 import { buildDigest, DIGEST_LIMIT } from './lib/digest.mjs';
-import { ROOT, writeJson, writeRowsJson, writeText, checkCode, fail } from './lib/util.mjs';
+import { ROOT, writeJson, writeRowsJson, writeText, checkCode, fail, isDigestFresh } from './lib/util.mjs';
 
 const TYPES = ['quick'];
 
 function parseArgs(argv) {
-  const args = { code: null, type: 'quick' };
+  const args = { code: null, type: 'quick', ifStale: false };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--type') args.type = argv[++i];
+    else if (argv[i] === '--if-stale') args.ifStale = true;
     else if (!args.code) args.code = argv[i];
   }
   return args;
 }
 
-const { code, type } = parseArgs(process.argv.slice(2));
+const { code, type, ifStale } = parseArgs(process.argv.slice(2));
 try {
   checkCode(code);
 } catch (e) {
-  fail(`${e.message}\n使い方: node collect/run.mjs <code> [--type quick]`);
+  fail(`${e.message}\n使い方: node collect/run.mjs <code> [--type quick] [--if-stale]`);
 }
 if (!TYPES.includes(type)) fail(`未対応の型です: ${type}（対応: ${TYPES.join(', ')}）`);
 
 const dir = join(ROOT, 'data', 'stocks', code);
+if (ifStale) {
+  const dp = join(dir, 'digest.md');
+  const need = [dp, pricesPath(code), profilePath(code)];
+  if (need.every((f) => existsSync(f)) && isDigestFresh(statSync(dp).mtime)) {
+    mkdirSync(join(dir, 'analyses'), { recursive: true });
+    console.log(`収集を省略（${code} の digest は最新です）:\n  ${dp}`);
+    process.exit(0);
+  }
+}
+
 const written = [];
 const errors = [];
 const missing = [];
