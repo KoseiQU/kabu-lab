@@ -76,3 +76,50 @@ test('build: 壊れたJSONはファイル名を示して exit 1', () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('build: indicators（系列は prices.rows と同じ長さ）と finance', () => {
+  const dir = makeData();
+  try {
+    w(join(dir, 'data/stocks/6501/finance.json'), { code: '6501', annual: { rows: [] } });
+    const k = buildData({ dataDir: join(dir, 'data'), schemasDir: join(ROOT, 'schemas') });
+    const s = k.stocks['6501'];
+    const ind = s.indicators;
+    assert.deepEqual(Object.keys(ind.ma), ['ma5', 'ma25', 'ma75', 'ma200']);
+    for (const arr of Object.values(ind.ma)) assert.equal(arr.length, s.prices.rows.length);
+    assert.equal(ind.bars, s.prices.rows.length);
+    assert.equal(ind.ma.ma5.at(-1), 1.5);
+    // 300本中の末尾250本を表示: 表示の添字 i は全体の 50+i。200日線は全体の添字199（表示149）から値がある
+    assert.equal(ind.ma.ma200[148], null);
+    assert.equal(ind.ma.ma200[149], 1.5);
+    assert.equal(ind.ma.ma75[23], null);
+    assert.equal(ind.ma.ma75[24], 1.5);
+    for (const k2 of ['close', 'ma', 'rsi14', 'volumeRatio20', 'change3dPct', 'week52']) assert.ok(k2 in ind.latest, k2);
+    for (const k2 of ['volumeProfile', 'swings', 'crosses', 'priceCrosses', 'gaps', 'maTouches', 'weekly', 'monthly']) assert.ok(k2 in ind, k2);
+    assert.ok(ind.weekly.length > 0 && ind.monthly.length > 0);
+    assert.ok(ind.weekly.every((b) => ['d', 'o', 'h', 'l', 'c', 'v'].every((x) => x in b)));
+    assert.deepEqual(s.finance, { code: '6501', annual: { rows: [] } });
+    assert.equal(k.stocks['8001'].indicators, null);
+    assert.equal(k.stocks['8001'].finance, null);
+    assert.ok(!JSON.stringify(k).includes('NaN'));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('build: ファイル名の型と中身の type が食い違えば exit 1（全型が対象）', () => {
+  const dir = makeData();
+  try {
+    w(join(dir, 'data/stocks/6501/analyses/2026-10-07-chart.json'), { ...sample, type: 'quick' });
+    const r = spawnSync(process.execPath, [join(ROOT, 'build.mjs'), '--data', join(dir, 'data'), '--out', join(dir, 'out.js')], { encoding: 'utf8' });
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /食い違って.*2026-10-07-chart\.json/);
+    rmSync(join(dir, 'data/stocks/6501/analyses/2026-10-07-chart.json'));
+    w(join(dir, 'data/stocks/6501/analyses/2026-10-07-chart.json'), { ...sample, type: 'chart', date: '2026-10-07' });
+    const k = buildData({ dataDir: join(dir, 'data'), schemasDir: join(ROOT, 'schemas') });
+    assert.deepEqual(k.stocks['6501'].analyses.map((a) => a.type), ['chart', 'quick', 'quick']);
+    w(join(dir, 'data/stocks/6501/analyses/memo.json'), { ...sample });
+    assert.throws(() => buildData({ dataDir: join(dir, 'data') }), /<日付>-<型>\.json/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

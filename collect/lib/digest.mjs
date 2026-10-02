@@ -71,7 +71,7 @@ export function buildDigest({ code, type = 'quick', profile, ind, pricesMeta, mi
         '| 線 | 値 | 乖離率 | 向き(5日前比) |',
         '|---|---|---|---|',
         ...ind.ma.map((m) => `| ${m.n}日 | ${nf(m.value, 1)} | ${sign(m.deviationPct)}% | ${m.slope ?? '-'} |`),
-        `RSI(14) ${nfa(ind.rsi14)} / 出来高 前20日平均比 ${u(ind.volumeRatio20, '倍')}`,
+        `RSI(14) ${nfa(ind.rsi14)} / 出来高 前20日平均比 ${u(ind.volumeRatio20, '倍')} / 直近3日の騰落率 ${ind.change3dPct == null ? '未取得' : sign(ind.change3dPct) + '%'}`,
         ind.week52 ? `52週高値 ${nfa(ind.week52.high)}（${ind.week52.highDate}）/ 52週安値 ${nfa(ind.week52.low)}（${ind.week52.lowDate}）` : '52週高安 未取得',
       ],
       items: [],
@@ -103,6 +103,15 @@ export function buildDigest({ code, type = 'quick', profile, ind, pricesMeta, mi
       items: [...ind.gaps].reverse().map((g) => `- ${g.d} ${g.dir === 'up' ? '上窓' : '下窓'} ${nfa(g.from)}→${nfa(g.to)}（${sign(g.pct)}%）${g.filled ? '埋め済' : '未埋め'}`),
       order: 'new-first',
       minKeep: 2,
+    });
+    S.push({
+      title: '移動平均線へのタッチと反発（安値が75日・200日線の±1.5%以内→5日以内に終値が安値から+3%以上。直近250日、新しい順）',
+      head: (ind.maTouches ?? []).length ? [] : ['なし'],
+      items: [...(ind.maTouches ?? [])].reverse().map(
+        (t) => `- ${t.d} ${t.line.replace('ma', '')}日線 安値 ${nfa(t.low)}（線 ${nfa(t.ma)}・${sign(t.distPct)}%）→ ${t.reboundDate} までに +${nfa(t.reboundPct)}%`,
+      ),
+      order: 'new-first',
+      minKeep: 3,
     });
     S.push({
       title: 'クロス（新しい順・各最大4件）',

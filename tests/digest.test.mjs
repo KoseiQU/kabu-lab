@@ -16,7 +16,7 @@ test('digest: 実形式の入力で8KB以内・主要見出しを含む', () => 
   const profile = parseKabutan(html, '6501');
   const d = buildDigest({ code: '6501', profile, ind: computeAll(rows), missing: profile.missing });
   assert.ok(Buffer.byteLength(d) <= DIGEST_LIMIT, `${Buffer.byteLength(d)} bytes`);
-  for (const h of ['基本情報', 'テクニカル指標', 'スイング', '価格帯別出来高', '窓', 'クロス', '信用残', '業績推移', '直近20日', '取得できなかった項目']) {
+  for (const h of ['基本情報', 'テクニカル指標', '直近3日の騰落率', '移動平均線へのタッチと反発', 'スイング', '価格帯別出来高', '窓', 'クロス', '信用残', '業績推移', '直近20日', '取得できなかった項目']) {
     assert.ok(d.includes(h), h);
   }
   assert.ok(d.includes('PER 27.3倍'));

@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   sma, deviationPct, rsi, volumeRatio, swings, binStep, volumeProfile, gaps, crosses, priceCrosses, high52, computeAll,
+  changePct, maTouches, aggregate,
 } from '../collect/lib/indicators.mjs';
 
 const close = (a, b, eps = 1e-9) => assert.ok(Math.abs(a - b) < eps, `${a} ≉ ${b}`);
@@ -118,4 +119,54 @@ test('computeAll: 300本で全項目がそろい NaN を含まない', () => {
   assert.ok(a.swings.highs.length > 0 && a.swings.lows.length > 0);
   assert.ok(!JSON.stringify(a).includes('NaN'));
   assert.ok(a.crosses.every((c) => Array.isArray(c.events)));
+});
+
+test('changePct: 直近3日の騰落率', () => {
+  const rows = [100, 110, 120, 130].map((c, i) => bar(day(i), c));
+  close(changePct(rows, 3), 30);
+  assert.equal(changePct(rows.slice(1), 3), null);
+});
+
+test('maTouches: 線の±1.5%に安値→翌日以降の終値が+3%以上で検出（手計算）', () => {
+  // 3日線。day2: 線=100、安値99.5（-0.5%）→ day3 終値103 で +3.52%。day4: 線=102、安値103（+0.98%）だが戻りは +0.97% で不成立
+  const cs = [100, 100, 100, 103, 103, 104, 104];
+  const rows = cs.map((c, i) => bar(day(i), c, { l: i === 2 ? 99.5 : c }));
+  const t = maTouches(rows, { periods: [3], within: 2 });
+  assert.deepEqual(t, [{ line: 'ma3', d: day(2), low: 99.5, ma: 100, distPct: -0.5, reboundPct: 3.52, reboundDate: day(3) }]);
+  // lookback の外は対象外
+  assert.deepEqual(maTouches(rows, { periods: [3], within: 2, lookback: 3 }), []);
+  // 戻りが3%未満なら検出しない
+  assert.deepEqual(maTouches(rows.map((r) => ({ ...r, c: Math.min(r.c, 102) })), { periods: [3], within: 2 }), []);
+});
+
+test('maTouches: 続けて該当した日は1つの押し目にまとめ、安値の低い日を残す', () => {
+  const cs = [100, 100, 100, 100, 103, 103];
+  const lows = [100, 100, 99.5, 99, 103, 103];
+  const rows = cs.map((c, i) => bar(day(i), c, { l: lows[i] }));
+  const t = maTouches(rows, { periods: [3], within: 2 });
+  assert.equal(t.length, 1);
+  assert.equal(t[0].d, day(3));
+  assert.equal(t[0].low, 99);
+  close(t[0].reboundPct, 4.04, 0.01);
+});
+
+test('aggregate: 週足（月曜始まり）と月足', () => {
+  const rows = [
+    { d: '2026-01-05', o: 10, h: 12, l: 9, c: 11, v: 1 }, // 月
+    { d: '2026-01-06', o: 11, h: 15, l: 10, c: 14, v: 2 },
+    { d: '2026-01-09', o: 14, h: 14, l: 8, c: 9, v: 3 }, // 金
+    { d: '2026-01-13', o: 9, h: 10, l: 7, c: 8, v: 4 }, // 翌週 火
+    { d: '2026-02-02', o: 8, h: 9, l: 6, c: 7, v: 5 },
+  ];
+  assert.deepEqual(aggregate(rows, 'week'), [
+    { d: '2026-01-05', o: 10, h: 15, l: 8, c: 9, v: 6 },
+    { d: '2026-01-13', o: 9, h: 10, l: 7, c: 8, v: 4 },
+    { d: '2026-02-02', o: 8, h: 9, l: 6, c: 7, v: 5 },
+  ]);
+  assert.deepEqual(aggregate(rows, 'month'), [
+    { d: '2026-01-05', o: 10, h: 15, l: 7, c: 8, v: 10 },
+    { d: '2026-02-02', o: 8, h: 9, l: 6, c: 7, v: 5 },
+  ]);
+  // 日曜をまたぐ週の切れ目（日曜 2026-01-11 は前週扱い）
+  assert.equal(aggregate([{ d: '2026-01-11', o: 1, h: 1, l: 1, c: 1, v: 1 }, { d: '2026-01-12', o: 1, h: 1, l: 1, c: 1, v: 1 }], 'week').length, 2);
 });

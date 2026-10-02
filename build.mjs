@@ -4,6 +4,8 @@ import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, statSy
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import { buildIndicators } from './collect/lib/indicators.mjs';
+
 const ROOT = dirname(fileURLToPath(import.meta.url));
 export const PRICE_BARS = 250;
 
@@ -37,13 +39,20 @@ export function buildData({ dataDir = join(ROOT, 'data'), schemasDir = join(ROOT
     const pricesFull = readIf(join(dir, 'prices.json'));
     const prices = pricesFull ? { meta: pricesFull.meta, rows: (pricesFull.rows ?? []).slice(-PRICE_BARS) } : null;
     const analyses = jsonFiles(join(dir, 'analyses')).map((f) => {
+      const rel = `data/stocks/${code}/analyses/${f}`;
       const a = readJson(join(dir, 'analyses', f));
-      a._file = `data/stocks/${code}/analyses/${f}`;
+      // ファイル名 <date>-<type>.json と中身の type が一致すること（全型を対象）
+      const m = f.match(/^(\d{4}-\d{2}-\d{2})-([a-z]+)\.json$/);
+      if (!m) throw new BrokenJsonError(`分析ファイル名が <日付>-<型>.json の形ではありません: ${rel}`);
+      if (a?.type !== m[2]) throw new BrokenJsonError(`ファイル名の型「${m[2]}」と中身の type「${a?.type}」が食い違っています: ${rel}`);
+      a._file = rel;
       return a;
     });
     analyses.sort((a, b) => (a.date === b.date ? (a._file < b._file ? 1 : -1) : a.date < b.date ? 1 : -1)); // 日付降順
     allAnalyses.push(...analyses);
-    stocks[code] = { code, name: profile?.name ?? analyses[0]?.name ?? prices?.meta?.name ?? code, profile, prices, analyses };
+    const indicators = pricesFull?.rows?.length ? buildIndicators(pricesFull.rows, prices.rows.length) : null;
+    const finance = readIf(join(dir, 'finance.json'));
+    stocks[code] = { code, name: profile?.name ?? analyses[0]?.name ?? prices?.meta?.name ?? code, profile, prices, indicators, finance, analyses };
   }
 
   // 用語帳: 全分析の terms を用語で重複排除（初出 = 最も古い日付）。data/glossary.json があれば統合（定義はこちらを優先）

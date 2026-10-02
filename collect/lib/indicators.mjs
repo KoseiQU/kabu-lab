@@ -162,6 +162,78 @@ export function high52(rows) {
   return { high: hi.h, highDate: hi.d, low: lo.l, lowDate: lo.d };
 }
 
+/** 直近 n 日の騰落率(%) = 最終日終値 ÷ n日前の終値 − 1 */
+export function changePct(rows, n = 3) {
+  if (rows.length < n + 1) return null;
+  const a = rows.at(-1 - n).c, b = rows.at(-1).c;
+  return a ? ((b - a) / a) * 100 : null;
+}
+
+/**
+ * 移動平均線へのタッチと反発。安値が線の ±bandPct% 以内に入り、その後 within 日以内（翌日以降）に
+ * 終値がその日の安値から reboundPct% 以上戻した日。直近 lookback 本が対象。
+ * 同じ線で直前の該当日から within 日以内に続く該当日は同じ押し目とみなし、安値が最も低い日を残す。
+ * 返り値（日付昇順）: [{line, d, low, ma, distPct, reboundPct, reboundDate}]
+ */
+export function maTouches(rows, { periods = [75, 200], bandPct = 1.5, within = 5, reboundPct = 3, lookback = 250 } = {}) {
+  const closes = rows.map((r) => r.c);
+  const start = Math.max(0, rows.length - lookback);
+  const out = [];
+  for (const n of periods) {
+    const ma = sma(closes, n);
+    const line = [];
+    let lastIdx = -Infinity;
+    for (let i = start; i < rows.length; i++) {
+      const m = ma[i];
+      if (m == null) continue;
+      const l = rows[i].l;
+      const dist = ((l - m) / m) * 100;
+      if (Math.abs(dist) > bandPct) continue;
+      let best = null;
+      for (let j = i + 1; j <= Math.min(rows.length - 1, i + within); j++) {
+        const rb = ((rows[j].c - l) / l) * 100;
+        if (best == null || rb > best.rb) best = { rb, d: rows[j].d };
+      }
+      if (!best || best.rb < reboundPct) continue;
+      const rec = { line: `ma${n}`, d: rows[i].d, low: rows[i].l, ma: round(m, 1), distPct: round(dist), reboundPct: round(best.rb), reboundDate: best.d };
+      if (i - lastIdx <= within) {
+        // 同じ押し目（直前の該当日から within 日以内）: 安値がより低い日を代表にする
+        if (rows[i].l < line.at(-1).low) line[line.length - 1] = rec;
+      } else line.push(rec);
+      lastIdx = i;
+    }
+    out.push(...line);
+  }
+  return out.sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0));
+}
+
+/** 日足 → 週足（月曜始まり）・月足。d はその期間の最初の営業日 */
+export function aggregate(rows, unit = 'week') {
+  const keyOf = (d) => {
+    if (unit === 'month') return d.slice(0, 7);
+    const t = new Date(d + 'T00:00:00Z');
+    const dow = (t.getUTCDay() + 6) % 7; // 月=0
+    return new Date(t.getTime() - dow * 86400000).toISOString().slice(0, 10);
+  };
+  const out = [];
+  let cur = null, curKey = null;
+  for (const r of rows) {
+    const k = keyOf(r.d);
+    if (k !== curKey) {
+      if (cur) out.push(cur);
+      cur = { d: r.d, o: r.o, h: r.h, l: r.l, c: r.c, v: r.v };
+      curKey = k;
+    } else {
+      cur.h = Math.max(cur.h, r.h);
+      cur.l = Math.min(cur.l, r.l);
+      cur.c = r.c;
+      cur.v += r.v;
+    }
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
 /** まとめて計算 */
 export function computeAll(rows) {
   if (!rows?.length) throw new Error('株価データが空です');
@@ -191,12 +263,51 @@ export function computeAll(rows) {
     ma,
     rsi14: round(rsi(closes, 14).at(-1), 1),
     volumeRatio20: round(volumeRatio(rows, 20)),
+    change3dPct: round(changePct(rows, 3)),
     swings: swings(rows, { k: 8, lookback: 250 }),
     volumeProfile: volumeProfile(rows, { lookback: 250 }),
     gaps: gaps(rows, { thresholdPct: 1.5, lookback: 250 }),
     crosses: crossList,
     priceCrosses: priceX,
     week52: high52(rows),
+    maTouches: maTouches(rows),
     last20: rows.slice(-20),
+  };
+}
+
+/**
+ * build.mjs が data.js に入れる指標一式（KABU.stocks[code].indicators）。形は schemas/indicators.md を参照。
+ * fullRows: prices.json の全日足。display: 画面に出す本数（prices.rows の切り詰め後の長さ）。
+ */
+export function buildIndicators(fullRows, display = 250) {
+  if (!fullRows?.length) return null;
+  const a = computeAll(fullRows);
+  const closes = fullRows.map((r) => r.c);
+  const from = Math.max(0, fullRows.length - display);
+  const ma = Object.fromEntries(MA_PERIODS.map((n) => [`ma${n}`, sma(closes, n).slice(from).map((v) => round(v, 1))]));
+  const last = new Date(fullRows.at(-1).d + 'T00:00:00Z');
+  const twoYearsAgo = new Date(Date.UTC(last.getUTCFullYear() - 2, last.getUTCMonth(), last.getUTCDate())).toISOString().slice(0, 10);
+  return {
+    asOf: a.asOf,
+    bars: fullRows.length - from,
+    ma,
+    latest: {
+      close: a.close,
+      change: a.change,
+      changePct: a.changePct,
+      ma: a.ma,
+      rsi14: a.rsi14,
+      volumeRatio20: a.volumeRatio20,
+      change3dPct: a.change3dPct,
+      week52: a.week52,
+    },
+    volumeProfile: a.volumeProfile,
+    swings: a.swings,
+    crosses: a.crosses,
+    priceCrosses: a.priceCrosses,
+    gaps: a.gaps,
+    maTouches: a.maTouches,
+    weekly: aggregate(fullRows, 'week').filter((w) => w.d >= twoYearsAgo),
+    monthly: aggregate(fullRows, 'month'),
   };
 }
