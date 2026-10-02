@@ -1137,3 +1137,6 @@ a.rl,a.tab,a.k{text-decoration:none}
 .srh{flex-wrap:wrap; row-gap:2px}
 .srh .yoy{white-space:normal; max-width:100%}
 .lsn small{text-wrap:balance}
+.plax small,.krt th small{font-size:12px}
+.lvchart .lvg.on .lvline{stroke-opacity:1; opacity:1}
+.lvchart .lvg.on .tagtxt{font-weight:700}

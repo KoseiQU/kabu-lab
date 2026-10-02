@@ -260,6 +260,14 @@
     const nd = (k) => main.querySelector(`[data-nodata="${k}"]`);
     const pair = (cond, key, label) => { if (cond !== !!nd(key)) add(`④ ${label}の未取得表示が不一致`, `${key}: ${cond ? '欠損なのに表示なし' : 'データがあるのに未取得'}`); };
     const whyIn = (key, sec) => { const el = nd(key), why = A.missFor(a, sec); if (el && why && !el.textContent.includes(why)) add('④ 未取得の理由が missing と違う', `${key}: ${why}`); };
+    // 最小文字 12px（SVG は表示倍率を掛けて判定）
+    main.querySelectorAll('*').forEach((el) => {
+      if (![...el.childNodes].some((n) => n.nodeType === 3 && n.nodeValue.trim())) return;
+      const svg = el.closest('svg'), vb = svg && svg.viewBox && svg.viewBox.baseVal;
+      const k = vb && vb.width ? svg.getBoundingClientRect().width / vb.width : 1;
+      const px = parseFloat(getComputedStyle(el).fontSize) * k;
+      if (px < 11.95) add('最小文字12px未満', `${px.toFixed(1)}px ${el.textContent.trim().slice(0, 12)}`);
+    });
     // 図の中の文字どうしが重ならない（チャート型・決算型の全図）
     main.querySelectorAll('[data-chart] svg').forEach((svg) => {
       const ts = [...svg.querySelectorAll('text')].map((t) => { const b = t.getBBox(); return [b.x, b.y + 2, b.x + b.width, b.y + b.height - 2, t.textContent]; }).filter((b) => b[2] > b[0]);
