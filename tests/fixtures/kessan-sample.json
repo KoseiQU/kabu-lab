@@ -1,0 +1,93 @@
+{
+ "schema": "kabu-analysis@1",
+ "type": "kessan",
+ "code": "6501",
+ "name": "日立製作所",
+ "date": "2026-10-02",
+ "price": { "close": 5522, "change": 12, "changePct": 0.22, "asOf": "2026-10-02" },
+ "summary": "1Qは売上+20.0%・調整後営業利益+39.5%で通期予想も上方修正。純利益は前年の特別配当の反動で微減",
+ "sections": {
+  "period": { "label": "2027年3月期 第1四半期", "announced": "2026-07-29", "docTitle": "2027年3月期 第1四半期決算短信〔IFRS〕（連結）" },
+  "verdict": { "grade": "good", "label": "好決算", "reason": "売上収益+20.0%、調整後営業利益+39.5%と大きく伸び、通期予想も上方修正した。純利益の−1.4%は前年の特別配当約500億円の反動による。" },
+  "points": [
+   { "title": "本業の利益が大きく伸びた", "text": "調整後営業利益は2,943億円（+39.5%）。調整後営業利益率は10.9%で、前年の9.3%から上がった。" },
+   { "title": "通期予想を上方修正", "text": "通期予想は売上11兆7,000億円（+10.5%）、調整後営業利益1兆4,080億円（+17.4%）、純利益9,000億円（+12.2%）。" },
+   { "title": "純利益の減少は一時的な要因", "text": "純利益は1,894億円（−1.4%）。前年に特別配当約500億円があった反動で、本業の落ち込みではない。" }
+  ],
+  "results": [
+   { "key": "sales", "label": "売上収益", "value": 27096, "unit": "億円", "yoyPct": 20.0, "note": "" },
+   { "key": "adjOp", "label": "調整後営業利益", "value": 2943, "unit": "億円", "yoyPct": 39.5, "note": "" },
+   { "key": "ebita", "label": "Adjusted EBITA", "value": 3235, "unit": "億円", "yoyPct": 36.2, "note": "" },
+   { "key": "net", "label": "純利益", "value": 1894, "unit": "億円", "yoyPct": -1.4, "note": "前年の特別配当約500億円の反動" }
+  ],
+  "driver": { "title": "エナジーが利益の柱", "text": "1Qの事業別Adjusted EBITAはエナジーが1,291億円（利益率14.2%）で最大。DSSが856億円、CIが834億円で続く。" },
+  "progress": { "label": "純利益の通期予想に対する進捗", "pct": 21, "pace": 25, "note": "下期偏重のため均等ペースを下回る" },
+  "margin": { "label": "調整後営業利益率", "pct": 10.9, "prevPct": 9.3, "peer": "" },
+  "outlook": {
+   "stance": "bullish",
+   "revision": "up",
+   "text": "1Q発表時に通期予想を上方修正。純利益9,000億円（+12.2%）、EPS 201.14円を見込む。",
+   "forecast": [
+    { "label": "売上収益", "value": 117000, "unit": "億円", "yoyPct": 10.5 },
+    { "label": "調整後営業利益", "value": 14080, "unit": "億円", "yoyPct": 17.4 },
+    { "label": "純利益", "value": 9000, "unit": "億円", "yoyPct": 12.2 },
+    { "label": "EPS", "value": 201.14, "unit": "円", "yoyPct": null }
+   ]
+  },
+  "plusMinus": {
+   "plus": { "title": "本業の稼ぐ力が上がった", "text": "調整後営業利益率が9.3%から10.9%に上がり、通期予想も上方修正された。" },
+   "minus": { "title": "純利益は前年を下回った", "text": "前年の特別配当約500億円の反動で、純利益は1,894億円（−1.4%）。進捗率も21%と均等ペースの25%を下回る。" }
+  },
+  "investments": [
+   { "title": "設備投資", "amount": 6700, "text": "通期で6,700億円を計画。" },
+   { "title": "Clever Devices の買収", "amount": 479, "text": "約479億円で買収。" },
+   { "title": "自社株買い", "amount": 5500, "text": "5,500億円の枠のうち、1Qで1,479億円を実施。" }
+  ],
+  "finance": {
+   "items": [
+    { "label": "現金", "prev": 13234, "curr": 15044, "unit": "億円" },
+    { "label": "有利子負債", "prev": 10090, "curr": 10569, "unit": "億円" },
+    { "label": "D/Eレシオ", "prev": 0.15, "curr": 0.16, "unit": "倍" },
+    { "label": "自己資本比率", "prev": 43.7, "curr": 43.7, "unit": "%" },
+    { "label": "営業CF", "prev": 4421, "curr": 4962, "unit": "億円" }
+   ],
+   "verdict": "健全",
+   "text": "現金は1兆5,044億円に増え、D/Eレシオは0.16倍、自己資本比率は43.7%。借入に頼らずに投資と株主還元を続けられる水準。"
+  },
+  "returns": {
+   "dividends": [
+    { "period": "2025.3", "value": 43, "forecast": false },
+    { "period": "2026.3", "value": 50, "forecast": false },
+    { "period": "2027.3", "value": "中間28・期末未定", "forecast": true }
+   ],
+   "eps": [
+    { "period": "2025.3", "value": 133.9, "forecast": false },
+    { "period": "2026.3", "value": 176.76, "forecast": false },
+    { "period": "2027.3", "value": 201.14, "forecast": true }
+   ],
+   "buyback": "5,500億円の自社株買い（1Qで1,479億円を実施）"
+  },
+  "segments": [
+   { "name": "デジタルシステム＆サービス", "profit": 856, "margin": 11.9, "note": "1Q Adj. EBITA" },
+   { "name": "エナジー", "profit": 1291, "margin": 14.2, "note": "1Q Adj. EBITA" },
+   { "name": "モビリティ", "profit": 305, "margin": 8.8, "note": "1Q Adj. EBITA" },
+   { "name": "コネクティブインダストリーズ", "profit": 834, "margin": 11.0, "note": "1Q Adj. EBITA" }
+  ],
+  "next": [
+   "純利益の進捗が下期に追いつくか（1Qは21%、均等ペースは25%）",
+   "エナジーの利益率14.2%が続くか",
+   "期末配当の金額（現在は未定）"
+  ]
+ },
+ "terms": [
+  { "term": "Adjusted EBITA", "def": "買収で生じた無形資産の償却などを除いた、本業の稼ぎを見る利益" },
+  { "term": "進捗率", "def": "通期予想に対して、今までの累計がどこまで来たか" },
+  { "term": "D/Eレシオ", "def": "有利子負債 ÷ 自己資本。低いほど借金に頼っていない" }
+ ],
+ "insight": "純利益の前年割れでも、理由が前年の一時的な配当なら本業の伸びを見る。調整後営業利益と利益率が判断の軸になる",
+ "sources": [
+  { "title": "日立製作所 2027年3月期 第1四半期決算短信", "url": "https://www.hitachi.com/content/dam/hitachi/global/ja_jp/press/files/2026/07/0729/2026_1Q.pdf" },
+  { "title": "株探 日立製作所 決算", "url": "https://kabutan.jp/stock/finance?code=6501" }
+ ],
+ "missing": ["同業の利益率（未取得）"]
+}

@@ -1,0 +1,62 @@
+{
+ "schema": "kabu-analysis@1",
+ "type": "chart",
+ "code": "6501",
+ "name": "日立製作所",
+ "date": "2026-10-02",
+ "price": { "close": 5522, "change": 12, "changePct": 0.22, "asOf": "2026-10-02" },
+ "summary": "日足は全移動平均線の上で上昇基調。上は5,645円と5,830円、下は5,040〜5,166円の帯が分かれ目",
+ "sections": {
+  "timeframes": [
+   { "frame": "monthly", "trend": "flat", "text": "2月の6,039円を高値に、3月以降は4,388〜5,830円の幅で上下。月足では高値を超えられていない" },
+   { "frame": "weekly", "trend": "up", "text": "6月末の4,422円から安値を切り上げ、9月の押しも5,040円で止まった。週足は上向き" },
+   { "frame": "daily", "trend": "up", "text": "終値5,522円は5日・25日・75日・200日線すべての上。9月18日に5日線が25日線を上抜けた" }
+  ],
+  "levels": [
+   { "kind": "resistance", "low": 6039, "high": 6039, "strength": 5, "label": "52週高値（2月10日）", "basis": ["過去の高値", "52週高値"] },
+   { "kind": "resistance", "low": 5830, "high": 5830, "strength": 4, "label": "8月14日高値", "basis": ["過去の高値"] },
+   { "kind": "resistance", "low": 5621, "high": 5645, "strength": 3, "label": "8月28日・9月28日の戻り高値帯", "basis": ["戻り高値", "節目"] },
+   { "kind": "support", "low": 5395, "high": 5395, "strength": 2, "label": "25日線", "basis": ["25日線"] },
+   { "kind": "support", "low": 5129, "high": 5129, "strength": 3, "label": "75日線", "basis": ["75日線"] },
+   { "kind": "support", "low": 5040, "high": 5166, "strength": 4, "label": "8月25日・9月11日の安値帯", "basis": ["過去の安値", "スイング安値"] },
+   { "kind": "support", "low": 5052, "high": 5052, "strength": 3, "label": "200日線", "basis": ["200日線", "タッチと反発"] },
+   { "kind": "support", "low": 5000, "high": 5000, "strength": 1, "label": "5,000円の節目", "basis": ["節目"] },
+   { "kind": "support", "low": 4800, "high": 5000, "strength": 5, "label": "価格帯別出来高の最多帯", "basis": ["価格帯別出来高"] }
+  ],
+  "heat": [
+   { "key": "ma25dev", "value": 2.35, "state": "calm", "note": "25日線から+2.35%。±10%超が過熱の目安" },
+   { "key": "rsi", "value": 58, "state": "calm", "note": "RSI 58。70以上で買われすぎの目安" },
+   { "key": "change3d", "value": 1.04, "state": "calm", "note": "直近3日で+1.04%" },
+   { "key": "volume", "value": 1.14, "state": "calm", "note": "出来高は前20日平均の1.14倍" }
+  ],
+  "checklist": [
+   { "id": "C01", "status": "progress", "reason": "9月11日安値5,040円から反発し、8月25日安値5,166円と合わせた帯が下値の支えとして働いている。", "watch": "5,040〜5,166円の帯を終値で割らずに推移するか" },
+   { "id": "C02", "status": "done", "reason": "6月末4,422円と7月中旬4,616円の2つの底の後、間の高値5,004円を上抜けた。", "watch": "" },
+   { "id": "C03", "status": "none", "reason": "頭と左右の肩がそろう3つの底の形は見られない。", "watch": "" },
+   { "id": "C04", "status": "none", "reason": "一定の値幅を上下に往復するボックスの形になっていない。", "watch": "" },
+   { "id": "C05", "status": "done", "reason": "6〜7月の4,400〜5,000円台の底練りから、7月末に上値5,004円を突破した。", "watch": "" },
+   { "id": "C06", "status": "progress", "reason": "8月25日安値5,166円を9月に一度割り込んだ後に回復。上値だった水準が支えに変わるかの途中。", "watch": "5,621〜5,645円の戻り高値帯を上抜けた後、その帯が支えに変わるか" },
+   { "id": "C07", "status": "none", "reason": "高値の切り下げと安値の切り上げが重なる形は見られない。", "watch": "" },
+   { "id": "C08", "status": "done", "reason": "8月6日に25日線が75日線を上抜けた後、9月11日の初押しから9月18日までに+9.6%戻した。", "watch": "" },
+   { "id": "C09", "status": "done", "reason": "9月11日の安値5,040円は75日線（約5,060円）の-0.4%まで近づき、9月18日までに終値で+9.6%戻した。", "watch": "" },
+   { "id": "C10", "status": "done", "reason": "9月11日の安値5,040円は200日線（約5,015円）の+0.49%で止まり、9月18日までに終値で+9.6%戻した。", "watch": "" }
+  ],
+  "plans": [
+   { "kind": "pullback", "title": "25日線までの押しを待つ", "when": "25日線（約5,395円）付近まで下げて下げ止まるなら", "zone": { "low": 5350, "high": 5400 }, "stop": { "price": 5129, "label": "75日線を割る" }, "target": { "price": 5830, "label": "8月14日高値" }, "pros": "上昇基調の中で、移動平均線を支えにした形を確かめてから考えられる", "cons": "押さずに上がると、考える機会がないまま進む" },
+   { "kind": "breakout", "title": "戻り高値の上抜けを待つ", "when": "5,645円の戻り高値を終値で上抜けるなら", "zone": { "low": 5645, "high": 5700 }, "stop": { "price": 5522, "label": "上抜け前の水準に戻る" }, "target": { "price": 6039, "label": "52週高値" }, "pros": "上値の壁を越えたことを確かめてから考えられる", "cons": "上抜けの直後は値動きが荒く、だましになることもある" },
+   { "kind": "wait", "title": "レンジの間は様子を見る", "when": "5,395〜5,645円の間で方向が出ないなら", "zone": { "low": null, "high": null }, "stop": { "price": null, "label": "" }, "target": { "price": null, "label": "" }, "pros": "根拠がそろうまで判断を急がずにすむ", "cons": "動き出した後は、最初の値幅を取り逃しやすい" }
+  ],
+  "lesson": { "title": "線と帯を分けて見る", "text": "1日の安値でできた線より、何度も止まった価格の帯のほうが崩れにくい。5,040〜5,166円のように、複数の安値と移動平均線が重なる所は支えとして意識されやすい。" }
+ },
+ "terms": [
+  { "term": "サポート", "def": "下げ止まりやすい価格の線や帯。過去の安値や移動平均線が目安" },
+  { "term": "レジスタンス", "def": "上げ止まりやすい価格の線や帯。過去の高値が目安" },
+  { "term": "価格帯別出来高", "def": "どの価格でどれだけ売買されたか。多い帯は意識されやすい" }
+ ],
+ "insight": "支えは1本の線より、安値と移動平均線が重なる帯で考えると崩れ方が読みやすい",
+ "sources": [
+  { "title": "Yahoo Finance chart API 6501.T（日足2年）", "url": "https://query1.finance.yahoo.com/v8/finance/chart/6501.T?range=2y&interval=1d" },
+  { "title": "株探 日立製作所", "url": "https://kabutan.jp/stock/?code=6501" }
+ ],
+ "missing": []
+}

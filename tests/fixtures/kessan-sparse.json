@@ -1,0 +1,148 @@
+{
+ "schema": "kabu-analysis@1",
+ "type": "kessan",
+ "code": "6501",
+ "name": "日立製作所",
+ "date": "2026-10-02",
+ "price": {
+  "close": 5522,
+  "change": 12,
+  "changePct": 0.22,
+  "asOf": "2026-10-02"
+ },
+ "summary": "1Qは売上+20.0%・調整後営業利益+39.5%で通期予想も上方修正。純利益は前年の特別配当の反動で微減",
+ "sections": {
+  "period": {
+   "label": "2027年3月期 第1四半期",
+   "announced": "2026-07-29",
+   "docTitle": "2027年3月期 第1四半期決算短信〔IFRS〕（連結）"
+  },
+  "verdict": {
+   "grade": "good",
+   "label": "好決算",
+   "reason": "売上収益+20.0%、調整後営業利益+39.5%と大きく伸び、通期予想も上方修正した。純利益の−1.4%は前年の特別配当約500億円の反動による。"
+  },
+  "points": [
+   {
+    "title": "本業の利益が大きく伸びた",
+    "text": "調整後営業利益は2,943億円（+39.5%）。調整後営業利益率は10.9%で、前年の9.3%から上がった。"
+   },
+   {
+    "title": "通期予想を上方修正",
+    "text": "通期予想は売上11兆7,000億円（+10.5%）、調整後営業利益1兆4,080億円（+17.4%）、純利益9,000億円（+12.2%）。"
+   },
+   {
+    "title": "純利益の減少は一時的な要因",
+    "text": "純利益は1,894億円（−1.4%）。前年に特別配当約500億円があった反動で、本業の落ち込みではない。"
+   }
+  ],
+  "results": [
+   {
+    "key": "sales",
+    "label": "売上収益",
+    "value": null,
+    "unit": "億円",
+    "yoyPct": null,
+    "note": ""
+   },
+   {
+    "key": "net",
+    "label": "純利益",
+    "value": null,
+    "unit": "億円",
+    "yoyPct": null,
+    "note": ""
+   }
+  ],
+  "driver": {
+   "title": "エナジーが利益の柱",
+   "text": "1Qの事業別Adjusted EBITAはエナジーが1,291億円（利益率14.2%）で最大。DSSが856億円、CIが834億円で続く。"
+  },
+  "progress": {
+   "label": "進捗",
+   "pct": null,
+   "pace": 25,
+   "note": ""
+  },
+  "margin": {
+   "label": "利益率",
+   "pct": null,
+   "prevPct": null,
+   "peer": ""
+  },
+  "outlook": {
+   "stance": "neutral",
+   "revision": "none",
+   "text": "1Q発表時に通期予想を上方修正。純利益9,000億円（+12.2%）、EPS 201.14円を見込む。",
+   "forecast": [
+    {
+     "label": "純利益",
+     "value": null,
+     "unit": "億円",
+     "yoyPct": null
+    }
+   ]
+  },
+  "plusMinus": {
+   "plus": {
+    "title": "本業の稼ぐ力が上がった",
+    "text": "調整後営業利益率が9.3%から10.9%に上がり、通期予想も上方修正された。"
+   },
+   "minus": {
+    "title": "純利益は前年を下回った",
+    "text": "前年の特別配当約500億円の反動で、純利益は1,894億円（−1.4%）。進捗率も21%と均等ペースの25%を下回る。"
+   }
+  },
+  "investments": [
+   {
+    "title": "設備投資",
+    "amount": null,
+    "text": "金額は未取得。"
+   }
+  ],
+  "finance": {
+   "items": [
+    {
+     "label": "現金",
+     "prev": null,
+     "curr": null,
+     "unit": "億円"
+    }
+   ],
+   "verdict": "未取得",
+   "text": "財務の数値は未取得。"
+  },
+  "returns": {
+   "dividends": [
+    {
+     "period": "2027.3",
+     "value": null,
+     "forecast": true
+    }
+   ],
+   "eps": [
+    {
+     "period": "2027.3",
+     "value": null,
+     "forecast": true
+    }
+   ],
+   "buyback": null
+  },
+  "next": [
+   "決算資料の取得"
+  ]
+ },
+ "terms": [],
+ "insight": "純利益の前年割れでも、理由が前年の一時的な配当なら本業の伸びを見る。調整後営業利益と利益率が判断の軸になる",
+ "sources": [
+  {
+   "title": "株探 日立製作所 決算",
+   "url": "https://kabutan.jp/stock/finance?code=6501"
+  }
+ ],
+ "missing": [
+  "決算短信（未取得）",
+  "事業別利益（未取得）"
+ ]
+}

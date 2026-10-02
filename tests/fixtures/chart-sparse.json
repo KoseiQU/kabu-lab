@@ -1,0 +1,217 @@
+{
+ "schema": "kabu-analysis@1",
+ "type": "chart",
+ "code": "6501",
+ "name": "日立製作所",
+ "date": "2026-10-02",
+ "price": {
+  "close": 5522,
+  "change": 12,
+  "changePct": 0.22,
+  "asOf": "2026-10-02"
+ },
+ "summary": "日足は全移動平均線の上で上昇基調。上は5,645円と5,830円、下は5,040〜5,166円の帯が分かれ目",
+ "sections": {
+  "timeframes": [
+   {
+    "frame": "monthly",
+    "trend": "flat",
+    "text": "2月の6,039円を高値に、3月以降は4,388〜5,830円の幅で上下。月足では高値を超えられていない"
+   },
+   {
+    "frame": "weekly",
+    "trend": "up",
+    "text": "6月末の4,422円から安値を切り上げ、9月の押しも5,040円で止まった。週足は上向き"
+   },
+   {
+    "frame": "daily",
+    "trend": "up",
+    "text": "終値5,522円は5日・25日・75日・200日線すべての上。9月18日に5日線が25日線を上抜けた"
+   }
+  ],
+  "levels": [
+   {
+    "kind": "resistance",
+    "low": 5830,
+    "high": 5830,
+    "strength": 1,
+    "label": "高値",
+    "basis": [
+     "過去の高値"
+    ]
+   },
+   {
+    "kind": "support",
+    "low": 5040,
+    "high": 5040,
+    "strength": 1,
+    "label": "安値",
+    "basis": [
+     "過去の安値"
+    ]
+   }
+  ],
+  "heat": [
+   {
+    "key": "ma25dev",
+    "value": null,
+    "state": "calm",
+    "note": ""
+   },
+   {
+    "key": "rsi",
+    "value": null,
+    "state": "calm",
+    "note": ""
+   },
+   {
+    "key": "change3d",
+    "value": null,
+    "state": "calm",
+    "note": ""
+   },
+   {
+    "key": "volume",
+    "value": null,
+    "state": "calm",
+    "note": ""
+   }
+  ],
+  "checklist": [
+   {
+    "id": "C01",
+    "status": "none",
+    "reason": "該当なし。",
+    "watch": ""
+   },
+   {
+    "id": "C02",
+    "status": "none",
+    "reason": "該当なし。",
+    "watch": ""
+   },
+   {
+    "id": "C03",
+    "status": "none",
+    "reason": "該当なし。",
+    "watch": ""
+   },
+   {
+    "id": "C04",
+    "status": "none",
+    "reason": "該当なし。",
+    "watch": ""
+   },
+   {
+    "id": "C05",
+    "status": "none",
+    "reason": "該当なし。",
+    "watch": ""
+   },
+   {
+    "id": "C06",
+    "status": "none",
+    "reason": "該当なし。",
+    "watch": ""
+   },
+   {
+    "id": "C07",
+    "status": "none",
+    "reason": "該当なし。",
+    "watch": ""
+   },
+   {
+    "id": "C08",
+    "status": "none",
+    "reason": "該当なし。",
+    "watch": ""
+   },
+   {
+    "id": "C09",
+    "status": "none",
+    "reason": "該当なし。",
+    "watch": ""
+   },
+   {
+    "id": "C10",
+    "status": "none",
+    "reason": "該当なし。",
+    "watch": ""
+   }
+  ],
+  "plans": [
+   {
+    "kind": "pullback",
+    "title": "25日線までの押しを待つ",
+    "when": "25日線（約5,395円）付近まで下げて下げ止まるなら",
+    "zone": {
+     "low": null,
+     "high": null
+    },
+    "stop": {
+     "price": null,
+     "label": ""
+    },
+    "target": {
+     "price": null,
+     "label": ""
+    },
+    "pros": "上昇基調の中で、移動平均線を支えにした形を確かめてから考えられる",
+    "cons": "押さずに上がると、考える機会がないまま進む"
+   },
+   {
+    "kind": "breakout",
+    "title": "戻り高値の上抜けを待つ",
+    "when": "5,645円の戻り高値を終値で上抜けるなら",
+    "zone": {
+     "low": null,
+     "high": null
+    },
+    "stop": {
+     "price": null,
+     "label": ""
+    },
+    "target": {
+     "price": null,
+     "label": ""
+    },
+    "pros": "上値の壁を越えたことを確かめてから考えられる",
+    "cons": "上抜けの直後は値動きが荒く、だましになることもある"
+   },
+   {
+    "kind": "wait",
+    "title": "レンジの間は様子を見る",
+    "when": "5,395〜5,645円の間で方向が出ないなら",
+    "zone": {
+     "low": null,
+     "high": null
+    },
+    "stop": {
+     "price": null,
+     "label": ""
+    },
+    "target": {
+     "price": null,
+     "label": ""
+    },
+    "pros": "根拠がそろうまで判断を急がずにすむ",
+    "cons": "動き出した後は、最初の値幅を取り逃しやすい"
+   }
+  ],
+  "lesson": {
+   "title": "線と帯を分けて見る",
+   "text": "1日の安値でできた線より、何度も止まった価格の帯のほうが崩れにくい。5,040〜5,166円のように、複数の安値と移動平均線が重なる所は支えとして意識されやすい。"
+  }
+ },
+ "terms": [],
+ "insight": "支えは1本の線より、安値と移動平均線が重なる帯で考えると崩れ方が読みやすい",
+ "sources": [
+  {
+   "title": "Yahoo Finance chart API 6501.T（日足2年）",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/6501.T?range=2y&interval=1d"
+  }
+ ],
+ "missing": [
+  "週足・月足の判断材料（日足が短い）"
+ ]
+}
