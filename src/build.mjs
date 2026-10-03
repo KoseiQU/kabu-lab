@@ -35,6 +35,7 @@ const jsonFiles = (dir) => (isDir(dir) ? readdirSync(dir).filter((f) => f.endsWi
 export function buildData({ dataDir = DATA_DIR, schemasDir = join(ROOT, 'schemas'), now = new Date() } = {}) {
   const stocks = {};
   const allAnalyses = [];
+  const pricesByCode = new Map(); // 答え合わせ用の全日足（prices.rows は直近250本に切り詰めるため）
   const stocksDir = join(dataDir, 'stocks');
   for (const code of isDir(stocksDir) ? readdirSync(stocksDir).sort() : []) {
     const dir = join(stocksDir, code);
@@ -42,6 +43,7 @@ export function buildData({ dataDir = DATA_DIR, schemasDir = join(ROOT, 'schemas
     const profile = readIf(join(dir, 'profile.json'));
     const pricesFull = readIf(join(dir, 'prices.json'));
     const prices = pricesFull ? { meta: pricesFull.meta, rows: (pricesFull.rows ?? []).slice(-PRICE_BARS) } : null;
+    if (pricesFull?.rows?.length) pricesByCode.set(code, pricesFull.rows);
     const analyses = jsonFiles(join(dir, 'analyses')).map((f) => {
       const rel = `data/stocks/${code}/analyses/${f}`;
       const a = readJson(join(dir, 'analyses', f));
@@ -59,35 +61,76 @@ export function buildData({ dataDir = DATA_DIR, schemasDir = join(ROOT, 'schemas
     stocks[code] = { code, name: profile?.name ?? analyses[0]?.name ?? prices?.meta?.name ?? code, profile, prices, indicators, finance, analyses };
   }
 
-  // 用語帳: 全分析の terms を用語で重複排除（初出 = 最も古い日付）。data/glossary.json があれば統合（定義はこちらを優先）
+  // 市場: 最新の <date>-raw.json、分析 <date>.json の全件（日付降順）と最新、series.json（日経平均・ドル円・米10年金利の日足）
+  const mdir = join(dataDir, 'market');
+  const mfiles = jsonFiles(mdir);
+  const rawF = mfiles.filter((f) => /^\d{4}-\d{2}-\d{2}-raw\.json$/.test(f)).sort().at(-1);
+  const marketAnalyses = mfiles
+    .filter((f) => /^\d{4}-\d{2}-\d{2}\.json$/.test(f))
+    .map((f) => {
+      const rel = `data/market/${f}`;
+      const a = readJson(join(mdir, f));
+      if (a?.type !== 'market') throw new BrokenJsonError(`市場の分析ファイルの type が「market」ではありません（${a?.type}）: ${rel}`);
+      a._file = rel;
+      return a;
+    })
+    .sort((a, b) => (a.date === b.date ? (a._file < b._file ? 1 : -1) : a.date < b.date ? 1 : -1));
+  const series = readIf(join(mdir, 'series.json'));
+  const market = {
+    raw: rawF ? readJson(join(mdir, rawF)) : null,
+    analysis: marketAnalyses[0] ?? null,
+    analyses: marketAnalyses,
+    series,
+  };
+  // 用語・気づき・答え合わせは銘柄と市場の分析の全件から
+  const everyAnalysis = [...allAnalyses, ...marketAnalyses];
+
+  // 用語帳: 全分析の terms を用語で重複排除（初出 = 最も古い日付）。data/glossary.json（旧形式）があれば統合（定義はこちらを優先）。
+  // data/glossary/*.json（用語型）があれば最後に統合: 定義は用語型を優先し、本体を detail に持たせる
   const glossary = new Map();
-  for (const a of [...allAnalyses].sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0))) {
+  for (const a of [...everyAnalysis].sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0))) {
     for (const t of a.terms ?? []) {
       if (!t?.term || glossary.has(t.term)) continue;
-      glossary.set(t.term, { term: t.term, def: t.def, firstCode: a.code, firstName: a.name, firstDate: a.date, firstType: a.type });
+      glossary.set(t.term, { term: t.term, def: t.def, firstCode: a.code, firstName: a.name, firstDate: a.date, firstType: a.type, category: null, detail: null });
     }
   }
   const extra = readIf(join(dataDir, 'glossary.json'));
   for (const g of Array.isArray(extra) ? extra : extra?.terms ?? []) {
     if (!g?.term) continue;
-    glossary.set(g.term, { ...(glossary.get(g.term) ?? { firstCode: null, firstName: null, firstDate: null, firstType: null }), ...g });
+    glossary.set(g.term, { ...(glossary.get(g.term) ?? { firstCode: null, firstName: null, firstDate: null, firstType: null, category: null, detail: null }), ...g });
+  }
+  const gdir = join(dataDir, 'glossary');
+  for (const f of jsonFiles(gdir)) {
+    const rel = `data/glossary/${f}`;
+    const y = readJson(join(gdir, f));
+    if (y?.type !== 'yougo' || !y.term) throw new BrokenJsonError(`用語ファイルの type が「yougo」ではないか term がありません: ${rel}`);
+    const { schema, type, ...body } = y;
+    const prev = glossary.get(y.term) ?? { firstCode: null, firstName: null, firstDate: y.addedAt ?? null, firstType: 'yougo' };
+    glossary.set(y.term, { ...prev, term: y.term, def: y.def, category: y.category ?? null, detail: { ...body, _file: rel } });
   }
 
-  // 気づきノート: 全分析の insight を日付降順。data/notes.json があれば統合
-  const notes = allAnalyses
-    .filter((a) => a.insight)
-    .map((a) => ({ date: a.date, code: a.code, name: a.name, type: a.type, text: a.insight }));
+  // 気づきノート: 全分析の insight（kind: insight）、chart・hansei の lesson（kind: lesson, title つき）、
+  // hansei の nextChecks（kind: nextCheck, title=label・text=how）を日付降順。data/notes.json があれば統合
+  const notes = [];
+  for (const a of everyAnalysis) {
+    const base = { date: a.date, code: a.code ?? null, name: a.name, type: a.type };
+    if (a.insight) notes.push({ ...base, kind: 'insight', text: a.insight });
+    const lesson = a.sections?.lesson;
+    if ((a.type === 'chart' || a.type === 'hansei') && lesson?.text) notes.push({ ...base, kind: 'lesson', title: lesson.title ?? '', text: lesson.text });
+    if (a.type === 'hansei') for (const c of a.sections?.nextChecks ?? []) if (c?.how || c?.label) notes.push({ ...base, kind: 'nextCheck', title: c.label ?? '', text: c.how ?? '' });
+  }
   const extraNotes = readIf(join(dataDir, 'notes.json'));
   notes.push(...(Array.isArray(extraNotes) ? extraNotes : extraNotes?.notes ?? []));
   notes.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 
-  // 市場: 最新の <date>-raw.json と <date>.json（分析）
-  const mdir = join(dataDir, 'market');
-  const mfiles = jsonFiles(mdir);
-  const latest = (re) => mfiles.filter((f) => re.test(f)).sort().at(-1);
-  const rawF = latest(/^\d{4}-\d{2}-\d{2}-raw\.json$/);
-  const anaF = latest(/^\d{4}-\d{2}-\d{2}\.json$/);
-  const market = { raw: rawF ? readJson(join(mdir, rawF)) : null, analysis: anaF ? readJson(join(mdir, anaF)) : null };
+  // シナリオの答え合わせ: quick の scenarios と market の outlook（DESIGN.md §5.8）
+  const review = [];
+  for (const a of allAnalyses.filter((x) => x.type === 'quick')) {
+    review.push(buildReview(a, 'stock', a.sections?.scenarios, pricesByCode.get(a.code)));
+  }
+  const nikkei = series?.series?.['^N225']?.rows ?? null;
+  for (const a of marketAnalyses) review.push(buildReview(a, 'market', a.sections?.outlook, nikkei));
+  review.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 
   const checklistItems = readIf(join(schemasDir, 'checklist-items.json')) ?? [];
 
@@ -97,7 +140,56 @@ export function buildData({ dataDir = DATA_DIR, schemasDir = join(ROOT, 'schemas
     market,
     glossary: [...glossary.values()].sort((a, b) => a.term.localeCompare(b.term, 'ja')),
     notes,
+    review,
     checklistItems,
+  };
+}
+
+const isNum = (x) => typeof x === 'number' && Number.isFinite(x);
+const round2 = (x) => Math.round(x * 100) / 100;
+export const REVIEW_YOUNG_DAYS = 5;
+
+/**
+ * 答え合わせ1件: 基準（price.close・price.asOf）、3つの目安、基準日より後の終値列、経過営業日数、
+ * 最新の終値にいちばん近い目安（機械的な距離。帯の中なら距離0）。rows は日付昇順 [{d, c}]（無ければ after は空）。
+ */
+export function buildReview(a, kind, scenarios, rows) {
+  const baseDate = a.price?.asOf ?? a.date;
+  const after = (rows ?? []).filter((r) => r.d > baseDate && isNum(r.c)).map((r) => ({ d: r.d, c: r.c }));
+  const targets = (Array.isArray(scenarios) ? scenarios : []).map((x) => {
+    const t = x?.target ?? {};
+    return {
+      kind: x?.kind ?? null,
+      label: t.label ?? '',
+      ...(isNum(t.price) ? { price: t.price } : {}),
+      ...(isNum(t.low) && isNum(t.high) ? { low: t.low, high: t.high } : {}),
+      breakIf: x?.breakIf ?? '',
+    };
+  });
+  const latest = after.at(-1) ?? null;
+  let nearest = null;
+  if (latest) {
+    for (const t of targets) {
+      let dist = null;
+      if (isNum(t.low) && isNum(t.high)) dist = latest.c >= t.low && latest.c <= t.high ? 0 : Math.min(Math.abs(latest.c - t.low) / t.low, Math.abs(latest.c - t.high) / t.high) * 100;
+      else if (isNum(t.price) && t.price > 0) dist = (Math.abs(latest.c - t.price) / t.price) * 100;
+      if (dist != null && (!nearest || dist < nearest.distPct)) nearest = { kind: t.kind, distPct: round2(dist) };
+    }
+  }
+  return {
+    kind,
+    code: a.code ?? null,
+    name: a.name,
+    type: a.type,
+    date: a.date,
+    file: a._file ?? null,
+    base: { price: a.price?.close ?? null, date: baseDate },
+    targets,
+    after,
+    days: after.length,
+    young: after.length < REVIEW_YOUNG_DAYS,
+    latest,
+    nearest,
   };
 }
 
