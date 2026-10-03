@@ -204,7 +204,10 @@ if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.m
     console.error(`エラー: ${e.message}`);
     process.exit(1);
   }
-  if (!argv.includes('--no-viewer')) {
+  // 本番以外の実行（--data や --out を指定したテスト・試験運転）では、--viewer を明示しない限りデスクトップのビューアを書き換えない
+  const custom = argv.includes('--data') || argv.includes('--out');
+  const explicitViewer = argv.includes('--viewer') || !!process.env.KABU_VIEWER_PATH;
+  if (!argv.includes('--no-viewer') && (!custom || explicitViewer)) {
     // ビューアの失敗は警告だけ（data.js の生成は成功扱い）
     let path = '(未決定)';
     try {
