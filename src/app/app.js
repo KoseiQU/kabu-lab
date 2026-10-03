@@ -164,7 +164,8 @@
     { key: 'glossary', href: '#/glossary', icon: 'i-yogo', label: '用語帳', fk: 'F8' },
     { key: 'notes', href: '#/notes', icon: 'i-note', label: '気づきノート', fk: 'F9' },
   ];
-  const navKey = (route) => (route.view === 'stock' ? 'home' : route.view);
+  /** ヘッダの現在地。銘柄ページはホームを光らせず、銘柄の項目（銘柄ページのときだけ出す）を現在地にする（レールと F2 の表示に揃える） */
+  const navKey = (route) => route.view;
   const hrefStock = (code, type, date) => '#/stock/' + encodeURIComponent(code) + (type ? '/' + type : '') + (date ? '/' + date : '');
 
   function resolve(route) {
@@ -204,7 +205,8 @@
     const cmd = info.cmd
       ? `<span>${esc(info.cmd)}<i class="cur"></i></span>`
       : '<span><i class="cur"></i><span class="hint">/kabu &lt;銘柄名 or コード&gt; [型]</span></span>';
-    const gnav = `<nav class="gnav" aria-label="画面の切替">${GNAV.map((g) => `<a class="gn${cur(nk === g.key)}" href="${g.href}" data-gnav="${g.key}"><svg aria-hidden="true"><use href="#${g.icon}"/></svg>${g.label}</a>`).join('')}</nav>`;
+    const stockNav = onStock && D.stocks[route.code] ? `<a class="gn gn-st${cur(true)}" href="${hrefStock(route.code)}" data-gnav="stock"><svg aria-hidden="true"><use href="#i-stock"/></svg>銘柄 <span class="mono">${esc(route.code)}</span></a>` : '';
+    const gnav = `<nav class="gnav" aria-label="画面の切替">${GNAV.map((g) => `<a class="gn${cur(nk === g.key)}" href="${g.href}" data-gnav="${g.key}"><svg aria-hidden="true"><use href="#${g.icon}"/></svg>${g.label}</a>`).join('')}${stockNav}</nav>`;
     $('#top').innerHTML = '<div class="brand"><b>KABU LAB</b><span>銘柄分析 × 学習ノート</span></div>' + gnav
       + `<div class="cmdw"><div class="cmdbox" aria-label="コマンド（表示のみ）"><span class="lbl">CMD</span><span class="pr">&gt;</span>${cmd}<kbd>ENTER</kbd></div></div>`
       + `<div class="meta"><span>VIEW <b>${esc(info.view)}</b></span><span>DATE <b>${esc(info.date)}</b></span><span class="u-mid">MODE <b>LEARN</b></span></div>`;
