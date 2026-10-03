@@ -30,10 +30,10 @@ AIは売買の正解を当てる装置ではない。複数のシナリオと根
 | クイック診断（既定） | 省略 / `クイック` | 4点診断・株価チャート・業績推移・割高割安・シナリオ・需給・チェックリスト・学びノート | 軽 |
 | 決算 | `決算` | 決算短信の5点解説。`決算 3点` で有報・中計も読む | 重 |
 | チャート | `チャート` | サポート／レジスタンス・10項目チェックリストの理由・売買タイミングの考え方 | 中 |
-| ニュース | `ニュース <出来事>` | 出来事の影響度・一時的か長期か・過去事例との比較 | 中 |
+| ニュース | `/kabu <銘柄> ニュース <出来事>`、`/kabu ニュース 探して` | 出来事の影響度・一時的か長期か・過去事例との比較。「探して」は直近1週間に株価が大きく動いた日本企業の出来事を1つ選ぶ | 中 |
 | 反省 | `反省 <購入日> <購入価格>` | 買いタイミングの振り返りと次回のチェックポイント | 軽 |
 | 市場 | `/kabu 市場` | 相場の高い安い・為替・金利・地政学ランキング・今日のニュース5本 | 中 |
-| 用語 | `/kabu 用語 <言葉>` | 用語解説。用語帳に追加 | 極軽 |
+| 用語 | `/kabu 用語 <言葉か質問>` | 用語・考え方の解説（因果の流れ図つき）。用語帳に追加 | 極軽 |
 
 実行すると分析結果が保存され、アプリ（`app/index.html`）がその銘柄ページを開く。
 
@@ -62,8 +62,8 @@ kabu-lab/
 ├── DESIGN.md             設計書（契約）
 ├── data/                 分析データ（学習ノートの本体。コミットする）
 │   ├── stocks/<code>/{profile.json, prices.json, digest.md, digest-kessan.md, finance.json, memo.md, analyses/<date>-<type>.json}
-│   ├── market/<date>.json
-│   └── glossary.json, notes.json
+│   ├── market/{<date>-raw.json, series.json, digest-market.md, <date>.json＝市場型の分析}
+│   └── glossary/<用語>.json（用語型。1語1ファイル）
 ├── src/                  プログラム一式（コマンドはここで実行する）
 │   ├── package.json, build.mjs, config.json
 │   ├── collect/          収集スクリプト（run.mjs, prices.mjs, kabutan.mjs, kabutan-finance.mjs, market.mjs, lib/）
@@ -177,14 +177,87 @@ digest.md にはこれらの結果と直近20日の四本値を載せる。チ�
 - `collect/kabutan-finance.mjs`：株探の決算ページ（`/stock/finance?code=`）から、通期と四半期の業績推移、財務（自己資本比率・有利子負債倍率など）、キャッシュフローを取り `finance.json` と `digest-kessan.md`（8KB以内）を書く。`node collect/run.mjs <code> --type kessan`。
 - `tools/fetch-doc.mjs <code> <url> --name <名前>`：決算短信などのPDFを `raw/docs/` に保存し、pdf2text でテキスト化し、ページ数と文字数を出す。`tools/doc-slice.mjs <txt> --pages 1-2,8 | --grep <語>`：必要なページだけを取り出す（Claude が読むのは1資料あたり20KBまで）。
 
+### 5.4 market 型（P3）
+
+`type: "market"`。`code` は null、`name` は「市場」、`price` は日経平均。保存先は `data/market/<最終取引日>.json`。画面は `#/market`（日付の切替で履歴）。`sections`：
+
+| キー | 中身 |
+|---|---|
+| `level` | 相場の高い安い。`{verdict(12字), position(0〜1。0=安い・1=高い), text(160字), gauges:[{key, label, value, unit, ref, refLabel, max}]}`。gauges は2〜4件（日経平均の予想PER、200日線からの乖離、52週の値幅の中の位置など。取れたものだけ） |
+| `outlook` | 3件固定（bull / base / bear）。quick の `scenarios` と同じ形。来年末までの日経平均の流れ |
+| `fx` | `{direction: weak/strong/range（円安方向・円高方向・もみ合い）, text(160字), effects:[{who(16字), dir: plus/minus, text(80字)}], outlook(160字)}`。effects は2〜4件（輸出企業・輸入企業・家計など、誰にどう効くか） |
+| `rates` | `{items:[{key, label, value, unit, note}], text(160字)}`。items は1〜4件（米10年金利・日本10年金利・政策金利など取れたもの）。金利と株価の関係を一言 |
+| `geo` | 5件固定・影響の大きい順。`{name(20字), level(1〜5), text(120字), sectors:[{name(12字), dir: plus/minus}]}`。sectors は1〜4件 |
+| `news` | 3〜5件。`{title(40字), text(120字), dir: plus/minus/neutral, sectors:[文字列], url}`。今日の日本株に効きそうなニュースを初心者の言葉で |
+| `calendar` | 0〜5件。`{date, label(30字)}`。今後2週間ほどの予定（決算・統計・会合） |
+
+収集：`node collect/market.mjs [--if-stale]` が、これまでの `<date>-raw.json` に加えて `series.json`（日経平均・ドル円・米10年金利の日足2年分）と `digest-market.md`（4KB以内）を書く。digest には各指標の直近値・前日比・1か月／3か月／1年の変化率、日経平均の25・75・200日線と乖離・RSI・52週高値安値とその中の位置、ドル円の25・75日線と向きを載せる。Yahoo へのリクエストは合計4回以内。日経平均の予想PERと日本の金利は Claude が Web検索で補う。
+
+### 5.5 news 型（P3）
+
+`type: "news"`。主役の会社を1社決め、その銘柄の分析として保存する（`data/stocks/<code>/analyses/<最終取引日>-news.json`）。会社を特定できない出来事（景気・政策・地政学）は市場型で扱う。収集は quick と同じ digest を使う。`sections`：
+
+| キー | 中身 |
+|---|---|
+| `event` | `{title(40字), date, kind(12字), what(160字)}`。何が起きたか。kind は「不祥事」「業績修正」「提携・買収」「規制」「事故」など |
+| `impact` | `{level(1〜5), dir: plus/minus/mixed, duration: short/mid/long, text(160字), factors:[{label(20字), dir: better/worse, text(80字)}]}`。duration は 一時的（数日〜数週）／数か月／長引く（1年以上）。factors は2〜4件（長引くかどうかを分ける要因） |
+| `reaction` | `{from:{date, price}, to:{date, price}, changePct, text(120字)}`。出来事の前日の終値から直近まで。数字は digest から |
+| `chart` | `{pins:[{date, label}]}` 1〜5件。株価チャートに出来事の日を示す |
+| `cases` | 2〜4件。`{name(30字), year, dropPct, days, recoveryMonths, outcome(80字), similar(80字), different(80字), url}`。過去の似た事例。`dropPct`（初動の騰落率）・`days`（その日数）・`recoveryMonths`（元の水準に戻るまでの月数。戻っていなければ null）は出典で確認できた数字だけを入れ、無ければ null |
+| `related` | 0〜5件。`{code, name, relation(20字), dir: plus/minus/neutral}`。波及しそうな会社・業種（code は分かれば） |
+| `takeaway` | `{text(160字), checks:[文字列(60字)]}`。今回はどう受け止めるか。checks は次に確認する点1〜3件 |
+
+### 5.6 hansei 型（P3）
+
+`type: "hansei"`。`/kabu <銘柄> 反省 <購入日> <購入価格>`。保存先は `analyses/<最終取引日>-hansei.json`。「いま売るべきか」には答えない（振り返りと次回の確認点だけ）。
+
+`node tools/entry-stats.mjs <code> <購入日> <購入価格>` が prices.json から次を計算して標準出力に出す（2KB以内。機械テスト必須）：購入日の四本値と購入価格がその日の値幅に収まるか、購入日の25日線乖離・RSI・直近3日の騰落率・出来高の20日平均比、25・75・200日線の位置と向き、直前のスイング高値・安値、購入後の最大含み益と最大含み損（日付つき）、最終取引日の損益率、経過営業日数。購入日が休場日なら翌営業日に寄せ、その旨を出す。データの範囲外なら exit 1。
+
+| キー | 中身 |
+|---|---|
+| `entry` | `{date, price, adjusted, note(80字)}`。adjusted は購入日を営業日に寄せたとき true |
+| `result` | `{asOf, close, pnlPct, maxUpPct, maxUpDate, maxDownPct, maxDownDate, days}` |
+| `at` | 4件固定順（ma25dev / rsi / change3d / volume）。chart の `heat` と同じ形。買った日の過熱の物差し |
+| `position` | `{trend: up/flat/down, text(160字), support:{price, label}, resistance:{price, label}}`。買った日がチャートのどこだったか。support・resistance は無ければ null |
+| `good` | 0〜3件。`{title(20字), text(120字)}`。良かった点 |
+| `improve` | 1〜3件。同じ形。改善点 |
+| `alt` | 0〜2件。`{title(20字), when(80字), zone:{low, high}, text(120字)}`。別の入り方。画面に「後から見た話」と注記する |
+| `nextChecks` | 3〜5件。`{label(20字), how(80字)}`。次に買う前に確認すること |
+| `chart` | `{pins:[{date, label}], levels:[{kind: resistance/support, low, high, label}]}`。各0〜4件。購入日と購入価格の印は `entry` から描く |
+| `lesson` | `{title, text(160字)}` |
+
+### 5.7 yougo 型（P3）
+
+`/kabu 用語 <言葉か質問>`。1語1ファイルで `data/glossary/<用語>.json`（ファイル名は用語の `/ \ : * ? " < > |` と空白を `_` に置換）。銘柄の分析ではないので骨格は別：
+
+```json
+{ "schema": "kabu-term@1", "type": "yougo", "term": "金利と株価", "reading": "きんりとかぶか", "category": "マクロ",
+  "def": "80字以内の一言の定義", "body": "初心者向けの説明（300字以内）", "analogy": "身近なたとえ（120字以内）",
+  "flow": [ { "label": "金利が上がる", "dir": "up" }, { "label": "借りるお金が高くなる", "dir": "up" }, { "label": "会社の利益が減る", "dir": "down" }, { "label": "株価に下向きの力", "dir": "down" } ],
+  "seesaw": { "left": "金利", "right": "株価", "note": "片方が上がるともう片方に下向きの力" },
+  "example": "数字を使った例（160字以内）", "stockLink": "株価とどう関係するか（160字以内）", "pitfall": "よくある誤解（120字以内）",
+  "related": ["長期金利", "PER"], "addedAt": "2026-10-03", "sources": [] }
+```
+
+- `category` は 指標／チャート／決算／需給／マクロ／制度／その他。`flow` は2〜5件（因果の流れ図。label 16字以内、dir は up / down / none）。`seesaw` は逆に動く2つの関係を説明するときだけ（任意）。`reading`・`related`（0〜5）・`sources`（0件可）は任意。
+- build は `data/glossary/*.json` を用語帳に統合する（分析の `terms` と同じ語があれば、こちらの定義を優先し、詳しい解説つきとして扱う）。
+
+### 5.8 学習機能（P3）
+
+- **用語帳**（`#/glossary`、`#/glossary/<用語>`）：全分析の `terms` と用語型の解説を1つの一覧にする。絞り込み（文字検索・分類）、初出の銘柄と日付へのリンク、詳しい解説つきの語は開くと流れ図・シーソー図・たとえ・例・誤解を表示。「定義をかくす」切替（思い出してから開く暗記用）。
+- **気づきノート**（`#/notes`）：全分析の `insight`、chart と hansei の `lesson`、hansei の `nextChecks` を日付の新しい順に並べる。型と銘柄で絞り込み、元の分析へリンク。
+- **シナリオの答え合わせ**：quick の `scenarios` と market の `outlook` について、分析日より後の株価（日経平均）があれば、基準価格・3つの目安（線または帯）・その後の実際の値動きを1つの図に重ねる。経過営業日数と、現在値にいちばん近い目安（機械的な距離の比較であり評価ではない旨を注記）を示す。5営業日未満は「まだ日が浅い」と表示。銘柄ページのクイック診断と市場ページに置き、気づきノートから一覧でたどれる。build が `review`（分析ごとの基準・目安・その後の終値列）を data.js に入れ、画面は再計算しない。
+
 ## 6. 画面
 
 見た目の正は `mocks/mock-6-final.html`（案4の高密度HUD＋業績推移と需給の立体棒グラフ。メーター・株価チャート・ゲージは平面）。配色・フォント・枠・文言の調子はこれに従う。
 
 - **ホーム**（`#/`）：銘柄ライブラリ（表）、市場パネル、地政学、分析メニュー、今日の用語。データがない欄は「未実行」。
 - **銘柄ページ**（`#/stock/<code>/<type>`）：型タブ。同じ型を複数回実行したら日付の切替で履歴を見られる。
-- **用語帳**（`#/glossary`）と**気づきノート**（`#/notes`）：P3。
-- **シナリオの答え合わせ**：過去のシナリオの基準価格・目安と、その後の実際の株価を重ねて表示する。P3。
+- **画面の切替**：ヘッダにホーム・市場・用語帳・気づきノートの切替を置く（確定版モックの調子に合わせる）。ホームの市場パネル・地政学パネル・今日の用語は、それぞれ市場ページ・用語帳へ飛べる。
+- **市場ページ**（`#/market`、`#/market/<date>`）：日経平均とドル円の折れ線（`series.json`）、高い安いのメーターと物差し、3つのシナリオと答え合わせ、為替の影響図（誰にプラス・マイナスか）、金利、地政学ランキング（星と影響する業種）、今日のニュース、予定。分析が無く raw だけのときは指標だけ表示し、残りは「未実行」。
+- **ニュース型・反省型**は銘柄ページの型タブに加える（§5.5・§5.6）。ニュース型は影響度の星・期間の3段階表示・株価チャート（出来事の日に印）・過去事例の比較図（初動の騰落率と回復までの月数を横棒で。null は「不明」）。反省型は株価チャート（購入日と購入価格の印、その後の最大含み益・含み損）・買った日の過熱の物差し・良かった点と改善点・次回の確認カード。
+- **用語帳**（`#/glossary`）、**気づきノート**（`#/notes`）、**シナリオの答え合わせ**：§5.8。
 - 対応幅 1280〜1920px。横スクロール禁止。最小文字12px、本文コントラスト比4.5:1以上、本文は発光させない。
 - **情報優先（2026-10-03 利用者指示）**：1画面に収めるために情報を省かない。縦スクロールは可。枠は中身に合わせて伸ばす。全体の配置バランス（確定版モックの並び）は変えない。
 - **稼ぎ頭マップの展開**：通常は上位3事業＋「その他 N事業」。「その他」を押すとパネルが左隣（業績推移の上）へ重なる形で横に広がり、全事業を利益額の横棒つきで一覧できる（利益率があれば併記）。もう一度押すか Esc・枠外クリックで元に戻る。展開中も他のパネルの配置は動かさない。
@@ -200,7 +273,10 @@ digest.md にはこれらの結果と直近20日の四本値を載せる。チ�
 | P2a | 収集の拡張（§5.3）と chart・kessan のスキーマ・検証・フィクスチャ | `npm test` 全通過。実銘柄で kessan の digest が作れる | Opus |
 | P2b | チャート型・決算型の画面 | フィクスチャと実データで崩れなし | Opus |
 | P2c | スキルに2つの型を追加し、実銘柄で通す | 触って確認 | メイン |
-| P3 | ニュース・市場・反省・用語、用語帳・気づきノート・答え合わせ | 触って確認 | Opus |
+| P3a | 基盤：4つの型のスキーマ・検証・フィクスチャ（標準・極端・欠損多め）、市場の収集拡張（series・digest-market）、entry-stats、build 拡張（market 履歴・glossary/・review） | `npm test` 全通過。実データで digest-market と entry-stats が出る | Opus |
+| P3b | 画面1：ヘッダの切替、市場ページ、ニュース型・反省型のタブ | フィクスチャで崩れなし。`__KABU_TEST.runAll()` 通過 | Opus |
+| P3c | 画面2：用語帳・気づきノート・シナリオの答え合わせ | 同上 | Opus |
+| P3d | スキルに4つの型を追記し、実データで各1本通す | 触って確認 | メイン |
 | P4 | スキル仕上げ（skill-forge で監査と発動テスト）、起動の入口 | 完成 | メイン |
 
 ## 8. 運用ルール
@@ -221,6 +297,7 @@ digest.md にはこれらの結果と直近20日の四本値を載せる。チ�
 - 2026-10-03 P2a 完了（テスト106本）。株探の決算ページから通期・四半期・進捗率・修正履歴・財務・CFを取得。四半期の営業CFなど株探にない数字は決算短信PDFから読む。`indicators` の形は `schemas/indicators.md` が正。
 - 2026-10-03 利用者指示: フォルダが散らかっていて分かりにくい → 直下を5つに整理（README・DESIGN・data・src・archive）。分析結果だけを見る単体ビューアをデスクトップに置き、build のたびに更新する。
 - 2026-10-03 学習機能（用語帳・気づきノート・シナリオの答え合わせ）を採用。朝のニュースは市場型に含め、定時実行はしない。
+- 2026-10-03 P3 着手（利用者指示「4つの型を一気に」）。ニュース型は主役の会社を1社決めて銘柄の分析として保存（会社を特定できない出来事は市場型）。用語型は `data/glossary/<用語>.json` の1語1ファイル（旧 `data/glossary.json`・`notes.json` も build は読み続ける）。アナリストの見方の別枠は P3 の後に判断。チャート型・決算型は利用者未評価のまま進める。
 
 ## 10. 現在地と次の一手（引き継ぎ用。作業のたびに更新する）
 
