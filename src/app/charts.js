@@ -290,8 +290,18 @@
     s += text(ax + 12, lt.ty + 4.5, fmtP(lastC), { fill: C.bg, style: 'font-weight:700', cls: 'st-t tagtxt' });
     s += `<g stroke="${C.cy}" fill="none" stroke-width="1.2">` + tag('circle', { cx: lx, cy: ly, r: 8 }) + tag('circle', { cx: lx, cy: ly, r: 2, fill: C.cy })
       + tag('path', { d: `M${f(lx)} ${f(ly - 14)}v5M${f(lx)} ${f(ly + 9)}v5M${f(lx - 14)} ${f(ly)}h5` }) + '</g>';
-    // 注釈ピン：高値系は上・安値系は下を優先し、札がローソク足・他のピン（札と引き出し線）・右端のタグ・現在値の照準に
-    // 重ならない一番近い位置を探す（ピンの左右どちらにも置ける）
+    s += pinLayer(o.pins, { rows, n, X, Y, bw, padL, padT, mainH, mainB, ax, nowX: lx, nowY: ly });
+    return s + '</svg>';
+  }
+
+
+  /* ---------- 注釈ピン（株価チャート・メインチャート共通） ----------
+     pins=[{date, label, low?（true=下に置く／false=上。省略時はラベルの語で判断）, at?（印を付ける価格。省略時は高値／安値）, color?, cls?}]
+     g={rows, n, X, Y, bw, padL, padT, mainH, mainB, ax（札の右端の上限）, nowX, nowY}
+     高値系は上・安値系は下を優先し、札がローソク足・他のピン（札と引き出し線）・現在値の照準に重ならない一番近い位置を探す */
+  function pinLayer(pinsIn, g) {
+    const { rows, n, X, Y, bw, padL, padT, mainH, mainB, ax, nowX: lx, nowY } = g;
+    let s = '';
     const placed = [];
     const hitCandle = (x0, x1, y0, y1) => {
       for (let k = 0; k < n; k++) {
@@ -301,24 +311,23 @@
       }
       return false;
     };
-    // 札・引き出し線（縦：px で ya→ly、横：ly で hx0→hx1）との交差
     const segHitsBox = (sx0, sy0, sx1, sy1, q) => Math.max(sx0, sx1) >= q.x0 - 3 && Math.min(sx0, sx1) <= q.x1 + 3 && Math.max(sy0, sy1) >= q.y0 - 3 && Math.min(sy0, sy1) <= q.y1 + 3;
     const hitPlaced = (c) => placed.some((q) => {
       if (c.x0 < q.x1 + 4 && c.x1 > q.x0 - 4 && c.y0 < q.y1 + 4 && c.y1 > q.y0 - 4) return true; // 札どうし
       if (segHitsBox(q.px, q.ya, q.px, q.ly, c) || segHitsBox(q.hx0, q.ly, q.hx1, q.ly, c)) return true; // 他の引き出し線が札を横切る
       return segHitsBox(c.px, c.ya, c.px, c.ly, q) || segHitsBox(c.hx0, c.ly, c.hx1, c.ly, q); // 自分の引き出し線が他の札を横切る
     });
-    const pinRows = (o.pins || []).filter((p) => p && typeof p.date === 'string' && p.label)
+    const pinRows = (pinsIn || []).filter((p) => p && typeof p.date === 'string' && p.label)
       .map((p) => ({ p, i: rows.findIndex((r) => r.d === p.date) })).filter((x) => x.i >= 0)
       .sort((a, b) => a.i - b.i);
     pinRows.forEach(({ p, i }) => {
       const r = rows[i], x = X(i);
-      const low = /安値|底|急落|下落|割れ|安/.test(p.label) && !/高値/.test(p.label);
+      const low = typeof p.low === 'boolean' ? p.low : /安値|底|急落|下落|割れ|安/.test(p.label) && !/高値/.test(p.label);
       const lab = /^\d{1,2}\/\d{1,2}/.test(p.label) ? p.label : md(p.date) + ' ' + p.label;
       const bwid = textW(lab, 12) + 22;
-      const ya = Y(low ? r.l : r.h);
+      const ya = isNum(p.at) ? Y(p.at) : Y(low ? r.l : r.h);
       const yTop = padT - 14, yBot = mainB - 12;
-      // 候補：上下 × 左右 × 横へのずらし（0〜192px）× 縦の距離。近さ（縦＋横×0.7、逆方向は+40）で一番良いものを選ぶ
+      const col = p.color || C.cy;
       let best = null;
       for (const strict of [true, false]) {
         for (const dir of low ? [1, -1] : [-1, 1]) {
@@ -332,7 +341,7 @@
                 const c = { x0: bx, x1: bx + bwid, y0: ly - 10, y1: ly + 10, px: x, ya, ly, hx0: Math.min(x, side === 'R' ? bx : bx + bwid), hx1: Math.max(x, side === 'R' ? bx : bx + bwid) };
                 if (strict && hitCandle(c.x0, c.x1, c.y0, c.y1)) continue;
                 if (hitPlaced(c)) continue;
-                if (c.x0 < lx + 16 && c.x1 > lx - 16 && Math.abs(ly - Y(lastC)) < 26) continue; // 現在値の照準
+                if (c.x0 < lx + 16 && c.x1 > lx - 16 && Math.abs(ly - nowY) < 26) continue; // 現在値の照準
                 const score = d + off * 0.7 + (dir === (low ? 1 : -1) ? 0 : 40) + (side === 'L' ? 0 : 6);
                 if (!best || score < best.score) best = { score, c, side };
                 break;
@@ -348,15 +357,15 @@
       }
       const { side } = best, ly = best.c.ly, bx = best.c.x0;
       placed.push(best.c);
-      s += '<g class="a-fade pin">';
-      s += tag('path', { d: `M${f(x)} ${f(ya)} V${f(ly)} H${f(side === 'R' ? bx : bx + bwid)}`, stroke: C.cy2, 'stroke-width': 1, fill: 'none', opacity: 0.85 });
-      s += tag('path', { d: `M${f(x)} ${f(ya - 4)} l4 4 -4 4 -4 -4z`, fill: C.bg, stroke: C.cy, 'stroke-width': 1.5 });
-      s += tag('path', { d: `M${f(bx + 5)} ${f(ly - 10)} H${f(bx + bwid)} V${f(ly + 10)} H${f(bx)} V${f(ly - 5)} Z`, fill: '#071019', stroke: C.cy, 'stroke-width': 1, class: 'pinbox' });
-      s += tag('rect', { x: bx, y: ly - 10, width: 3, height: 20, fill: C.cy });
+      s += `<g class="a-fade pin${p.cls ? ' ' + esc(p.cls) : ''}" data-date="${esc(p.date)}">`;
+      s += tag('path', { d: `M${f(x)} ${f(ya)} V${f(ly)} H${f(side === 'R' ? bx : bx + bwid)}`, stroke: p.color || C.cy2, 'stroke-width': 1, fill: 'none', opacity: 0.85 });
+      s += tag('path', { d: `M${f(x)} ${f(ya - 4)} l4 4 -4 4 -4 -4z`, fill: C.bg, stroke: col, 'stroke-width': 1.5 });
+      s += tag('path', { d: `M${f(bx + 5)} ${f(ly - 10)} H${f(bx + bwid)} V${f(ly + 10)} H${f(bx)} V${f(ly - 5)} Z`, fill: '#071019', stroke: col, 'stroke-width': 1, class: 'pinbox' });
+      s += tag('rect', { x: bx, y: ly - 10, width: 3, height: 20, fill: col });
       s += text(bx + bwid - 9, ly + 4.5, lab, { cls: 'st-j', fill: C.tx, anchor: 'end' });
       s += '</g>';
     });
-    return s + '</svg>';
+    return s;
   }
 
   /* ---------- 小型円弧メーター（viewBox 140×66 固定。両端ラベルは HTML 側） ---------- */
@@ -895,12 +904,15 @@
     }).filter(Boolean);
     levels.forEach((L) => { L.in = L.hi >= lo - span0 * 0.35 && L.lo <= hi + span0 * 0.35; });
     levels.forEach((L) => { if (L.in) { lo = Math.min(lo, L.lo); hi = Math.max(hi, L.hi); } });
+    // 購入価格（反省型）：近ければ価格軸に取り込み、遠ければ端の札で示す
+    const E = o.entry && isNum(o.entry.price) && o.entry.price > 0 ? { price: o.entry.price, date: o.entry.date, label: o.entry.label || '買' } : null;
+    if (E) { E.in = E.price >= lo - span0 * 0.35 && E.price <= hi + span0 * 0.35; if (E.in) { lo = Math.min(lo, E.price); hi = Math.max(hi, E.price); } }
     const span = hi - lo || span0;
     const P1 = hi + span * 0.07, P0 = Math.max(0, lo - span * 0.05);
     const dec = isNum(o.dec) ? o.dec : priceDec(rows.map((r) => r.c));
     void dec;
     const lastC = rows[n - 1].c;
-    const tagMax = Math.max(textW(fmtP(lastC), 12, true) + 4, ...levels.map((L) => textW(levelTag(L), 12, true) + (L.in ? 0 : 16)));
+    const tagMax = Math.max(textW(fmtP(lastC), 12, true) + 4, ...levels.map((L) => textW(levelTag(L), 12, true) + (L.in ? 0 : 16)), E ? textW(E.label + ' ' + fmtP(E.price), 12) + (E.in ? 0 : 16) : 0);
     const bins = o.vp && Array.isArray(o.vp.bins) ? o.vp.bins : [];
     const padL = 4, padR = Math.max(84, Math.ceil(tagMax) + 20), padT = 28, padB = 19, gap = 8;
     const vpW = bins.length ? Math.round(clamp(W * 0.1, 56, 110)) : 0, vpGap = vpW ? 6 : 0;
@@ -918,6 +930,7 @@
       const yy = L.in ? Y(L.lo === L.hi ? L.lo : (L.lo + L.hi) / 2) : (L.hi > P1 ? padT + 9 : mainB - 9);
       tagList.push({ L, y: yy });
     });
+    if (E) tagList.push({ E, y: E.in ? Y(E.price) : (E.price > P1 ? padT + 9 : mainB - 9) });
     const ty = spread(tagList.map((t) => t.y), 20, padT - 4, mainB + 2);
     tagList.forEach((t, k) => { t.ty = ty[k]; });
 
@@ -954,6 +967,14 @@
     // サポレジ（帯・線・タグ）
     tagList.forEach((t) => {
       if (t.now) return;
+      if (t.E) {
+        const ex = rows.findIndex((r) => r.d === E.date), x0 = ex >= 0 ? X(ex) : padL, yA = E.in ? Y(E.price) : t.ty;
+        s += '<g class="entry">';
+        if (E.in) s += tag('line', { x1: x0, x2: ax, y1: yA, y2: yA, stroke: C.amb, 'stroke-width': 1.4, 'stroke-dasharray': '6 3', class: 'entryline' });
+        s += tag('path', { d: `M${f(ax + 2)} ${f(yA)} L${f(ax + 8)} ${f(t.ty - 9)} H${f(W - 2)} V${f(t.ty + 9)} H${f(ax + 8)} Z`, fill: '#1a1206', stroke: C.amb, class: 'tagbox' });
+        s += text(ax + 12, t.ty + 4, `${E.label} ${fmtP(E.price)}${E.in ? '' : E.price > P1 ? ' ▲' : ' ▼'}`, { fill: '#ffd28a', cls: 'st-j tagtxt' });
+        return void (s += '</g>');
+      }
       const L = t.L, rr = L.kind === 'R';
       const col = rr ? 'rgba(255,120,180,.9)' : 'rgba(166,243,255,.92)';
       const fill = rr ? `rgba(255,92,163,${f(0.06 + L.str * 0.025)})` : `rgba(62,230,255,${f(0.05 + L.str * 0.022)})`;
@@ -1016,6 +1037,8 @@
     s += tag('path', { d: `M${f(ax + 2)} ${f(ly)} L${f(ax + 8)} ${f(lt.ty - 10)} H${f(W)} V${f(lt.ty + 10)} H${f(ax + 8)} Z`, fill: C.cy, filter: 'url(#kl-glow)', class: 'tagbox now' });
     s += text(ax + 12, lt.ty + 4.5, fmtP(lastC), { fill: C.bg, style: 'font-weight:700', cls: 'st-t tagtxt' });
     s += `<g stroke="${C.cy}" fill="none" stroke-width="1.2">` + tag('circle', { cx: lx, cy: ly, r: 8 }) + tag('circle', { cx: lx, cy: ly, r: 2, fill: C.cy }) + '</g>';
+    // 注釈ピン（購入日・最大含み益／含み損・出来事の日など）。札は価格帯別出来高の手前まで
+    if (o.pins && o.pins.length) s += pinLayer(o.pins, { rows, n, X, Y, bw, padL, padT, mainH, mainB, ax: plotR, nowX: lx, nowY: ly });
     return s + '</svg>';
   }
 
@@ -1417,12 +1440,182 @@
     return s + '</svg>';
   }
 
+
+  /* =====================================================================
+     P3b：市場ページ・ニュース型・反省型の図
+     ===================================================================== */
+
+  /* ---------- 市場の折れ線の期間切り出し ----------
+     rows=[{d,c}]（昇順）を asOf までに切り、終わりから months か月の窓を返す。移動平均は窓の外の足も使って計算する */
+  const RANGES = { '3m': [3, '3か月'], '1y': [12, '1年'], '2y': [24, '2年'] };
+  function seriesWindow(rowsIn, asOf, months, mas) {
+    const all = (rowsIn || []).filter((r) => r && typeof r.d === 'string' && isNum(r.c) && (!asOf || r.d <= asOf));
+    if (!all.length) return { rows: [], ma: {} };
+    const end = all[all.length - 1].d;
+    const dt = new Date(end + 'T00:00:00Z');
+    dt.setUTCMonth(dt.getUTCMonth() - (isNum(months) ? months : 12));
+    const start = isNaN(dt) ? '' : dt.toISOString().slice(0, 10);
+    let si = all.findIndex((r) => r.d > start);
+    if (si < 0) si = 0;
+    const closes = all.map((r) => r.c), ma = {};
+    (mas || []).forEach((n) => { ma['ma' + n] = sma(closes, n).slice(si); });
+    return { rows: all.slice(si), ma };
+  }
+
+  /* ---------- 市場の折れ線：日経平均（25・75・200日線つき）＋ドル円（下段）。横軸は日付（両段で共有） ----------
+     o = {main:{name, unit, rows:[{d,c}], ma:{ma25,ma75,ma200}}, sub:{name, unit, rows:[{d,c}]}|null, W, H, label} */
+  function marketChart(o) {
+    const W = Math.round(o.W), H = Math.round(o.H);
+    if (!(W > 200 && H > 160)) return '';
+    const head = svgOpen(W, H, o.label || '日経平均とドル円の推移', 'mkchart');
+    const M = o.main || {}, mrows = (M.rows || []).filter((r) => r && typeof r.d === 'string' && isNum(r.c));
+    if (mrows.length < 2) return head + text(W / 2, H / 2, '指数の日足データがありません', { cls: 'st-j', anchor: 'middle' }) + '</svg>';
+    const Sb = o.sub || null, srows = Sb ? (Sb.rows || []).filter((r) => r && typeof r.d === 'string' && isNum(r.c)) : [];
+    const hasSub = srows.length >= 2;
+    const t = (d) => Date.parse(d + 'T00:00:00Z');
+    const d0 = mrows[0].d, d1 = [mrows[mrows.length - 1].d, hasSub ? srows[srows.length - 1].d : ''].sort().pop();
+    const t0 = t(d0), t1 = t(d1) || t0 + 1;
+    const lastM = mrows[mrows.length - 1].c, lastS = hasSub ? srows[srows.length - 1].c : null;
+    const mDec = decOf(lastM, 2) ? 2 : 0;
+    const tagW = Math.max(textW(fmt(lastM, mDec), 12, true), hasSub ? textW(fmt(lastS, 2), 12, true) : 0) + 22;
+    const padL = 4, padR = Math.max(74, Math.ceil(tagW) + 8), padT = 22, padB = 19, gap = hasSub ? 30 : 0;
+    const inner = H - padT - padB - gap;
+    const mainH = hasSub ? Math.round(inner * 0.7) : inner, subH = inner - mainH;
+    const ax = W - padR, pw = ax - padL;
+    const X = (d) => padL + clamp((t(d) - t0) / (t1 - t0 || 1), 0, 1) * pw;
+    let s = head;
+    // 価格の範囲（終値と移動平均）
+    const band = (rows, extra, top, h) => {
+      let lo = Infinity, hi = -Infinity;
+      rows.forEach((r) => { lo = Math.min(lo, r.c); hi = Math.max(hi, r.c); });
+      (extra || []).forEach((a) => (a || []).forEach((v) => { if (isNum(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v); } }));
+      const tk = niceTicks(lo, hi, Math.max(2, Math.round(h / 52)));
+      const P0 = tk.lo, P1 = tk.hi;
+      return { tk, Y: (p) => top + (P1 - p) / (P1 - P0 || 1) * h };
+    };
+    const mas = M.ma || {};
+    const mb = band(mrows, [mas.ma25, mas.ma75, mas.ma200], padT, mainH);
+    const sTop = padT + mainH + gap;
+    const sb = hasSub ? band(srows, [], sTop, subH) : null;
+    // 枠・目盛り
+    const frame = (top, h, B, dec, unit) => {
+      let g = tag('rect', { x: padL, y: top, width: pw, height: h, fill: 'none', stroke: 'rgba(62,230,255,.16)' });
+      B.tk.ticks.forEach((v) => {
+        const y = B.Y(v);
+        if (y < top - 0.5 || y > top + h + 0.5) return;
+        g += tag('line', { x1: padL, x2: ax, y1: y, y2: y, stroke: 'rgba(62,230,255,.07)' });
+        g += tag('line', { x1: ax, x2: ax + 4, y1: y, y2: y, stroke: C.tx3 });
+      });
+      return g;
+    };
+    s += frame(padT, mainH, mb) + (hasSub ? frame(sTop, subH, sb) : '');
+    s += tag('line', { x1: ax, x2: ax, y1: padT, y2: hasSub ? sTop + subH : padT + mainH, stroke: 'rgba(62,230,255,.3)' });
+    // 月の区切りと日付ラベル（範囲が長いときは四半期ごと）
+    const spanM = (t1 - t0) / (30.4 * 864e5);
+    const every = spanM > 15 ? 3 : 1;
+    let labEnd = -1e9, prevYm = '';
+    mrows.forEach((r, i) => {
+      const ym = r.d.slice(0, 7);
+      if (i > 0 && ym === prevYm) return;
+      const first = i === 0;
+      prevYm = ym;
+      if (first) return;
+      const mo = +r.d.slice(5, 7);
+      const x = X(r.d);
+      s += tag('line', { x1: x, x2: x, y1: padT, y2: hasSub ? sTop + subH : padT + mainH, stroke: 'rgba(62,230,255,.08)', 'stroke-dasharray': '2 4' });
+      if ((mo - 1) % every !== 0) return;
+      const lab = (mo === 1 || labEnd < 0 ? r.d.slice(0, 4) + '年 ' : '') + mo + '月';
+      const w = textW(lab);
+      if (x - 2 > labEnd + 8 && x + w < ax - 50) { s += text(x + 3, H - 5, lab, { cls: 'st-j', fill: C.tx2 }); labEnd = x + 3 + w; }
+    });
+    s += text(ax - 2, H - 5, mmdd(d1), { anchor: 'end', fill: C.cy2 });
+    // 目盛りの文字（右端）
+    const axisLab = (B, top, h, dec, lastY) => {
+      let g = '';
+      B.tk.ticks.forEach((v) => { const y = B.Y(v); if (y >= top + 6 && y <= top + h - 2 && Math.abs(y - lastY) > 15) g += text(ax + 8, y + 4, fmt(v, dec), { fill: C.tx3 }); });
+      return g;
+    };
+    const mY = mb.Y(lastM), sY = hasSub ? sb.Y(lastS) : 0;
+    s += axisLab(mb, padT, mainH, Math.min(mb.tk.dec, 2), mY);
+    if (hasSub) s += axisLab(sb, sTop, subH, Math.min(Math.max(sb.tk.dec, 0), 2), sY);
+    // 段の名前
+    s += text(padL + 6, padT - 7, `${M.name || '日経平均'}（${M.unit || '円'}）`, { cls: 'st-j', fill: C.tx2 });
+    if (hasSub) s += text(padL + 6, sTop - 7, `${Sb.name || 'ドル円'}（${Sb.unit || '円'}）`, { cls: 'st-j', fill: C.tx2 });
+    // 線
+    const line = (rows, Y) => pathD(rows.map((r) => [X(r.d), Y(r.c)]));
+    const dM = line(mrows, mb.Y);
+    s += tag('path', { d: `${dM} L${f(X(mrows[mrows.length - 1].d))} ${f(padT + mainH)} L${f(X(mrows[0].d))} ${f(padT + mainH)}Z`, fill: 'rgba(62,230,255,.06)', class: 'mk-area' });
+    ['ma200', 'ma75', 'ma25'].forEach((k) => {
+      const a = mas[k];
+      if (!Array.isArray(a)) return;
+      const d = seriesPath(a.slice(-mrows.length), (i) => X(mrows[i].d), mb.Y), m = MA_STYLE[k];
+      if (d) s += tag('path', { d, fill: 'none', stroke: m[0], 'stroke-width': k === 'ma25' ? 1.3 : m[1], 'stroke-dasharray': m[2], 'stroke-linejoin': 'round', class: `ma mk-${k}` });
+    });
+    s += tag('path', { d: dM, fill: 'none', stroke: C.cy, 'stroke-width': 1.6, 'stroke-linejoin': 'round', class: 'mk-line' });
+    if (hasSub) {
+      const dS = line(srows, sb.Y);
+      s += tag('path', { d: `${dS} L${f(X(srows[srows.length - 1].d))} ${f(sTop + subH)} L${f(X(srows[0].d))} ${f(sTop + subH)}Z`, fill: 'rgba(207,221,230,.05)' });
+      s += tag('path', { d: dS, fill: 'none', stroke: C.mid, 'stroke-width': 1.4, 'stroke-linejoin': 'round', class: 'mk-sub' });
+    }
+    // 最新値の札
+    const nowTag = (x, y, v, dec, col, txt) => tag('line', { x1: x, x2: ax, y1: y, y2: y, stroke: col, 'stroke-dasharray': '2 3', opacity: 0.8 })
+      + tag('path', { d: `M${f(ax + 2)} ${f(y)} L${f(ax + 8)} ${f(y - 10)} H${f(W)} V${f(y + 10)} H${f(ax + 8)} Z`, fill: col, class: 'tagbox' })
+      + text(ax + 12, y + 4.5, fmt(v, dec), { fill: txt, style: 'font-weight:700', cls: 'st-t tagtxt' })
+      + tag('circle', { cx: x, cy: y, r: 3, fill: C.bg, stroke: col, 'stroke-width': 1.4 });
+    s += nowTag(X(mrows[mrows.length - 1].d), clamp(mY, padT + 10, padT + mainH - 10), lastM, mDec, C.cy, C.bg);
+    if (hasSub) s += nowTag(X(srows[srows.length - 1].d), clamp(sY, sTop + 10, sTop + subH - 10), lastS, 2, C.mid, C.bg);
+    return s + '</svg>';
+  }
+
+  /* ---------- 基準線つき横ゲージ（市場の物差し。負の値も扱う。HTML） ----------
+     item = {value, ref, refLabel, max, unit}。値か基準が負なら −max〜max、そうでなければ 0〜max */
+  function refGaugeModel(item) {
+    const v = item && isNum(item.value) ? item.value : null, r = item && isNum(item.ref) ? item.ref : null;
+    let max = item && isNum(item.max) && item.max > 0 ? item.max : niceCeil(Math.max(Math.abs(v || 0), Math.abs(r || 0), 1) * 1.25);
+    const min = (v != null && v < 0) || (r != null && r < 0) ? -max : 0;
+    const pos = (x) => clamp((x - min) / (max - min) * 100, 0, 100);
+    return { v, r, min, max, pos, over: v != null && v > max ? 1 : v != null && v < min ? -1 : 0, zero: min < 0 ? pos(0) : null };
+  }
+  function refGauge(item) {
+    const m = refGaugeModel(item);
+    const tk = niceTicks(m.min, m.max, 4, [1, 2, 2.5, 5, 10]).ticks.filter((t) => t >= m.min - 1e-9 && t <= m.max + 1e-9);
+    let g = tk.map((t) => `<span class="tk" style="left:${f(m.pos(t))}%"></span>`).join('');
+    if (m.zero != null) g += `<span class="zr" style="left:${f(m.zero)}%"></span>`;
+    if (m.r != null) g += `<span class="rf" style="left:${f(m.pos(m.r))}%" data-ref="${f(m.pos(m.r))}"></span>`;
+    if (m.v != null) g += `<span class="gmk a-fade${m.over ? ' over' : ''}" style="left:${f(m.pos(m.v))}%" data-pos="${f(m.pos(m.v))}"></span>`;
+    const d = decOf(m.max, 2);
+    return `<div class="gtr"><span>${fmt(m.min, d)}${m.over < 0 ? '<em class="ov">未満</em>' : ''}</span><div class="gt${m.v == null ? ' nil' : ''}">${g}</div><span>${fmt(m.max, d)}${m.over > 0 ? '<em class="ov">超</em>' : ''}</span></div>`;
+  }
+
+  /* ---------- 影響の期間（3段階：一時的／数か月／長引く） ---------- */
+  const DURATION = [['short', '一時的', '数日〜数週'], ['mid', '数か月', '数か月'], ['long', '長引く', '1年以上']];
+  function durationBar(k) {
+    const at = DURATION.findIndex((x) => x[0] === k);
+    const cells = DURATION.map(([key, lab, sub], i) => `<div class="du${i === at ? ' on' : i < at ? ' past' : ''}" data-du="${key}"${i === at ? ' aria-current="true"' : ''}><i></i><b>${lab}</b><small>${sub}</small></div>`).join('');
+    return `<div class="dub" role="img" aria-label="影響の期間 ${at >= 0 ? DURATION[at][1] : '不明'}">${cells}</div>`;
+  }
+
+  /* ---------- 過去事例の比較（初動の騰落率・回復までの月数）の物差し ----------
+     null は棒を描かない。騰落率は 0 を中心に左右、月数は 0 から右へ */
+  function caseScale(cases) {
+    const list = (cases || []).filter((c) => c && typeof c === 'object');
+    const dm = Math.max(10, ...list.map((c) => (isNum(c.dropPct) ? Math.abs(c.dropPct) : 0)));
+    const rm = Math.max(6, ...list.map((c) => (isNum(c.recoveryMonths) ? c.recoveryMonths : 0)));
+    return { drop: niceCeil(dm), rec: niceCeil(rm) };
+  }
+  function monthBar(v, scale) {
+    if (!isNum(v) || v < 0) return '<span class="mb nil"></span>';
+    const w = clamp(v / (scale || 1) * 100, 0, 100);
+    return `<span class="mb"><u class="a-gx" style="width:${f(Math.max(w, 0.8))}%"></u></span>`;
+  }
+
   const api = {
     C, SEG_COLORS, isNum, clamp, esc, fmt, fmtP, fmtS, fmtVol, yenParts, jpAmountParts, decOf, priceDec, textW,
     niceStep, niceCeil, niceTicks, sma, deviation, spread, mmdd, md, segModel, segListHtml, ckReasons, noteSign,
     priceChart, meter, meterLabelX, devCell, gauge, perf3d, supply3d, fan, donut, spark, checklist, stars, segs,
     miniCandles, vpLayout, levelChart, levelTag, HEAT, heatPos, heatValue, heatGauge, planLanes, planPrices, plansChart,
     prevFromYoy, pairBars3d, ringGeom, ring, paceBar, yoyBar, cmpPair, changeOf, bulletModel, bullet, returnsPeriods, returns3d, marginLine,
+    pinLayer, RANGES, seriesWindow, marketChart, refGaugeModel, refGauge, DURATION, durationBar, caseScale, monthBar,
   };
   G.KABU_CHARTS = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

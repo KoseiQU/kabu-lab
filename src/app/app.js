@@ -62,10 +62,22 @@
       ['deep', /有報|有価証券報告書|中期経営計画|中計/], ['results', /決算短信|売上|利益|決算/],
     ],
   };
+  MISS_BY.market = [
+    ['level', /PER|乖離|割高|割安|高い安い|値幅/], ['rates', /金利/], ['fx', /為替|ドル円|円安|円高/], ['geo', /地政学/],
+    ['news', /ニュース/], ['calendar', /予定|日程|カレンダー/], ['outlook', /シナリオ|見通し/], ['mkchart', /日経平均|指数|日足/],
+  ];
+  MISS_BY.news = [
+    ['cases', /過去事例|事例/], ['reaction', /株価|騰落|反応|日足/], ['related', /波及|関連/], ['impact', /影響|要因|違約|契約/],
+    ['event', /出来事|発表|報道/], ['takeaway', /受け止め|確認/],
+  ];
+  MISS_BY.hansei = [
+    ['result', /購入後|値動き|損益|含み/], ['at', /過熱|乖離|RSI|騰落|出来高/], ['position', /位置|サポート|レジスタンス|節目|流れ/],
+    ['alt', /別の入り方/], ['entry', /購入日|購入価格/], ['chart', /株価|日足|チャート/],
+  ];
   const rulesOf = (a) => MISS_BY[a && a.type] || MISS_RULES;
 
   /* ---------- 状態 ---------- */
-  const S = { route: null, recent: null, seen: {}, testing: false, ctx: null, animTimer: 0, segTimer: 0, ckSel: null, ckItems: [], lvPin: null };
+  const S = { route: null, recent: null, seen: {}, testing: false, ctx: null, animTimer: 0, segTimer: 0, ckSel: null, ckItems: [], lvPin: null, mkRange: '1y' };
   try { S.recent = window.localStorage.getItem('kabu.recent'); } catch (e) { /* 使えない環境では記憶しない */ }
 
   const dataOk = () => { const D = window.KABU; return !!(D && typeof D === 'object' && D.stocks && typeof D.stocks === 'object' && !Array.isArray(D.stocks)); };
@@ -556,18 +568,21 @@
     const close = a.price && isNum(a.price.close) ? a.price.close : null;
     const pm = `<span class="jp">起点 <span class="u-wide">現在値 </span><span class="mono">${K.fmtP(close)}</span>円</span>`;
     if (secAbsent(a, 'scenarios')) return panel('scenarios', 'SYS-06 / SCENARIO', '3つのシナリオ', pm, `<div class="pb">${noData('scenarios', a)}</div>`);
-    const list = arr(a.sections.scenarios);
+    const cards = scenCards(arr(a.sections.scenarios));
+    return panel('scenarios', 'SYS-06 / SCENARIO', '3つのシナリオ', pm, `<div class="pb"><div class="scn"><div class="host" id="fan" data-chart="fan"></div><div class="scards">${cards}</div></div></div>`);
+  }
+  /** シナリオ3枚（強気・中立・弱気）。quick の scenarios と market の outlook で共通 */
+  function scenCards(list) {
     const order = [['bull', 'SCN-A', 'bull'], ['base', 'SCN-B', 'mid'], ['bear', 'SCN-C', 'bear']];
-    const cards = order.map(([k, code, cls]) => {
+    return order.map(([k, code, cls]) => {
       const s = list.find((x) => x && x.kind === k);
       if (!s) return '';
       const label = s.target && typeof s.target.label === 'string' ? s.target.label : '';
       const m = /\d[\d,.]*(?:[〜~]\d[\d,.]*)?円/.exec(label);
       const tgt = label ? (k !== 'base' ? '目安 ' : '') + (m ? esc(label.slice(0, m.index)) + `<em>${esc(m[0])}</em>` + esc(label.slice(m.index + m[0].length)) : esc(label)) : '';
       const txt = s.text && s.text !== label ? s.text + (/[。．.！？!?」]$/.test(s.text) ? '' : '。') : '';
-      return `<div class="sc ${cls}"><div class="sch"><span class="scode">${code}</span><b>${esc(s.title || '')}</b><span class="tgt">${tgt}</span></div>${txt ? `<p>${esc(txt)}</p>` : ''}${s.breakIf ? `<div class="inv"><span>崩れる条件</span>${esc(s.breakIf)}</div>` : ''}</div>`;
+      return `<div class="sc ${cls}" data-scn="${k}"><div class="sch"><span class="scode">${code}</span><b>${esc(s.title || '')}</b><span class="tgt">${tgt}</span></div>${txt ? `<p>${esc(txt)}</p>` : ''}${s.breakIf ? `<div class="inv"><span>崩れる条件</span>${esc(s.breakIf)}</div>` : ''}</div>`;
     }).join('');
-    return panel('scenarios', 'SYS-06 / SCENARIO', '3つのシナリオ', pm, `<div class="pb"><div class="scn"><div class="host" id="fan" data-chart="fan"></div><div class="scards">${cards}</div></div></div>`);
   }
   function marginPanel(a) {
     const pm = '<span class="jp u-wide">単位：千株</span>';
@@ -1084,10 +1099,199 @@
   /* =====================================================================
      市場ページ（#/market、#/market/<date>）
      ===================================================================== */
+  const FXDIR = { weak: ['円安方向', 'weak', 2], range: ['もみ合い', 'range', 1], strong: ['円高方向', 'strong', 0] };
+  const NEWSDIR = { plus: ['＋', 'プラス', 'p'], minus: ['−', 'マイナス', 'm'], neutral: ['＝', '中立', 'n'] };
+  const WD = ['日', '月', '火', '水', '木', '金', '土'];
+  const dayNum = (d) => { const t = Date.parse(String(d) + 'T00:00:00Z'); return isNaN(t) ? null : Math.round(t / 864e5); };
+  const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return ''; } };
+  const srcLink = (u, lab) => (/^https?:\/\//.test(u || '') ? `<a class="srcl" href="${esc(u)}" target="_blank" rel="noopener">${esc(lab || hostOf(u) || '出典')} ↗</a>` : '');
+  const seriesOf = (D, k) => { const S2 = D.market && D.market.series && D.market.series.series; const x = S2 && S2[k]; return x && Array.isArray(x.rows) ? x : null; };
+
+  /** 市場ページの材料：表示する分析（日付指定があればその日）・raw・series・基準日 */
+  function marketCtx(route) {
+    const D = window.KABU, M = D.market && typeof D.market === 'object' ? D.market : {};
+    const list = arr(M.analyses).filter((x) => x && typeof x === 'object' && x.type === 'market');
+    if (!list.length && M.analysis && M.analysis.type === 'market') list.push(M.analysis);
+    let a = null, badDate = null;
+    if (route.date) { a = list.find((x) => x.date === route.date) || null; if (!a) badDate = route.date; }
+    if (!a) a = list[0] || null;
+    const raw = M.raw && typeof M.raw === 'object' ? M.raw : null;
+    const asOf = a ? (a.price && a.price.asOf) || a.date : null;
+    const nk = seriesOf(D, '^N225'), fx = seriesOf(D, 'JPY=X');
+    const upto = (S2) => (S2 ? S2.rows.filter((r) => r && typeof r.d === 'string' && isNum(r.c) && (!asOf || r.d <= asOf)) : []);
+    return { kind: 'market', a, list, badDate, raw, asOf, nk, fx, nkRows: upto(nk), fxRows: upto(fx), series: M.series || null };
+  }
+  function mkHeader(c) {
+    const a = c.a, it = c.raw && c.raw.items ? c.raw.items : {};
+    const nkI = it.nikkei225 || {};
+    const close = a && a.price && isNum(a.price.close) ? a.price.close : c.nkRows.length ? c.nkRows[c.nkRows.length - 1].c : nkI.value;
+    const ch = a && a.price ? a.price.change : nkI.change, pct = a && a.price ? a.price.changePct : nkI.changePct;
+    const asOf = c.asOf || nkI.asOf || (c.nkRows.length ? c.nkRows[c.nkRows.length - 1].d : '');
+    const up = isNum(ch) ? ch > 0 : isNum(pct) && pct > 0, dn = isNum(ch) ? ch < 0 : isNum(pct) && pct < 0;
+    const lastOf = (rows, item) => (rows.length ? rows[rows.length - 1] : item && isNum(item.value) ? { c: item.value, d: item.asOf } : null);
+    const fxL = lastOf(c.fxRows, it.usdjpy), usS = seriesOf(window.KABU, '^TNX');
+    const usRows = usS ? usS.rows.filter((r) => r && isNum(r.c) && (!c.asOf || r.d <= c.asOf)) : [];
+    const usL = lastOf(usRows, it.us10y);
+    const kv = (lab, v, unit, d) => `<div class="sh-kv"><span>${lab}${v && v.d ? `<small>${esc(mmdd(v.d))}</small>` : ''}</span><b>${v ? `${fmt(v.c, 2)}<span>${unit}</span>` : '<span>未取得</span>'}</b></div>`;
+    const tags = ['日経平均・ドル円・米10年金利', a ? `分析 ${a.date}` : '指標のみ（分析は未実行）'].map((x) => `<span>${esc(x)}</span>`).join('');
+    return `<div class="sh mk-sh">
+    <div class="sh-id"><div class="ticker">MKT</div><div><h1>市場</h1><div class="tags">${tags}</div></div></div>
+    <div class="sh-price"><svg class="ret" aria-hidden="true"><use href="#ret"/></svg><div>
+      <div class="lbl"><span>日経平均 ／ ${asOf ? esc(jpDate(asOf)) + '終値' : '基準日不明'}</span></div>
+      <div class="pxrow"><span class="px"><span class="num">${fmt(close, 2)}</span><small>円</small></span><span class="chg ${up ? 'up' : dn ? 'dn' : ''}">${up ? '▲' : dn ? '▼' : '―'} <span>前日比</span> ${fmtS(ch, 2)}<span>円</span> / ${fmtS(pct, 2)}%</span></div>
+    </div></div>
+    ${kv('ドル円', fxL, '円')}${kv('米10年金利', usL, '%')}
+    <div class="sh-fill"><svg viewBox="0 0 150 26" aria-hidden="true" fill="none" stroke="#3ee6ff"><path d="M0 13h40" stroke-opacity=".35"/><path d="M46 5v16M52 9v8M58 3v20M64 9v8M70 7v12" stroke-opacity=".5"/><path d="M78 13h30" stroke-dasharray="2 3" stroke-opacity=".45"/><circle cx="123" cy="13" r="9" stroke-opacity=".6"/><circle cx="123" cy="13" r="2.5" fill="#3ee6ff" stroke="none"/><path d="M138 13h12" stroke-opacity=".35"/></svg></div>
+  </div>`;
+  }
+  function mkTabs(c) {
+    let right;
+    if (c.list.length > 1) {
+      const items = c.list.map((x) => ({ d: x.date, on: c.a && x.date === c.a.date }));
+      right = c.list.length > 5
+        ? `<span class="dates"><span class="lb">履歴</span><select aria-label="分析日を選ぶ" data-dates>${items.map((x) => `<option value="${esc(hrefMarket(x.d))}"${x.on ? ' selected' : ''}>${esc(x.d)}</option>`).join('')}</select></span>`
+        : `<span class="dates"><span class="lb">履歴</span>${items.map((x) => `<a class="${x.on ? 'on' : ''}" href="${hrefMarket(x.d)}">${esc(mmdd(x.d))}</a>`).join('')}</span>`;
+    } else right = `<span class="note">ANALYSIS <b>${c.a ? 'MARKET' : 'STANDBY'}</b>${c.a ? ' ／ ' + esc(mmdd(c.a.date)) : ''}</span>`;
+    return `<nav class="tabs" aria-label="市場ページ"><a class="tab on" href="${hrefMarket(c.a && c.list.length > 1 ? c.a.date : null)}"><i>M-01</i>市場の分析<span class="dot"></span></a><div class="rt"><span class="lgd"><i style="background:var(--cy)"></i>上昇・プラス</span><span class="lgd"><i style="background:var(--mag)"></i>下落・マイナス</span><span class="lgd"><i style="background:var(--amber)"></i>警告・注目</span>${right}</div></nav>`;
+  }
+  function mkChartPanel(c) {
+    const R = K.RANGES[S.mkRange] ? S.mkRange : '1y';
+    const btns = Object.keys(K.RANGES).map((k) => `<button type="button" class="rg${k === R ? ' on' : ''}" data-mk-range="${k}" aria-pressed="${k === R}">${K.RANGES[k][1]}</button>`).join('');
+    const pm = `<span class="rgs" role="group" aria-label="表示する期間">${btns}</span>`;
+    if (!c.nkRows.length) return panel('mkchart', 'MKT-C1 / INDEX', '日経平均とドル円', pm, `<div class="pb">${noData('mkchart', c.a, { def: '指数の日足（series.json）がありません。/kabu 市場 の収集で作られます' })}</div>`);
+    const closes = c.nkRows.map((r) => r.c);
+    const ma = (n) => { const v = K.sma(closes, n); return v[v.length - 1]; };
+    const vv = (v) => (isNum(v) ? `<b>${fmt(v, 0)}</b>` : '<b>—</b>');
+    const legend = `<span><i class="sw mkl"></i>日経平均</span><span><i class="sw l25"></i>25日線 ${vv(ma(25))}</span><span><i class="sw l75"></i>75日線 ${vv(ma(75))}</span><span><i class="sw l200"></i>200日線 ${vv(ma(200))}</span>${c.fxRows.length ? '<span><i class="sw mkf"></i>ドル円（下段）</span>' : '<span class="ndn" data-nodata="mkchart:fx">ドル円の日足は未取得</span>'}`;
+    const fxc = c.fxRows.map((r) => r.c);
+    const dev = [[25, '日経平均 25日線との乖離'], [75, '75日線'], [200, '200日線']].map(([n, l]) => K.devCell(l, K.deviation(closes, n))).join('') + K.devCell('ドル円 25日線との乖離', K.deviation(fxc, 25));
+    return panel('mkchart', 'MKT-C1 / INDEX', '日経平均とドル円', pm, `<div class="pb"><div class="legend">${legend}</div><div class="host mkhost" data-chart="mkchart" data-range="${R}"></div><div class="dev" aria-label="移動平均線からの乖離率">${dev}</div></div>`);
+  }
+  function mkIndPanel(c) {
+    const items = c.raw && c.raw.items && typeof c.raw.items === 'object' ? c.raw.items : null;
+    const pm = `<span>${esc(c.raw && c.raw.date ? c.raw.date : '')}</span>`;
+    if (!items || !Object.keys(items).length) return panel('mkind', 'MKT-C2 / TICKER', '指標の直近値', pm, `<div class="pb">${noData('mkind', null, { sm: true, def: '指標の直近値（raw）がありません' })}</div>`);
+    const rows = marketRows(items).map((m) => {
+      const it = m.it, up = isNum(it.change) ? it.change >= 0 : true;
+      const cg = m.key === 'usdjpy' ? (isNum(it.change) ? `<span class="n">${fmtS(it.change, 2)} ${it.change >= 0 ? '円安方向' : '円高方向'}</span>` : '') : `<span class="${up ? 'up' : 'dn'}">${isNum(it.change) && m.viz !== 'zt' ? fmtS(it.change, m.dec) : ''}${isNum(it.changePct) && m.viz === 'zt' ? fmtS(it.changePct, 2) + '%' : ''}</span>`;
+      const p = isNum(it.changePct) ? K.clamp(it.changePct, -4, 4) : 0;
+      const bar = `<span class="zt"><u class="a-gx${p < 0 ? ' neg' : ''}" style="${p < 0 ? 'right:50%' : 'left:50%'};width:${(Math.abs(p) / 4 * 50).toFixed(2)}%"></u></span>`;
+      return `<div class="mki"${it.note ? ` title="${esc(it.note)}"` : ''}><span class="nm">${esc(m.name)}<i class="${m.subAlt ? 'alt' : ''}">${esc(m.sub)}</i></span><span class="vl">${fmt(it.value, m.dec)}${m.unit ? `<small>${esc(m.unit)}</small>` : ''}</span><span class="cg">${cg}</span>${bar}</div>`;
+    }).join('');
+    return panel('mkind', 'MKT-C2 / TICKER', '指標の直近値', `${pm}<span class="jp">棒＝前日比（±4%）</span>`, `<div class="pb"><div class="mkis">${rows}</div></div>`);
+  }
+  function levelPanelM(c) {
+    const a = c.a, L = secs(a).level && typeof secs(a).level === 'object' ? secs(a).level : null;
+    if (!L) return panel('level', 'MKT-A1 / LEVEL', '相場の高い安い', '', `<div class="pb">${noData('level', a, { sm: true })}</div>`);
+    const pos = isNum(L.position) ? K.clamp(L.position, 0, 1) : null;
+    const g = arr(L.gauges).filter((x) => x && typeof x === 'object').map((x, i) => {
+      const has = isNum(x.value);
+      const val = has ? `<span class="vl">${fmt(x.value, K.decOf(x.value, 2))}<small>${esc(x.unit || '')}</small></span>` : `<span class="nd" data-nodata="level:${esc(x.key || i)}">未取得</span>`;
+      const ref = x.refLabel ? `<span class="ref"><i class="sw rfs"></i>${esc(x.refLabel)}</span>` : '';
+      return `<div class="mg" data-gauge="${esc(x.key || i)}"><div class="hd"><span class="nm">${esc(x.label || x.key || '')}</span>${val}</div>${ref}${K.refGauge(x)}${!has && missFor(a, 'level') ? `<span class="ref">${esc(missFor(a, 'level'))}</span>` : ''}</div>`;
+    }).join('');
+    const meter = pos != null ? `<div class="mkm">${kmeter(pos, '安い', '高い')}<div class="mkv"><span class="code">VERDICT</span><b>${esc(L.verdict || '—')}</b><small>位置 <span class="mono">${fmt(pos * 100, 0)}</span> ／ 100</small></div></div>` : `<div class="mkm">${noData('level', a, { sm: true, word: '位置' })}</div>`;
+    return panel('level', 'MKT-A1 / LEVEL', '相場の高い安い', '<span class="jp"><i class="sw rfs"></i>基準 ・ <i class="sw gms"></i>いまの値</span>', `<div class="pb">${meter}${L.text ? `<p class="mkt">${richNums(L.text)}</p>` : ''}<div class="mgs">${g}</div></div>`);
+  }
+  function outlookPanelM(c) {
+    const a = c.a, list = arr(secs(a).outlook);
+    const close = a.price && isNum(a.price.close) ? a.price.close : null;
+    const pm = `<span class="jp">来年末までの日経平均 ・ 起点 <span class="mono">${K.fmtP(close)}</span>円</span>`;
+    if (!list.length) return panel('outlook', 'MKT-A2 / SCENARIO', '3つのシナリオ', pm, `<div class="pb">${noData('outlook', a)}</div>`);
+    return panel('outlook', 'MKT-A2 / SCENARIO', '3つのシナリオ', pm, `<div class="pb"><div class="scn mk-scn"><div class="host" data-chart="mkfan"></div><div class="scards">${scenCards(list)}</div></div><div class="mk-review" data-slot="review" hidden></div></div>`);
+  }
+  function fxPanel(c) {
+    const a = c.a, F = secs(a).fx && typeof secs(a).fx === 'object' ? secs(a).fx : null;
+    if (!F) return panel('fx', 'MKT-A3 / FX', '為替（ドル円）', '', `<div class="pb">${noData('fx', a, { sm: true })}</div>`);
+    const d = FXDIR[F.direction] || null;
+    const zones = [['strong', '円高方向'], ['range', 'もみ合い'], ['weak', '円安方向']].map(([k, l]) => `<span class="fz${d && d[1] === k ? ' on' : ''}" data-fx="${k}">${l}</span>`).join('');
+    const last = c.fxRows.length ? c.fxRows[c.fxRows.length - 1] : null;
+    const dirH = `<div class="fxd"><div class="fxa" role="img" aria-label="為替の向き ${d ? d[0] : '不明'}"><div class="fzs">${zones}</div><div class="fxt"><i style="left:${d ? [16.7, 50, 83.3][d[2]] : 50}%"></i></div><div class="fxs"><span>◀ 円が強くなる</span><span>円が弱くなる ▶</span></div></div><div class="fxn"><span>ドル円</span><b>${last ? fmt(last.c, 2) : '—'}<small>円</small></b><em class="${d ? d[1] : ''}">${d ? d[0] : '向き未取得'}</em></div></div>`;
+    const eff = arr(F.effects).filter((x) => x && x.who);
+    const col = (dir, lab, g) => { const xs = eff.filter((x) => x.dir === dir); return `<div class="fxc ${dir}"><div class="fxh"><span class="kg">${g}</span><b>${lab}</b><em>${xs.length}</em></div>${xs.map((x) => `<div class="fxe"><b>${esc(x.who)}</b><p>${richNums(x.text || '')}</p></div>`).join('') || '<p class="cwn">該当なし</p>'}</div>`; };
+    const eh = `<div class="fxg">${col('plus', 'プラスになる側', '＋')}<div class="kpmv" aria-hidden="true"><i></i><b>${d ? esc(d[0].replace('方向', '')) : 'FX'}</b><i></i></div>${col('minus', 'マイナスになる側', '−')}</div>`;
+    const tx = [F.text ? `<p><span class="tl">いま</span>${richNums(F.text)}</p>` : '', F.outlook ? `<p><span class="tl">この先</span>${richNums(F.outlook)}</p>` : ''].join('');
+    return panel('fx', 'MKT-A3 / FX', '為替（ドル円）', '<span class="jp">誰にプラス・誰にマイナスか</span>', `<div class="pb">${dirH}${eh}${tx ? `<div class="fxx">${tx}</div>` : ''}</div>`);
+  }
+  function ratesPanel(c) {
+    const a = c.a, R = secs(a).rates && typeof secs(a).rates === 'object' ? secs(a).rates : null;
+    const items = R ? arr(R.items).filter((x) => x && typeof x === 'object') : [];
+    if (!items.length) return panel('rates', 'MKT-A4 / RATES', '金利', '', `<div class="pb">${noData('rates', a, { sm: true })}</div>`);
+    const mx = K.niceCeil(Math.max(1, ...items.map((x) => (isNum(x.value) ? Math.abs(x.value) : 0))) * 1.15);
+    const cards = items.map((x, i) => {
+      const has = isNum(x.value);
+      return `<div class="rtc" data-rate="${esc(x.key || i)}"><span class="nm">${esc(x.label || x.key || '')}</span>${has ? `<b class="vl">${fmt(x.value, Math.max(2, K.decOf(x.value, 3)) === 3 ? 3 : 2)}<small>${esc(x.unit || '')}</small></b>${K.refGauge({ value: x.value, ref: null, max: mx })}` : `<span class="nd" data-nodata="rates:${esc(x.key || i)}">未取得</span>${missFor(a, 'rates') ? `<small class="ref">${esc(missFor(a, 'rates'))}</small>` : ''}`}${x.note ? `<small class="ref">${esc(x.note)}</small>` : ''}</div>`;
+    }).join('');
+    return panel('rates', 'MKT-A4 / RATES', '金利', `<span class="jp">物差し 0〜${fmt(mx, K.decOf(mx, 1))}</span>`, `<div class="pb"><div class="rts">${cards}</div>${R.text ? `<p class="mkt">${richNums(R.text)}</p>` : ''}</div>`);
+  }
+  function geoPanelM(c) {
+    const a = c.a, list = arr(secs(a).geo).filter((g) => g && (g.name || g.title));
+    const pm = '<span class="jp">影響の大きい順 ・ 影響度 5段階</span><span class="jp"><i class="sw chp"></i>プラス <i class="sw chm"></i>マイナス</span>';
+    if (!list.length) return panel('geo', 'MKT-A5 / GEO-RISK', '地政学ランキング', pm, `<div class="pb">${noData('geo', a, { sm: true })}</div>`);
+    const rows = list.map((g, i) => {
+      const chips = arr(g.sectors).filter((x) => x && x.name).map((x) => `<span class="chp ${x.dir === 'plus' ? 'p' : 'm'}">${x.dir === 'plus' ? '▲' : '▼'} ${esc(x.name)}</span>`).join('');
+      return `<div class="gk" data-geo="${i}"><span class="r">${String(i + 1).padStart(2, '0')}</span><div class="gt2"><b>${esc(g.name || g.title)}</b>${g.text ? `<p>${richNums(g.text)}</p>` : ''}</div><div class="gl">${K.stars(g.level)}${K.segs(g.level)}</div><div class="gs">${chips || '<span class="cwn">業種の記載なし</span>'}</div></div>`;
+    }).join('');
+    return panel('geo', 'MKT-A5 / GEO-RISK', '地政学ランキング', pm, `<div class="pb"><div class="gkh"><span>順位</span><span>出来事</span><span>影響度</span><span>影響する業種</span></div>${rows}</div>`);
+  }
+  function newsPanelM(c) {
+    const a = c.a, list = arr(secs(a).news).filter((x) => x && x.title);
+    const cnt = (k) => list.filter((x) => x.dir === k).length;
+    const pm = `<span class="jp">プラス ${cnt('plus')} ・ マイナス ${cnt('minus')} ・ 中立 ${cnt('neutral')}</span>`;
+    if (!list.length) return panel('news', 'MKT-A6 / NEWS', '今日のニュース', '', `<div class="pb">${noData('news', a, { sm: true })}</div>`);
+    const bar = `<div class="nwb" aria-hidden="true">${list.map((x) => `<i class="${(NEWSDIR[x.dir] || NEWSDIR.neutral)[2]}"></i>`).join('')}</div>`;
+    const cards = list.map((x, i) => {
+      const d = NEWSDIR[x.dir] || NEWSDIR.neutral;
+      const chips = arr(x.sectors).filter((y) => typeof y === 'string' && y).map((y) => `<span>${esc(y)}</span>`).join('');
+      return `<article class="nwc ${d[2]}" data-news="${i}"><div class="nwh"><span class="nwd ${d[2]}"><i>${d[0]}</i>${d[1]}</span>${chips ? `<span class="nws">${chips}</span>` : ''}</div><b>${esc(x.title)}</b>${x.text ? `<p>${richNums(x.text)}</p>` : ''}${srcLink(x.url) ? `<span class="nwu">出典 ${srcLink(x.url)}</span>` : ''}</article>`;
+    }).join('');
+    return panel('news', 'MKT-A6 / NEWS', '今日のニュース', pm, `<div class="pb">${bar}<div class="nwg">${cards}</div></div>`);
+  }
+  function calendarPanel(c) {
+    const a = c.a, list = arr(secs(a).calendar).filter((x) => x && typeof x.date === 'string').sort((x, y) => x.date.localeCompare(y.date));
+    const base = dayNum(a.date);
+    if (!list.length) {
+      const why = missFor(a, 'calendar');
+      return panel('calendar', 'MKT-A7 / CALENDAR', '今後の予定', '', `<div class="pb"><div class="cal0" data-nodata="calendar">${why ? `<span class="nd">未取得</span>${esc(why)}` : '<span class="nd0">予定なし</span>今後2週間ほどの予定の記載はありません'}</div></div>`);
+    }
+    const rows = list.map((x, i) => {
+      const dn = dayNum(x.date), diff = dn != null && base != null ? dn - base : null;
+      const wd = dn != null ? WD[((dn + 4) % 7 + 7) % 7] : '';
+      const rel = diff == null ? '' : diff === 0 ? '当日' : diff > 0 ? `あと${diff}日` : `${-diff}日前`;
+      return `<li data-cal="${i}"><i class="dt"></i><span class="cd"><b class="mono">${esc(mmdd(x.date))}</b><small>${wd ? `（${wd}）` : ''}</small></span><span class="cr2">${esc(rel)}</span><p>${esc(x.label || '')}</p></li>`;
+    }).join('');
+    return panel('calendar', 'MKT-A7 / CALENDAR', '今後の予定', `<span class="jp">${list.length}件 ・ 分析日 ${esc(mmdd(a.date))} 起点</span>`, `<div class="pb"><ol class="cal">${rows}</ol></div>`);
+  }
+  function mkStandby() {
+    const parts = ['相場の高い安い', '3つのシナリオ', '為替（誰にプラス・マイナスか）', '金利', '地政学ランキング', '今日のニュース', '今後の予定'];
+    return `<section class="panel" data-sec="standby"><div class="pi"><div class="ph"><span class="code">MKT-A0 / STANDBY</span><h2>市場の分析</h2><div class="pm"><span>STATUS: <span class="jp">未実行</span></span></div></div>
+      <div class="mkst">${RADAR.replace(/<text[^]*?<\/text>/, '')}<div><span class="code">MODULE STANDBY</span><h3>市場の分析は未実行です</h3><p>いまは指標の直近値と日経平均・ドル円の折れ線だけを表示しています。分析を実行すると、次の枠がここに並びます。</p>
+      <div class="mkps">${parts.map((x) => `<span>${esc(x)}</span>`).join('')}</div><div class="cmdl"><em>&gt;</em>/kabu 市場<i class="cur"></i></div></div></div></div></section>`;
+  }
   function renderMarket(route) {
     const D = window.KABU;
-    $('#main').innerHTML = `<section class="view" id="v-market" aria-label="市場ページ" data-view="market">${emptyHtml({ code: 'MKT-00 / MARKET', title: '市場', status: '準備中', mod: 'MODULE PENDING', h3: '市場ページは準備中です', p: '', cmd: '/kabu 市場' })}</section>`;
-    return { cmd: '/kabu 市場', view: 'MARKET 市場', date: localDate(D.generatedAt) };
+    const c = marketCtx(route);
+    S.ctx = c;
+    S.ckSel = null; S.ckItems = []; S.lvPin = null;
+    const a = c.a;
+    let body;
+    if (!a) {
+      body = `<div id="mview" class="mv"><div class="mv-r1">${mkChartPanel(c)}<div class="mv-rc">${mkIndPanel(c)}${mkStandby()}</div></div></div>`;
+    } else {
+      body = `<div id="mview" class="mv">
+    <div class="mv-r1">${mkChartPanel(c)}<div class="mv-rc">${levelPanelM(c)}${mkIndPanel(c)}</div></div>
+    <div class="mv-r2">${outlookPanelM(c)}${fxPanel(c)}</div>
+    <div class="mv-r3">${geoPanelM(c)}<div class="mv-rc">${ratesPanel(c)}${calendarPanel(c)}</div></div>
+    ${newsPanelM(c)}
+    ${notesPanel(a)}
+  </div>`;
+    }
+    const notice = c.badDate ? `<div class="foot-b" style="margin:0 0 6px;border:0;padding:0 4px"><span class="warn">指定の日付 ${esc(c.badDate)} の市場の分析は無いため、最新の分析を表示しています</span></div>` : '';
+    const ser = c.series && c.series.source ? [c.series.source] : [];
+    const sources = a ? a.sources : [...(c.raw && c.raw.source ? [c.raw.source] : []), ...ser].filter((x, i, l) => x && l.findIndex((y) => y && y.url === x.url) === i);
+    const missing = a ? a.missing : arr(c.series && c.series.missing);
+    $('#main').innerHTML = `<section class="view" id="v-market" aria-label="市場ページ" data-view="market">${mkHeader(c)}${mkTabs(c)}${notice}${body}${footHtml(sources, missing)}</section>`;
+    return { cmd: '/kabu 市場', view: 'MARKET 市場', date: a ? a.date : c.raw && c.raw.date ? c.raw.date : localDate(D.generatedAt) };
   }
 
   /* =====================================================================
@@ -1106,6 +1310,16 @@
     fan: (W, H, c) => {
       const sc = arr(c.a.sections.scenarios), by = (k) => { const s = sc.find((x) => x && x.kind === k); return s && s.target ? s.target : null; };
       return K.fan({ hist: c.upto.slice(-20).map((r) => r.c), now: c.a.price && c.a.price.close, bull: by('bull'), base: by('base'), bear: by('bear'), dec: c.dec, W, H });
+    },
+    // 市場ページ
+    mkchart: (W, H, c) => {
+      const R = K.RANGES[S.mkRange] ? S.mkRange : '1y', m = K.RANGES[R][0];
+      const main = K.seriesWindow(c.nkRows, c.asOf, m, [25, 75, 200]), sub = K.seriesWindow(c.fxRows, c.asOf, m, []);
+      return K.marketChart({ main: { name: '日経平均', unit: '円', rows: main.rows, ma: main.ma }, sub: c.fxRows.length ? { name: 'ドル円', unit: '円', rows: sub.rows } : null, W, H, label: `日経平均とドル円の推移（${K.RANGES[R][1]}）` });
+    },
+    mkfan: (W, H, c) => {
+      const sc = arr(secs(c.a).outlook), by = (k) => { const s2 = sc.find((x) => x && x.kind === k); return s2 && s2.target ? s2.target : null; };
+      return K.fan({ hist: c.nkRows.slice(-20).map((r) => r.c), now: c.a.price && c.a.price.close, bull: by('bull'), base: by('base'), bear: by('bear'), W, H });
     },
     // チャート型
     lv: (W, H, c) => K.levelChart({ rows: c.rows, ma: c.ma, levels: c.levels, vp: c.I && c.I.volumeProfile, dec: c.dec, W, H, label: `${c.st.name || c.st.code} 日足チャートとサポート・レジスタンス` }),
@@ -1258,7 +1472,17 @@
     if (ck) ckSelect(ck.dataset.ck);
     const lr = t.closest('.lvr');
     if (lr) lvSelect(lr.dataset.lv);
+    const rg = t.closest('[data-mk-range]');
+    if (rg) mkSetRange(rg.dataset.mkRange);
   });
+  /** 市場の折れ線の期間（3か月・1年・2年）を切り替えて、その図だけ描き直す */
+  function mkSetRange(k) {
+    if (!K.RANGES[k]) return;
+    S.mkRange = k;
+    $$('[data-mk-range]').forEach((b) => { const on = b.dataset.mkRange === k; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+    const h = $('[data-chart="mkchart"]');
+    if (h) { h.dataset.range = k; drawHost(h); }
+  }
   // サポレジ一覧：マウス・フォーカスを合わせている間だけ強調（離れたら固定中の行に戻す）
   document.addEventListener('mouseover', (e) => { const r = e.target.closest && e.target.closest('.lvr'); if (r) lvApply(r.dataset.lv); else if (e.target.closest && e.target.closest('.lvlist')) lvApply(S.lvPin); });
   document.addEventListener('mouseout', (e) => { const r = e.target.closest && e.target.closest('.lvr'); if (r && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('.lvr'))) lvApply(S.lvPin); });
@@ -1302,8 +1526,9 @@
     render, redraw: drawAll, current: () => S.route, segSet, segIsOpen, ckSelect, ckState: () => ({ sel: S.ckSel, items: S.ckItems }),
     lvSelect, lvState: () => S.lvPin, rulesOf, PLAN_AXIS, PLAN_GAP,
     setTesting: (b) => { S.testing = !!b; if (b) { clearTimeout(S.animTimer); document.body.classList.remove('anim'); } },
-    snapshot: () => ({ recent: S.recent, seen: { ...S.seen } }),
-    restore: (s) => { if (!s) return; S.recent = s.recent; S.seen = { ...s.seen }; try { if (s.recent) window.localStorage.setItem('kabu.recent', s.recent); else window.localStorage.removeItem('kabu.recent'); } catch (e) { /* 無視 */ } },
+    mkSetRange, mkState: () => S.mkRange,
+    snapshot: () => ({ recent: S.recent, seen: { ...S.seen }, mkRange: S.mkRange }),
+    restore: (s) => { if (!s) return; S.recent = s.recent; S.seen = { ...s.seen }; S.mkRange = s.mkRange || '1y'; try { if (s.recent) window.localStorage.setItem('kabu.recent', s.recent); else window.localStorage.removeItem('kabu.recent'); } catch (e) { /* 無視 */ } },
   };
 
   render(parseHash(location.hash));

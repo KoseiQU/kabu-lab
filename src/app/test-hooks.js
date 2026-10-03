@@ -25,6 +25,16 @@
   /** 分析JSONを1本そのまま注入（chart・kessan のフィクスチャ）。同じ型・同じ日付があれば日付を1日ずつ前へずらす（履歴の切替も検査できる） */
   function addAnalysis(target, an, opt = {}) {
     const a = clone(an);
+    if (a.type === 'market') { // 市場の分析は market.analyses へ（同じ日付があれば1日ずつ前へずらす）
+      target.market = target.market && typeof target.market === 'object' ? target.market : { raw: null, analysis: null, analyses: [], series: null };
+      const list = Array.isArray(target.market.analyses) ? target.market.analyses : [];
+      let d = a.date;
+      while (list.some((x) => x && x.date === d)) d = prevDay(d);
+      a.date = d; a._file = opt.file || 'tests/fixtures';
+      target.market.analyses = [...list, a].sort((x, y) => String(y.date).localeCompare(String(x.date)));
+      target.market.analysis = target.market.analyses[0];
+      return { view: 'market', date: d };
+    }
     const code = opt.code || a.code;
     let st = target.stocks[code];
     if (!st) {
@@ -63,7 +73,7 @@
     list.forEach((fx) => {
       if (isAnalysis(fx)) {
         routes.push(addAnalysis(target, fx));
-        if (bare) routes.push(addAnalysis(target, fx, { code: '9998', name: '検査用（株価・指標なし）' }));
+        if (bare && fx.type !== 'market') routes.push(addAnalysis(target, fx, { code: '9998', name: '検査用（株価・指標なし）' }));
       } else addCases(target, fx).forEach((c) => routes.push({ view: 'stock', code: c, type: null, date: null }));
     });
     return routes;
@@ -82,8 +92,9 @@
     if (!backup) backup = clone(window.KABU);
     const routes = addAll(window.KABU, Array.isArray(fx) ? fx : [fx], false);
     app().render(app().parseHash(location.hash));
-    return routes.map((r) => `#/stock/${r.code}${r.type ? '/' + r.type : ''}${r.date ? '/' + r.date : ''}`);
+    return routes.map(routeLabel);
   }
+  const routeLabel = (r) => (r.view === 'home' ? '#/' : r.view === 'market' ? `#/market${r.date ? '/' + r.date : ''}` : r.view === 'stock' ? `#/stock/${r.code}${r.type ? '/' + r.type : ''}${r.date ? '/' + r.date : ''}` : `#/${r.view}`);
   function restore() {
     if (backup) { window.KABU = backup; backup = null; }
     app().render(app().parseHash(location.hash));
