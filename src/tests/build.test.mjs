@@ -124,3 +124,10 @@ test('build: ファイル名の型と中身の type が食い違えば exit 1（
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('build: 知らない引数（--help など）では何も書かずに exit 1', () => {
+  const r = spawnSync(process.execPath, [join(ROOT, 'build.mjs'), '--help'], { encoding: 'utf8' });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /知らない引数 --help/);
+  assert.equal(r.stdout, '');
+});

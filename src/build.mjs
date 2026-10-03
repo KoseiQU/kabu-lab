@@ -280,6 +280,13 @@ export function writeAtomic(path, text) {
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
   const argv = process.argv;
+  // 知らない引数（--help など）で本番の build が走ってビューアを上書きしないよう、先に弾く
+  const KNOWN = ['--data', '--out', '--viewer', '--no-viewer'];
+  const unknown = argv.slice(2).filter((a) => a.startsWith('--') && !KNOWN.includes(a));
+  if (unknown.length) {
+    console.error(`エラー: 知らない引数 ${unknown.join(' ')}\n使い方: node build.mjs [--data <dataDir>] [--out <file>] [--viewer <path> | --no-viewer]`);
+    process.exit(1);
+  }
   const arg = (k, d) => {
     const i = argv.indexOf(k);
     return i > 0 ? resolve(argv[i + 1]) : d;
