@@ -343,7 +343,7 @@
     const analyzed = stocks.filter((s) => arr(s.analyses).length);
     const lastRun = stocks.reduce((m, s) => { const d = arr(s.analyses)[0] && s.analyses[0].date; return d && d > m ? d : m; }, '');
     const menu = MENU.map((m, i) => {
-      const inner = `<div class="ic"><svg><use href="#${m[0]}"/></svg><i>M-${String(i + 1).padStart(2, '0')}</i></div><b>${m[1]}</b><p>${m[2]}</p><code class="mcmd">${esc(m[5])}</code><div class="wt"><span>${[1, 2, 3, 4].map((k) => `<u class="${k <= m[4] ? 'on' : ''}"></u>`).join('')}</span>${m[3]}${m[6] ? '<em class="mgo">開く ›</em>' : ''}</div>`;
+      const inner = `<div class="ic"><svg><use href="#${m[0]}"/></svg><i>M-${String(i + 1).padStart(2, '0')}</i></div><b>${m[1]}</b><p>${m[2]}</p><code class="mcmd">${m[5].split(' ').map((w) => `<span class="nw">${esc(w)}</span>`).join(' ')}</code><div class="wt"><span>${[1, 2, 3, 4].map((k) => `<u class="${k <= m[4] ? 'on' : ''}"></u>`).join('')}</span>${m[3]}${m[6] ? '<em class="mgo">開く ›</em>' : ''}</div>`;
       return m[6] ? `<a class="mi go" href="${m[6][0]}" data-menu="${m[0]}" aria-label="${esc(m[1])}：${esc(m[6][1])}を開く（コマンド ${esc(m[5])}）">${inner}</a>` : `<div class="mi" data-menu="${m[0]}">${inner}</div>`;
     }).join('');
     const src = D.market && D.market.raw && D.market.raw.source;
