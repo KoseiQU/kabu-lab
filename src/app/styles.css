@@ -1533,3 +1533,4 @@ a.rlc:hover{text-decoration:underline}
 .alz em.mono{font-size:12px; font-weight:500; color:var(--tx2)}
 #hview .sv-r3{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}
 .pld2{min-height:120px}
+.evn small{font-size:12px}

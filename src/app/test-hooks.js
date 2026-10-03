@@ -10,6 +10,15 @@
   const QUICK_SECS = ['price', 'diagnosis', 'valuation', 'performance', 'segments', 'scenarios', 'margin', 'checklist', 'notes'];
   const ABSENT_SECS = ['diagnosis', 'performance', 'valuation', 'segments', 'scenarios', 'margin', 'checklist'];
   const CHART_SECS = ['timeframes', 'lvchart', 'levels', 'heat', 'checklist', 'plans', 'lesson', 'notes'];
+  const MARKET_SECS = ['mkchart', 'level', 'mkind', 'outlook', 'fx', 'rates', 'geo', 'calendar', 'news', 'notes'];
+  const MARKET_RAW_SECS = ['mkchart', 'mkind', 'standby'];
+  const NEWS_SECS = ['event', 'impact', 'nchart', 'reaction', 'factors', 'cases', 'related', 'takeaway', 'notes'];
+  const HANSEI_SECS = ['hchart', 'result', 'position', 'at', 'goodimprove', 'alt', 'nextChecks', 'lesson', 'notes'];
+  /** 市場ページで表示している分析（日付指定が無ければ最新） */
+  function marketAnalysis(D, route) {
+    const list = ((D.market && D.market.analyses) || []).filter((x) => x && x.type === 'market');
+    return (route.date && list.find((x) => x.date === route.date)) || list[0] || null;
+  }
   function kessanSecs(a) {
     const s = a.sections || {}, A = app();
     const out = ['verdict', 'points', 'results', 'progress', 'margin', 'outlook', 'plusminus', 'invest', 'finance', 'returns', 'next', 'notes'];
@@ -118,8 +127,19 @@
       const st = D.stocks[route.code];
       const type = route.type || 'quick';
       a = st ? (st.analyses || []).find((x) => x.type === type && (!route.date || x.date === route.date)) || null : null;
-      secs = a && type === 'quick' ? QUICK_SECS : a && type === 'chart' ? CHART_SECS : a && type === 'kessan' ? kessanSecs(a) : ['empty'];
+      secs = a && type === 'quick' ? QUICK_SECS : a && type === 'chart' ? CHART_SECS : a && type === 'kessan' ? kessanSecs(a) : a && type === 'news' ? NEWS_SECS : a && type === 'hansei' ? HANSEI_SECS : ['empty'];
+    } else if (route.view === 'market') {
+      a = marketAnalysis(D, route);
+      secs = a ? MARKET_SECS : MARKET_RAW_SECS;
+      if (!main.querySelector('[data-view="market"]')) add('① 市場ページが描かれていない', '');
+    } else if (route.view === 'glossary' || route.view === 'notes') {
+      secs = ['empty'];
+      if (!main.querySelector(`[data-view="${route.view}"]`)) add('① 準備中の画面が描かれていない', route.view);
     }
+    // ヘッダの画面切替：現在地が1つだけ強調される
+    const nk = route.view === 'stock' ? 'home' : route.view;
+    const on = [...document.querySelectorAll('#top .gn.on')];
+    if (on.length !== 1 || on[0].dataset.gnav !== nk) add('① ヘッダの現在地の表示が違う', on.map((x) => x.dataset.gnav).join(','));
     // ① 枠が存在し可視
     secs.forEach((s) => { if (!visible(main.querySelector(`[data-sec="${s}"]`))) add('① 枠が無い／見えない', s); });
     // 図の枠が空でない
@@ -136,7 +156,7 @@
       if (over) add('① 見出しがはみ出している', (ph.querySelector('h2') || {}).textContent || '');
     });
     // 文字の切れ（はみ出しを隠す枠の中で内容が収まっていない）
-    main.querySelectorAll('.ck, .sc, .vg, .term, .dg, .insight, .srow, .mi, .h-mr .cg, .h-mr .vl, .tf, .lvr, .hc, .cr, .plh, .plc, .lsn, .lsx, .kpt, .krc, .kdr, .kpmc, .kfr, .kir, .kicc, .kyc, .kvc, .kbr, .knx li, .kpd, .kvl, .kft td, .krt td').forEach((el) => {
+    main.querySelectorAll('.ck, .sc, .vg, .term, .dg, .insight, .srow, .mi, .h-mr .cg, .h-mr .vl, .tf, .lvr, .hc, .cr, .plh, .plc, .lsn, .lsx, .kpt, .krc, .kdr, .kpmc, .kfr, .kir, .kicc, .kyc, .kvc, .kbr, .knx li, .kpd, .kvl, .kft td, .krt td, .nwc, .gk, .rtc, .mg, .fxe, .csr, .rli, .ncc, .alc, .hrc, .pll, .du, .mki, .cal li').forEach((el) => {
       const tol = getComputedStyle(el).overflowY === 'visible' ? 4 : 1; /* 見える枠は字形のはみ出し（行高1）を許す */
       if (el.scrollHeight > el.clientHeight + tol || el.scrollWidth > el.clientWidth + 1) add('① 文字が切れている', el.textContent.trim().slice(0, 24));
     });
@@ -152,7 +172,7 @@
     // 図の中の重なり（ピンの札・右端のタグ・ローソク足・需給の倍率ラベル・メーターの両端ラベル）
     const bb = (el) => { try { const b = el.getBBox(); return [b.x, b.y, b.x + b.width, b.y + b.height]; } catch (e) { return null; } };
     const inter = (a, b, m = 0.5) => a && b && a[0] < b[2] - m && a[2] > b[0] + m && a[1] < b[3] - m && a[3] > b[1] + m;
-    main.querySelectorAll('[data-chart="price"] svg').forEach((svg) => {
+    main.querySelectorAll('[data-chart="price"] svg, [data-chart="nchart"] svg, [data-chart="hchart"] svg').forEach((svg) => {
       const pins = [...svg.querySelectorAll('.pinbox')].map(bb), tags = [...svg.querySelectorAll('.tagbox')].map(bb);
       const cdl = [...svg.querySelectorAll('.candles > *')].map(bb);
       [...svg.querySelectorAll('.pin')].forEach((g, i) => { const b = bb(g.querySelector('.pinbox')), t = bb(g.querySelector('text')); if (b && t && (t[0] < b[0] + 3 || t[2] > b[2] + 1)) add('① ピンの文字が札からはみ出す', String(i + 1)); });
@@ -203,6 +223,8 @@
     const all = document.body.innerText || '';
     BANNED.forEach((w) => { if (all.includes(w)) add('禁止語', w); });
     if (a && (a.type === 'chart' || a.type === 'kessan')) checkP2(a, route, add);
+    if (route.view === 'market' || route.view === 'glossary' || route.view === 'notes' || (a && (a.type === 'news' || a.type === 'hansei'))) { checkType(add); checkSvgText(add); }
+    if (a && ['market', 'news', 'hansei'].includes(a.type)) checkP3(a, route, add);
     // missing の文はどの型でも画面（フッターの未取得一覧）に出す
     if (a && a.type !== 'quick') {
       const list = main.querySelector('[data-missing-list]');
@@ -265,14 +287,9 @@
     }
   }
 
-  /** チャート型・決算型の「未取得」と欠損の対応、図の要素が枠内にあること */
-  function checkP2(a, route, add) {
-    const main = document.getElementById('main'), A = app(), s = a.sections || {};
-    const st = window.KABU.stocks[route.code] || {};
-    const nd = (k) => main.querySelector(`[data-nodata="${k}"]`);
-    const pair = (cond, key, label) => { if (cond !== !!nd(key)) add(`④ ${label}の未取得表示が不一致`, `${key}: ${cond ? '欠損なのに表示なし' : 'データがあるのに未取得'}`); };
-    const whyIn = (key, sec) => { const el = nd(key), why = A.missFor(a, sec); if (el && why && !el.textContent.includes(why)) add('④ 未取得の理由が missing と違う', `${key}: ${why}`); };
-    // 最小文字 12px（SVG は表示倍率を掛けて判定）
+  /** 最小文字 12px（SVG は表示倍率を掛けて判定） */
+  function checkType(add) {
+    const main = document.getElementById('main');
     main.querySelectorAll('*').forEach((el) => {
       if (![...el.childNodes].some((n) => n.nodeType === 3 && n.nodeValue.trim())) return;
       const svg = el.closest('svg'), vb = svg && svg.viewBox && svg.viewBox.baseVal;
@@ -280,11 +297,116 @@
       const px = parseFloat(getComputedStyle(el).fontSize) * k;
       if (px < 11.95) add('最小文字12px未満', `${px.toFixed(1)}px ${el.textContent.trim().slice(0, 12)}`);
     });
-    // 図の中の文字どうしが重ならない（チャート型・決算型の全図）
-    main.querySelectorAll('[data-chart] svg').forEach((svg) => {
+  }
+  /** 図の中の文字どうしが重ならない */
+  function checkSvgText(add) {
+    document.getElementById('main').querySelectorAll('[data-chart] svg').forEach((svg) => {
       const ts = [...svg.querySelectorAll('text')].map((t) => { const b = t.getBBox(); return [b.x, b.y + 2, b.x + b.width, b.y + b.height - 2, t.textContent]; }).filter((b) => b[2] > b[0]);
       ts.forEach((t, i) => { const o = ts.find((u, j) => j > i && t[0] < u[2] - 1 && t[2] > u[0] + 1 && t[1] < u[3] && t[3] > u[1]); if (o) add('図の文字どうしが重なる', `${svg.parentElement.dataset.chart}: ${t[4]} / ${o[4]}`); });
     });
+  }
+
+  /** P3b：市場・ニュース・反省の画面がデータと一致すること（件数・星・期間・不明・印・未取得） */
+  function checkP3(a, route, add) {
+    const main = document.getElementById('main'), s = a.sections || {}, K = window.KABU_CHARTS;
+    const nd = (k) => main.querySelector(`[data-nodata="${k}"]`);
+    const count = (sel) => main.querySelectorAll(sel).length;
+    const starsOf = (el) => ((el && el.querySelector('.lvl b') && el.querySelector('.lvl b').textContent) || '').length;
+    const lv = (v) => Math.max(0, Math.min(5, Math.round(typeof v === 'number' ? v : 0)));
+    const pinsIn = (svgSel, list, cls) => {
+      const svg = main.querySelector(svgSel);
+      list.forEach(([d, what]) => { if (!svg) return; const inWin = !!svg.closest('[data-chart]') && rowsHas(route, d); const g = svg.querySelector(cls ? `.pin.${cls}` : `.pin[data-date="${d}"]`); if (inWin && !g) add('図：印が無い', `${what} ${d}`); if (!inWin && g) add('図：表示範囲外なのに印がある', `${what} ${d}`); if (!inWin && !main.querySelector('[data-outside]')) add('図：範囲外の印の注記が無い', `${what} ${d}`); });
+    };
+    if (a.type === 'market') {
+      const geo = (s.geo || []).filter((g) => g && (g.name || g.title));
+      if (count('[data-geo]') !== geo.length) add('地政学：行数が違う', `${count('[data-geo]')} ≠ ${geo.length}`);
+      geo.forEach((g, i) => { const el = main.querySelector(`[data-geo="${i}"]`); if (starsOf(el) !== lv(g.level)) add('地政学：星の数が違う', `${i + 1}: ${starsOf(el)} ≠ ${lv(g.level)}`); const n = el ? el.querySelectorAll('.chp').length : 0; if (n !== (g.sectors || []).filter((x) => x && x.name).length) add('地政学：業種チップの数が違う', String(i + 1)); if (el && [...el.querySelectorAll('.chp')].some((c, k) => c.classList.contains('p') !== (g.sectors.filter((x) => x && x.name)[k].dir === 'plus'))) add('地政学：プラス／マイナスの色が違う', String(i + 1)); });
+      const news = (s.news || []).filter((x) => x && x.title);
+      if (count('[data-news]') !== news.length) add('ニュース：カードの数が違う', `${count('[data-news]')} ≠ ${news.length}`);
+      const cal = (s.calendar || []).filter((x) => x && typeof x.date === 'string');
+      if (cal.length ? count('[data-cal]') !== cal.length : !nd('calendar')) add('予定：件数と表示が違う', String(cal.length));
+      const eff = ((s.fx || {}).effects || []).filter((x) => x && x.who);
+      ['plus', 'minus'].forEach((k) => { const col = main.querySelector(`[data-sec="fx"] .fxc.${k}`); if (!col || col.querySelectorAll('.fxe').length !== eff.filter((x) => x.dir === k).length) add('為替：プラス／マイナスの振り分けが違う', k); });
+      const items = ((s.rates || {}).items || []).filter((x) => x && typeof x === 'object');
+      if (count('[data-rate]') !== items.length) add('金利：カードの数が違う', String(items.length));
+      items.forEach((x, i) => { if ((typeof x.value !== 'number') !== !!nd(`rates:${x.key || i}`)) add('金利：未取得表示が不一致', x.key || String(i)); });
+      const gs = ((s.level || {}).gauges || []).filter((x) => x && typeof x === 'object');
+      if (count('[data-gauge]') !== gs.length) add('高い安い：物差しの数が違う', String(gs.length));
+      gs.forEach((x, i) => {
+        const el = main.querySelector(`[data-gauge="${x.key || i}"]`), mk = el && el.querySelector('.gmk');
+        if ((typeof x.value !== 'number') !== !!nd(`level:${x.key || i}`)) add('高い安い：未取得表示が不一致', x.key || String(i));
+        if (typeof x.value === 'number') { const m = K.refGaugeModel(x); if (!mk || Math.abs(+mk.dataset.pos - m.pos(x.value)) > 0.2) add('高い安い：物差しの印の位置が違う', x.key || String(i)); }
+        if (typeof x.ref === 'number' && !(el && el.querySelector('.rf'))) add('高い安い：基準線が無い', x.key || String(i));
+      });
+      const nk = (((window.KABU.market || {}).series || {}).series || {})['^N225'];
+      if (nk && (nk.rows || []).length && !main.querySelector('[data-chart="mkchart"] svg .mk-line')) add('市場：日経平均の折れ線が無い', '');
+      if (!main.querySelector('[data-slot="review"]')) add('市場：答え合わせの置き場が無い', '');
+      if (count('[data-scn]') !== ['bull', 'base', 'bear'].filter((k) => (s.outlook || []).some((x) => x && x.kind === k)).length) add('市場：シナリオの枚数が違う', '');
+    }
+    if (a.type === 'news') {
+      const im = s.impact || {};
+      if (starsOf(main.querySelector('[data-sec="impact"]')) !== lv(im.level)) add('ニュース：影響度の星が違う', String(im.level));
+      const du = main.querySelector('.du.on');
+      if ((du && du.dataset.du) !== im.duration) add('ニュース：期間の3段階の表示が違う', `${du && du.dataset.du} ≠ ${im.duration}`);
+      if (count('.du') !== 3) add('ニュース：期間の段が3つでない', '');
+      const cases = (s.cases || []).filter((x) => x && typeof x === 'object');
+      if (count('[data-case]') !== cases.length) add('過去事例：行数が違う', String(cases.length));
+      cases.forEach((x, i) => {
+        const el = main.querySelector(`[data-case="${i}"]`); if (!el) return;
+        const d = el.querySelector('[data-bar="drop"]'), r = el.querySelector('[data-bar="rec"]');
+        if ((typeof x.dropPct !== 'number') !== !!d.querySelector('[data-unknown="drop"]')) add('過去事例：初動の「不明」表示が違う', String(i));
+        if (typeof x.dropPct !== 'number' && d.querySelector('.yb u')) add('過去事例：null なのに初動の棒がある', String(i));
+        if (typeof x.dropPct === 'number' && !d.querySelector('.yb u')) add('過去事例：初動の棒が無い', String(i));
+        if ((typeof x.recoveryMonths !== 'number') !== !!r.querySelector('[data-unknown="rec"]')) add('過去事例：回復の「不明」表示が違う', String(i));
+        if (typeof x.recoveryMonths !== 'number' && r.querySelector('.mb u')) add('過去事例：null なのに回復の棒がある', String(i));
+        if (typeof x.recoveryMonths === 'number' && !r.querySelector('.mb u')) add('過去事例：回復の棒が無い', String(i));
+        if (!el.querySelector('.css') || !el.querySelector('.csd')) add('過去事例：似ている点・違う点の対が無い', String(i));
+      });
+      pinsIn('[data-chart="nchart"] svg', ((s.chart || {}).pins || []).filter((p) => p && typeof p.date === 'string' && p.label).map((p) => [p.date, '出来事の印']));
+      const fs = ((s.impact || {}).factors || []).filter((x) => x && (x.label || x.text));
+      ['better', 'worse'].forEach((k) => { const col = main.querySelector(`[data-factor="${k}"]`); if (fs.length && (!col || col.querySelectorAll('.fxe').length !== fs.filter((x) => x.dir === k).length)) add('要因：左右の振り分けが違う', k); });
+      if (count('[data-rel]') !== (s.related || []).filter((x) => x && x.name).length) add('波及先：件数が違う', '');
+    }
+    if (a.type === 'hansei') {
+      const e = s.entry || {}, r = s.result || {};
+      if (e.date && typeof e.price === 'number') pinsIn('[data-chart="hchart"] svg', [[e.date, '購入日']], 'pin-entry');
+      if (r.maxUpDate && typeof r.maxUpPct === 'number') pinsIn('[data-chart="hchart"] svg', [[r.maxUpDate, '最大含み益']], 'pin-up');
+      if (r.maxDownDate && typeof r.maxDownPct === 'number') pinsIn('[data-chart="hchart"] svg', [[r.maxDownDate, '最大含み損']], 'pin-dn');
+      const svg = main.querySelector('[data-chart="hchart"] svg');
+      if (svg && typeof e.price === 'number' && !svg.querySelector('.entry .tagbox')) add('反省：購入価格の札が無い', '');
+      if (svg) { const want = ((s.chart || {}).levels || []).filter((L) => L && typeof L.low === 'number' && typeof L.high === 'number' && Math.max(L.low, L.high) > 0).length; if (svg.querySelectorAll('.lvg').length !== want) add('反省：サポート・レジスタンスの数が違う', `${svg.querySelectorAll('.lvg').length} ≠ ${want}`); }
+      const pnl = main.querySelector('[data-num="pnl"] b');
+      if (typeof r.pnlPct === 'number' && (!pnl || !pnl.textContent.includes(K.fmtS(r.pnlPct, 2)))) add('反省：損益率の表示が違う', String(r.pnlPct));
+      ['maxUp', 'maxDown'].forEach((k) => { const v = r[k + 'Pct'], el = main.querySelector(`[data-num="${k}"] b`); if (typeof v === 'number' && (!el || !el.textContent.includes(K.fmtS(v, 2)))) add('反省：最大含み益・含み損の表示が違う', k); });
+      if (/買い|売り|良い|悪い/.test((main.querySelector('[data-sec="result"]') || {}).textContent || '')) add('反省：結果の数値に評価語がある', '');
+      (s.at || []).forEach((h) => { if (h && h.key && (typeof h.value !== 'number') !== !!nd(`at:${h.key}`)) add('反省：過熱の物差しの未取得表示が不一致', h.key); });
+      if (!main.querySelector('[data-hindsight]')) add('反省：「後から見た話」の注記が無い', '');
+      if (count('[data-alt]') !== (s.alt || []).filter((x) => x && typeof x === 'object').length) add('反省：別の入り方の数が違う', '');
+      if (count('[data-check]') !== (s.nextChecks || []).filter((x) => x && (x.label || x.how)).length) add('反省：確認カードの数が違う', '');
+      if ((e.adjusted === true) !== !!main.querySelector('[data-adjusted]')) add('反省：休場日の注記が不一致', String(e.adjusted));
+    }
+  }
+  /** その銘柄の表示中の日足の窓にその日付があるか（図の SVG の印の有無で判定せず、データで判定する） */
+  function rowsHas(route, d) {
+    const st = window.KABU.stocks[route.code];
+    const rows = (st && st.prices && st.prices.rows) || [];
+    const svgHost = document.querySelector('#main [data-chart="nchart"], #main [data-chart="hchart"]');
+    const head = svgHost && svgHost.closest('.panel').querySelector('.ph .pm span');
+    const m = head && /(\d{4}\.\d{2}\.\d{2}) – (\d{4}\.\d{2}\.\d{2})/.exec(head.textContent);
+    if (!m) return false;
+    const a = m[1].replace(/\./g, '-'), b = m[2].replace(/\./g, '-');
+    return d >= a && d <= b && rows.some((r) => r && r.d === d);
+  }
+
+  /** チャート型・決算型の「未取得」と欠損の対応、図の要素が枠内にあること */
+  function checkP2(a, route, add) {
+    const main = document.getElementById('main'), A = app(), s = a.sections || {};
+    const st = window.KABU.stocks[route.code] || {};
+    const nd = (k) => main.querySelector(`[data-nodata="${k}"]`);
+    const pair = (cond, key, label) => { if (cond !== !!nd(key)) add(`④ ${label}の未取得表示が不一致`, `${key}: ${cond ? '欠損なのに表示なし' : 'データがあるのに未取得'}`); };
+    const whyIn = (key, sec) => { const el = nd(key), why = A.missFor(a, sec); if (el && why && !el.textContent.includes(why)) add('④ 未取得の理由が missing と違う', `${key}: ${why}`); };
+    checkType(add);
+    checkSvgText(add);
     if (a.type === 'chart') {
       (s.heat || []).forEach((h) => { if (h && h.key) pair(typeof h.value !== 'number', `heat:${h.key}`, '過熱の物差し'); });
       if ((st.prices && st.prices.rows || []).length) pair(!(st.indicators && typeof st.indicators === 'object'), 'indicators', '移動平均・価格帯別出来高');
@@ -431,6 +553,7 @@
   function checkInteractions(route, add) {
     const A = app(), main = document.getElementById('main');
     const D = window.KABU, st = D.stocks[route.code];
+    if (route.view === 'market') { checkMarketRange(add); return; }
     const a = st && (st.analyses || []).find((x) => x.type === (route.type || 'quick') && (!route.date || x.date === route.date));
     if (!a || !['quick', 'chart', 'kessan'].includes(route.type || 'quick')) return;
     if (a.type !== 'quick') checkInteractionsP2(route, a, add);
@@ -505,6 +628,26 @@
     }
   }
 
+  /** 市場の折れ線の期間切替：押すと図が描き直され（期間が変わる）、最後は初期の期間に戻す */
+  function checkMarketRange(add) {
+    const A = app(), main = document.getElementById('main');
+    const host = main.querySelector('[data-chart="mkchart"]');
+    if (!host) return;
+    const init = A.mkState();
+    const btns = [...main.querySelectorAll('[data-mk-range]')];
+    if (btns.length !== 3) add('市場：期間の切替が3つでない', String(btns.length));
+    btns.forEach((b) => {
+      b.click();
+      const svg = host.querySelector('svg');
+      if (host.dataset.range !== b.dataset.mkRange || b.getAttribute('aria-pressed') !== 'true') add('市場：期間の切替が反映されない', b.dataset.mkRange);
+      if (!svg || !svg.getAttribute('aria-label').includes(window.KABU_CHARTS.RANGES[b.dataset.mkRange][1])) add('市場：期間を切り替えても図が描き直されない', b.dataset.mkRange);
+      if (svg && BAD.test(svg.innerHTML)) add('市場：期間を切り替えた図に不正値', b.dataset.mkRange);
+      if (main.querySelectorAll('[data-mk-range][aria-pressed="true"]').length !== 1) add('市場：選択中の期間が1つでない', b.dataset.mkRange);
+    });
+    A.mkSetRange(init);
+    if (A.mkState() !== init || host.dataset.range !== init) add('市場：期間が初期状態に戻らない', String(A.mkState()));
+  }
+
   /** 検査対象の画面一覧（ホーム、各銘柄の全分析、分析の無い型タブ、存在しない銘柄） */
   function routesOf(D) {
     const A = app();
@@ -515,6 +658,9 @@
       A.TYPES.forEach((t) => { if (!ans.some((x) => x.type === t.key)) routes.push({ view: 'stock', code, type: t.key, date: null }); });
     });
     routes.push({ view: 'stock', code: '0000', type: null, date: null });
+    routes.push({ view: 'market', date: null });
+    ((D.market && D.market.analyses) || []).filter((x) => x && x.type === 'market').forEach((x) => routes.push({ view: 'market', date: x.date }));
+    routes.push({ view: 'glossary' }, { view: 'notes' });
     return routes;
   }
 
@@ -529,14 +675,14 @@
       A.setTesting(true);
       const routes = routesOf(window.KABU);
       routes.forEach((route) => {
-        const label = route.view === 'home' ? '#/' : `#/stock/${route.code}${route.type ? '/' + route.type : ''}${route.date ? '/' + route.date : ''}`;
+        const label = routeLabel(route);
         let n = 0;
         try {
           A.render(route);
           pages++;
           const addF = (check, detail) => { n++; failures.push({ route: label, check, detail }); };
           checkPage(route, addF);
-          if (route.view === 'stock') checkInteractions(route, addF);
+          if (route.view === 'stock' || route.view === 'market') checkInteractions(route, addF);
         } catch (e) {
           n++;
           failures.push({ route: label, check: '描画で例外', detail: String(e && e.stack ? e.stack : e).slice(0, 300) });

@@ -1186,7 +1186,7 @@
   function hchartPanel(c) {
     const e = c.entry, r = c.res;
     const out = c.hpins.map((p) => p.date).filter((d) => !c.w.inWin(d));
-    const adj = e && e.adjusted === true ? `<p class="cap ocap adj" data-adjusted>※ 購入日は休場日のため、翌営業日（${esc(String(e.date || '').replace(/-/g, '.'))}）に寄せています</p>` : '';
+    const adj = e && e.adjusted === true ? `<p class="cap ocap adj">※ 購入日は休場日のため、翌営業日（${esc(String(e.date || '').replace(/-/g, '.'))}）に寄せています</p>` : '';
     const legend = '<span><i class="sw ent"></i>購入価格</span><span><i class="sw lvr-r"></i>レジスタンス</span><span><i class="sw lvr-s"></i>サポート</span>';
     void r;
     return chartPanelS('hchart', 'SYS-H0 / CHART', '株価チャート（購入日と購入価格）', c, legend, adj + outNote([...new Set(out)]));
@@ -1194,7 +1194,7 @@
   function resultPanel(c) {
     const a = c.a, e = c.entry, r = c.res;
     const pm = '<span class="jp">色＝損益の正負（評価ではありません）</span>';
-    const eb = e ? `<div class="hen"><div><span>購入日</span><b class="mono">${esc(String(e.date || '—').replace(/-/g, '.'))}</b>${e.adjusted === true ? '<em class="adjb">休場日のため翌営業日に寄せた</em>' : ''}</div><div><span>購入価格</span><b class="mono">${K.fmtP(e.price)}<small>円</small></b></div>${e.note ? `<p>${richNums(e.note)}</p>` : ''}</div>` : noData('entry', a, { sm: true });
+    const eb = e ? `<div class="hen"><div><span>購入日</span><b class="mono">${esc(String(e.date || '—').replace(/-/g, '.'))}</b>${e.adjusted === true ? '<em class="adjb" data-adjusted>休場日のため翌営業日に寄せた</em>' : ''}</div><div><span>購入価格</span><b class="mono">${K.fmtP(e.price)}<small>円</small></b></div>${e.note ? `<p>${richNums(e.note)}</p>` : ''}</div>` : noData('entry', a, { sm: true });
     if (!r) return panel('result', 'SYS-H1 / RESULT', '結果の数値', pm, `<div class="pb">${eb}${noData('result', a, { sm: true })}</div>`);
     const sg = (v) => (isNum(v) ? (v > 0 ? 'up' : v < 0 ? 'dn' : '') : 'na');
     const pc = (v) => (isNum(v) ? fmtS(v, 2) + '%' : '—');
@@ -1319,7 +1319,7 @@
           ? 'クイック診断を実行すると、4点診断・株価チャート・業績推移・シナリオ・需給などの図解がここに並びます。'
           : 'この型の分析はまだ走らせていません。実行すると、ここに図解つきの結果が並びます。',
         note: (q.date ? `株価・基本情報は収集済み（<b>${esc(q.date)}</b>）。下のコマンドで分析を実行できます。` : '')
-          + (t.key === 'news' ? '<br>出来事を決めていないときは <b>/kabu ニュース 探して</b>（直近1週間に株価が大きく動いた出来事を1つ選びます）。' : t.key === 'hansei' ? '<br>例：<b>/kabu ' + esc(name) + ' 反省 2026-08-28 5600</b>（いま売るべきかには答えず、振り返りと次回の確認点だけを出します）。' : ''),
+          + (t.key === 'news' ? '<br>出来事を決めていないときは <b>/kabu ニュース 探して</b>（直近1週間に株価が大きく動いた出来事を1つ選びます）。' : t.key === 'hansei' ? '<br>例：<b>/kabu ' + esc(name) + ' 反省 2026-08-28 5600</b>（持ち続けるかどうかの判断はせず、振り返りと次回の確認点だけを出します）。' : ''),
         cmd: `/kabu ${name}${t.key === 'quick' ? '' : ' ' + t.cmd}`, arg: t.arg || '',
       });
     } else if (R.type === 'chart') {
