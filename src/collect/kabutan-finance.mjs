@@ -52,6 +52,15 @@ function tableAfter(html, anchor) {
   return null;
 }
 
+/** 前年比のセル → ％。「3.5倍」は (3.5-1)*100、「+10.9」「△1.4」はそのまま、語（黒転など）や空は null */
+export function yoyCellToPct(html) {
+  if (html === undefined || html === null) return null;
+  const t = toHalf(stripTags(String(html))).replace(/[\s,]/g, '');
+  const m = t.match(/^([0-9]+(?:\.[0-9]+)?)倍$/);
+  if (m) return Math.round((Number(m[1]) - 1) * 1000) / 10;
+  return parseNum(html);
+}
+
 /** 見出しの正規表現 → 列キー で行を {key: value} にする */
 function mapRows(table, colDefs, { textKeys = [] } = {}) {
   const idx = Object.fromEntries(Object.entries(colDefs).map(([k, re]) => [k, table.headers.findIndex((h) => re.test(h))]));
@@ -62,7 +71,14 @@ function mapRows(table, colDefs, { textKeys = [] } = {}) {
     const rec = {};
     for (const [k, i] of Object.entries(idx)) rec[k] = i > 0 ? conv(k, r.tds[i - 1]) : null; // headers[0] は「決算期」
     if (isPeriod) data.push({ period: r.label, forecast: r.forecast, ...rec });
-    else if (/前期比|前年同期比/.test(r.label)) Object.assign(yoy, Object.fromEntries(Object.entries(rec).filter(([, v]) => typeof v === 'number')));
+    else if (/前期比|前年同期比/.test(r.label)) {
+      // 株探は大きな増加を「3.5倍」と書く。％に直す（3.5倍 → +250%）。「黒転」「赤転」などの語は数値にしない
+      for (const [k, i] of Object.entries(idx)) {
+        if (i <= 0 || textKeys.includes(k)) continue;
+        const pct = yoyCellToPct(r.tds[i - 1]);
+        if (typeof pct === 'number') yoy[k] = pct;
+      }
+    }
   }
   return { rows: data, yoy: Object.keys(yoy).length ? yoy : null };
 }
