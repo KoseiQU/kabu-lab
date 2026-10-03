@@ -1609,6 +1609,157 @@
     return `<span class="mb"><u class="a-gx" style="width:${f(Math.max(w, 0.8))}%"></u></span>`;
   }
 
+  /* =====================================================================
+     P3c：シナリオの答え合わせの図（座標は reviewModel が決め、reviewChart が描く）
+     rv = review の1件 {base:{price,date}, targets:[{kind, price? | low?/high?}], after:[{d,c}]}
+     縦軸は「基準価格と実際の終値」を主役に取る。目安は、その値動きの幅の reach 倍（既定1.5倍）まで
+     離れていれば軸に含め、それより遠い目安は図の上端／下端に寄せて矢印と値で示す（out: 'up' | 'down'）。
+     横軸は営業日の順番（0＝分析日、i＝i営業日後）。日数が少ないときも minSlots（既定5）日ぶんの幅を取り、右に余白を残す。
+     ===================================================================== */
+  const RV_KIND = { bull: ['強気', C.cy], base: ['中立', C.mid], bear: ['弱気', C.mag] };
+  const RV_LINE = C.amb;
+  function reviewModel(rv, Win, Hin, o = {}) {
+    const W = Math.round(Win), H = Math.round(Hin);
+    const base = rv && rv.base && isNum(rv.base.price) ? rv.base.price : null;
+    const after = (rv && Array.isArray(rv.after) ? rv.after : []).filter((r) => r && typeof r.d === 'string' && isNum(r.c));
+    if (base == null || !after.length || !(W > 160 && H > 90)) return null;
+    const closes = after.map((r) => r.c);
+    let lo = Math.min(base, ...closes), hi = Math.max(base, ...closes);
+    const minSpan = Math.abs(base) * 0.04 || 1;
+    if (hi - lo < minSpan) { const m = (hi + lo) / 2; lo = m - minSpan / 2; hi = m + minSpan / 2; }
+    const reach = isNum(o.reach) ? o.reach : 1.5, span = hi - lo;
+    const lim0 = lo - span * reach, lim1 = hi + span * reach;
+    const tg = [];
+    (rv.targets || []).forEach((t) => {
+      if (!t || !RV_KIND[t.kind]) return;
+      if (isNum(t.low) && isNum(t.high)) tg.push({ kind: t.kind, type: 'band', lo: Math.min(t.low, t.high), hi: Math.max(t.low, t.high) });
+      else if (isNum(t.price)) tg.push({ kind: t.kind, type: 'line', v: t.price });
+    });
+    let a0 = lo, a1 = hi;
+    tg.forEach((t) => {
+      if (t.type === 'line') { if (t.v >= lim0 && t.v <= lim1) { a0 = Math.min(a0, t.v); a1 = Math.max(a1, t.v); } } else if (t.hi >= lim0 && t.lo <= lim1) { a0 = Math.min(a0, Math.max(t.lo, lim0)); a1 = Math.max(a1, Math.min(t.hi, lim1)); }
+    });
+    const pad = (a1 - a0) * 0.08;
+    const P0 = a0 - pad, P1 = a1 + pad;
+    const tk = niceTicks(P0, P1, 4);
+    const ticks = tk.ticks.filter((v) => v >= P0 && v <= P1);
+    const tdec = Math.min(Math.max(tk.dec, 0), 2);
+    const padT = 10, padB = 20;
+    const padL = Math.ceil(Math.max(24, ...ticks.map((v) => textW(fmt(v, tdec), 12, true)))) + 8;
+    const top = padT, bot = H - padB, ph = bot - top;
+    const Y = (v) => top + (P1 - v) / (P1 - P0 || 1) * ph;
+    const last = after[after.length - 1];
+    const name = (k) => RV_KIND[k][0];
+    // 目安の位置（範囲外は端に寄せる）
+    const targets = tg.map((t) => {
+      if (t.type === 'line') {
+        const out = t.v > P1 ? 'up' : t.v < P0 ? 'down' : null;
+        return { ...t, out, y: out === 'up' ? top : out === 'down' ? bot : Y(t.v) };
+      }
+      const out = t.lo > P1 ? 'up' : t.hi < P0 ? 'down' : null;
+      if (out) return { ...t, out, y: out === 'up' ? top : bot };
+      const y0 = Y(Math.min(t.hi, P1)), y1 = Y(Math.max(t.lo, P0));
+      return { ...t, out: null, y0, y1, y: (y0 + y1) / 2, clipTop: t.hi > P1, clipBot: t.lo < P0 };
+    });
+    // 右の札（基準・目安・直近）。縦位置は重ならないよう押し広げる
+    const labels = [{ key: 'base', text: `基準 ${fmtP(base)}`, y: Y(base), color: C.tx2 }];
+    targets.forEach((t) => {
+      const arrow = t.out === 'up' ? '▲' : t.out === 'down' ? '▼' : '';
+      const val = t.type === 'line' ? fmtP(t.v) : `${fmtP(t.lo)}〜${fmtP(t.hi)}`;
+      labels.push({ key: t.kind, text: `${name(t.kind)} ${arrow}${val}`, y: t.y, color: RV_KIND[t.kind][1], out: t.out });
+    });
+    labels.push({ key: 'latest', text: `直近 ${fmtP(last.c)}`, y: Y(last.c), color: RV_LINE });
+    const padR = Math.ceil(Math.max(...labels.map((l) => textW(l.text, 12)))) + 18;
+    const x0 = padL, x1 = W - padR;
+    if (x1 - x0 < 60) return null;
+    const ty = spread(labels.map((l) => l.y + 4), 16, top + 9, bot + 4);
+    labels.forEach((l, i) => { l.ty = ty[i]; });
+    const slots = Math.max(after.length, isNum(o.minSlots) ? o.minSlots : 5);
+    const xs = x0 + 4, xe = x0 + (x1 - x0) * 0.9;
+    const X = (i) => xs + i / slots * (xe - xs);
+    const line = [[X(0), Y(base)], ...after.map((r, i) => [X(i + 1), Y(r.c)])];
+    return {
+      W, H, x0, x1, top, bot, P0, P1, X, Y, slots, ticks, tdec, labels, targets, line,
+      base: { price: base, y: Y(base), date: rv.base.date || '' },
+      last: { x: X(after.length), y: Y(last.c), c: last.c, d: last.d },
+    };
+  }
+  function reviewChart(rv, W, H, o = {}) {
+    const m = reviewModel(rv, W, H, o);
+    if (!m) return '';
+    const { x0, x1, top, bot } = m;
+    let s = svgOpen(m.W, m.H, o.label || `シナリオの答え合わせ：分析日${m.base.date}の基準価格と3つの目安、その後${m.line.length - 1}営業日の終値`, 'rvchart');
+    s += tag('rect', { x: x0, y: top, width: x1 - x0, height: bot - top, fill: 'none', stroke: 'rgba(62,230,255,.16)' });
+    m.ticks.forEach((v) => {
+      const y = m.Y(v);
+      s += tag('line', { x1: x0, x2: x1, y1: y, y2: y, stroke: 'rgba(62,230,255,.07)' });
+      if (y > top + 6 && y < bot - 4) s += text(x0 - 6, y + 4, fmt(v, m.tdec), { anchor: 'end', fill: C.tx3 });
+    });
+    // 目安：帯（low/high）と線（price）。範囲外は端に矢印
+    m.targets.forEach((t) => {
+      const col = RV_KIND[t.kind][1];
+      if (t.out) {
+        const y = t.out === 'up' ? top : bot, dy = t.out === 'up' ? 1 : -1, cx = x1 - 12;
+        s += tag('path', { d: `M${f(cx - 6)} ${f(y + dy * 9)} L${f(cx)} ${f(y + dy * 2)} L${f(cx + 6)} ${f(y + dy * 9)}Z`, fill: col, class: `rv-out rv-${t.kind}`, 'data-out': t.out });
+        s += tag('line', { x1: x0, x2: x1 - 20, y1: y + dy * 0.5, y2: y + dy * 0.5, stroke: col, 'stroke-width': 2, 'stroke-dasharray': '2 5', opacity: 0.55 });
+        return;
+      }
+      if (t.type === 'band') {
+        s += `<g class="rv-band rv-${t.kind}" data-kind="${t.kind}">` + tag('rect', { x: x0, y: t.y0, width: x1 - x0, height: Math.max(1, t.y1 - t.y0), fill: col, opacity: 0.1 })
+          + (t.clipTop ? '' : tag('line', { x1: x0, x2: x1, y1: t.y0, y2: t.y0, stroke: col, 'stroke-dasharray': '5 3', opacity: 0.8 }))
+          + (t.clipBot ? '' : tag('line', { x1: x0, x2: x1, y1: t.y1, y2: t.y1, stroke: col, 'stroke-dasharray': '5 3', opacity: 0.8 })) + '</g>';
+      } else {
+        s += tag('line', { x1: x0, x2: x1, y1: t.y, y2: t.y, stroke: col, 'stroke-width': 1.5, 'stroke-dasharray': '6 3', class: `rv-tline rv-${t.kind}`, 'data-kind': t.kind });
+      }
+    });
+    // 基準価格と分析日
+    s += tag('line', { x1: x0, x2: x1, y1: m.base.y, y2: m.base.y, stroke: C.tx2, 'stroke-width': 1.2, 'stroke-dasharray': '2 3', class: 'rv-bline' });
+    s += tag('line', { x1: m.X(0), x2: m.X(0), y1: top, y2: bot, stroke: 'rgba(62,230,255,.35)', 'stroke-dasharray': '2 3' });
+    // その後の実際の終値
+    s += tag('path', { d: pathD(m.line), fill: 'none', stroke: RV_LINE, 'stroke-width': 2, 'stroke-linejoin': 'round', class: 'rv-line' });
+    s += tag('circle', { cx: m.line[0][0], cy: m.line[0][1], r: 3, fill: C.tx2 });
+    s += `<g class="rv-last">` + tag('circle', { cx: m.last.x, cy: m.last.y, r: 6.5, fill: 'none', stroke: RV_LINE, 'stroke-width': 1.2 }) + tag('circle', { cx: m.last.x, cy: m.last.y, r: 2.6, fill: RV_LINE }) + '</g>';
+    // 右の札
+    m.labels.forEach((l) => {
+      const yl = l.key === 'latest' ? m.last.y : l.y;
+      s += tag('line', { x1: x1, x2: x1 + 5, y1: yl, y2: l.ty - 4, stroke: l.color, opacity: 0.7 });
+      s += text(x1 + 8, l.ty, l.text, { cls: 'st-j rv-lab', fill: l.color, style: l.key === 'latest' ? 'font-weight:700' : '' });
+    });
+    // 横軸：分析日と直近の日付
+    const l0 = `分析日 ${md(m.base.date)}`, l1 = md(m.last.d);
+    s += text(x0 + 2, m.H - 5, l0, { cls: 'st-j', fill: C.tx2 });
+    if (m.last.x - textW(l1, 12, true) / 2 > x0 + 2 + textW(l0) + 10) s += text(Math.min(m.last.x, x1 - textW(l1, 12, true) / 2 - 2), m.H - 5, l1, { anchor: 'middle', fill: C.cy2 });
+    return s + '</svg>';
+  }
+
+  /* ---------- 用語：因果の流れ図（箱を矢印でつなぐ。2〜5箱） ---------- */
+  const FLOW_DIR = { up: ['▲', '上がる', 'up'], down: ['▼', '下がる', 'dn'], none: ['―', '向きなし', 'no'] };
+  function flowHtml(list) {
+    const xs = (list || []).filter((x) => x && typeof x.label === 'string' && x.label).slice(0, 5);
+    if (!xs.length) return '';
+    const cols = xs.map(() => 'minmax(0,1fr)').join(' 22px ');
+    return `<div class="flw" role="list" style="grid-template-columns:${cols}" aria-label="因果の流れ（${xs.length}段）">` + xs.map((x, i) => {
+      const d = FLOW_DIR[x.dir] || FLOW_DIR.none;
+      return (i ? '<span class="fa" aria-hidden="true"></span>' : '') + `<div class="fb ${d[2]}" role="listitem" data-flow="${i}" data-dir="${esc(FLOW_DIR[x.dir] ? x.dir : 'none')}"><span class="fh"><span class="fn">${String(i + 1).padStart(2, '0')}</span><span class="fd"><i aria-hidden="true">${d[0]}</i>${d[1]}</span></span><b>${esc(x.label)}</b></div>`;
+    }).join('') + '</div>';
+  }
+  /* ---------- 用語：シーソー図（左が上がると右に下向きの力）。文字は HTML、図形だけ SVG ---------- */
+  function seesawHtml(sw) {
+    if (!sw || !sw.left || !sw.right) return '';
+    const svg = '<svg class="ssv" viewBox="0 0 240 104" aria-hidden="true">'
+      + tag('line', { x1: 8, x2: 232, y1: 98, y2: 98, stroke: 'rgba(62,230,255,.3)' })
+      + tag('path', { d: 'M120 58 L100 97 L140 97Z', fill: 'rgba(62,230,255,.12)', stroke: C.cy, 'stroke-width': 1.2 })
+      + tag('line', { x1: 16, x2: 224, y1: 26, y2: 90, stroke: C.tx, 'stroke-width': 4, 'stroke-linecap': 'round' })
+      + tag('circle', { cx: 120, cy: 58, r: 4, fill: C.cy })
+      + tag('rect', { x: 13, y: 8, width: 22, height: 16, fill: 'rgba(62,230,255,.25)', stroke: C.cy, transform: 'rotate(17 24 16)' })
+      + tag('rect', { x: 199, y: 64, width: 22, height: 16, fill: 'rgba(255,92,163,.25)', stroke: C.mag, transform: 'rotate(17 210 72)' })
+      + tag('path', { d: 'M56 34 V8 M49 15 L56 7 L63 15', fill: 'none', stroke: C.cy, 'stroke-width': 2 })
+      + tag('path', { d: 'M182 30 V60 M175 53 L182 61 L189 53', fill: 'none', stroke: C.mag, 'stroke-width': 2 })
+      + '</svg>';
+    return `<div class="ssw" role="img" aria-label="シーソー図：${esc(sw.left)}が上がると${esc(sw.right)}に下向きの力（逆も同じ）"><span class="ssl up"><i aria-hidden="true">▲</i>${esc(sw.left)}</span>${svg}<span class="ssl dn"><i aria-hidden="true">▼</i>${esc(sw.right)}</span></div>`
+      + `<p class="ssn">${esc(sw.note || '')}<small>逆向きも同じ：${esc(sw.left)}が下がると、${esc(sw.right)}に上向きの力</small></p>`;
+  }
+
   const api = {
     C, SEG_COLORS, isNum, clamp, esc, fmt, fmtP, fmtS, fmtVol, yenParts, jpAmountParts, decOf, priceDec, textW,
     niceStep, niceCeil, niceTicks, sma, deviation, spread, mmdd, md, segModel, segListHtml, ckReasons, noteSign,
@@ -1616,6 +1767,7 @@
     miniCandles, vpLayout, levelChart, levelTag, HEAT, heatPos, heatValue, heatGauge, planLanes, planPrices, plansChart,
     prevFromYoy, pairBars3d, ringGeom, ring, paceBar, yoyBar, cmpPair, changeOf, bulletModel, bullet, returnsPeriods, returns3d, marginLine,
     pinLayer, RANGES, seriesWindow, marketChart, refGaugeModel, refGauge, DURATION, durationBar, caseScale, monthBar,
+    RV_KIND, reviewModel, reviewChart, FLOW_DIR, flowHtml, seesawHtml,
   };
   G.KABU_CHARTS = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);
