@@ -1170,3 +1170,7 @@ a.rl,a.tab,a.k{text-decoration:none}
 .rbg.in{color:var(--cy); border-color:var(--cyl); background:rgba(62,230,255,.08)}
 .rbg.below{color:var(--amber); border-color:rgba(255,179,64,.5); background:rgba(255,179,64,.08)}
 .rbg.above{color:#cfdde6; border-color:rgba(207,221,230,.45); background:rgba(207,221,230,.06)}
+
+/* 画面幅が対応下限（1280px）より狭いときは、崩して詰めずに横スクロールで全体を見せる（PC専用・1280〜1920px 対応） */
+html { overflow-x: auto; }
+body { min-width: 1280px; }
