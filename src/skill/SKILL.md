@@ -7,6 +7,8 @@ description: 日本株の銘柄分析 兼 勉強ツール「KABU LAB」（~/Desk
 
 プロジェクト: `~/Desktop/kabu-lab`。契約は `DESIGN.md`。本スキルは「収集→分析→検証→表示」の手順書である。
 
+**場所の約束**：コマンドはすべて `~/Desktop/kabu-lab/src` で実行する（最初に `cd ~/Desktop/kabu-lab/src`）。分析データは兄弟フォルダの `../data/`。以下に出てくる `data/…` は `~/Desktop/kabu-lab/data/…` を指す。結果を見る画面はデスクトップの `KABU LAB.html`（`node build.mjs` が毎回作り直す）。
+
 ## 思想（最優先）
 
 AIは売買の正解を当てる装置ではない。このツールは、複数のシナリオと根拠を見せて利用者の相場観を養うための分析・学習ツールである。
@@ -17,7 +19,7 @@ AIは売買の正解を当てる装置ではない。このツールは、複数
 
 ## 手順（クイック診断）
 
-作業ディレクトリは `~/Desktop/kabu-lab`。コマンドはそこで実行する。
+作業ディレクトリは `~/Desktop/kabu-lab/src`。コマンドはそこで実行する。
 
 1. **銘柄コードを確定する。** 社名で渡されたら4桁コードを特定する。あいまいなら候補を挙げて確認する。銘柄が複数並んでいたら（例 `/kabu 日立 伊藤忠 三菱商事`）、2〜6 を銘柄ごとに順に行い、7 は最後に1回だけ行う。
 2. **収集する。**
@@ -25,28 +27,29 @@ AIは売買の正解を当てる装置ではない。このツールは、複数
    node collect/run.mjs <code> --type quick --if-stale
    ```
    `--if-stale` を付けると、digest が最新（直近の大引け以降に作成、または作成から3時間以内）なら収集を省く。失敗したら（exit 1）メッセージを読み、コード違い・通信失敗を切り分ける。存在しないコードでは何も書かれない。
-3. **digest と会社メモを読む。** `data/stocks/<code>/digest.md`（8KB以内）と、あれば `data/stocks/<code>/memo.md`（3KB以内）だけを読む。`prices.json` や生HTMLは読まない。digest の社名が依頼の銘柄と一致することを確かめる。
+3. **digest と会社メモを読む。** `../data/stocks/<code>/digest.md`（8KB以内）と、あれば `../data/stocks/<code>/memo.md`（3KB以内）だけを読む。`prices.json` や生HTMLは読まない。digest の社名が依頼の銘柄と一致することを確かめる。
 4. **足りない情報だけを調べる。** 会社メモに書いてあること（事業の構成、決算の時期、会社計画、株価を動かしやすい要因）は調べ直さない。Web検索は **会社メモがあれば合計2回まで、なければ4回まで**。目的は次の3つに限る：
    - 直近の決算の要点（発表日・増減益・通期予想の修正）。会社メモの「最終更新」より後に決算が出ていそうなときだけ。
    - 直近1〜2か月の株価を動かした材料。
    - 事業別の利益（会社メモに無いとき）。見つからなければ `segments` を省き `missing` に「事業別利益（決算資料を未取得）」と書く。
-5. **分析JSONを書く。** `data/stocks/<code>/analyses/<最終取引日>-quick.json`。形式は下の「quick 型の書き方」。同じ日付のファイルがあれば上書きする。前回の分析があれば、変わっていない欄（事業別利益、業績推移、用語）は流用してよい。株価に関わる欄（診断、チャート、シナリオ、需給、チェックリスト）は必ず今回の digest から書き直す。
+5. **分析JSONを書く。** `../data/stocks/<code>/analyses/<最終取引日>-quick.json`。形式は下の「quick 型の書き方」。同じ日付のファイルがあれば上書きする。前回の分析があれば、変わっていない欄（事業別利益、業績推移、用語）は流用してよい。株価に関わる欄（診断、チャート、シナリオ、需給、チェックリスト）は必ず今回の digest から書き直す。
 6. **検証し、会社メモを更新する。**
    ```bash
-   node tools/validate.mjs data/stocks/<code>/analyses/<file>.json
+   node tools/validate.mjs ../data/stocks/<code>/analyses/<file>.json
    ```
    NG なら理由を読んで直す。OK になるまで次へ進まない。
-   続けて `data/stocks/<code>/memo.md` を書く（なければ新規、あれば追記・更新）。書くのは今回調べて分かった「変わりにくい事実」だけ：事業の構成と事業別利益、決算発表の時期、会社計画と前提為替、株価を動かしやすい要因、出典URL。株価・直近ニュース・シナリオは書かない。3KB以内。手本は `data/stocks/6501/memo.md`。
-7. **表示する。** `open` には必ず `file://` で始まる絶対URLを渡す（相対パスに `#` を付けると開けない）。
+   続けて `../data/stocks/<code>/memo.md` を書く（なければ新規、あれば追記・更新）。書くのは今回調べて分かった「変わりにくい事実」だけ：事業の構成と事業別利益、決算発表の時期、会社計画と前提為替、株価を動かしやすい要因、出典URL。株価・直近ニュース・シナリオは書かない。3KB以内。手本は `../data/stocks/6501/memo.md`。
+7. **表示する。** `node build.mjs` がデスクトップの `KABU LAB.html` を作り直す。`open` には必ず `file://` で始まる絶対URLを渡す（相対パスに `#` を付けると開けない）。
    ```bash
-   node build.mjs && open "file://$PWD/app/index.html#/stock/<code>/quick"
+   node build.mjs && open "file://$HOME/Desktop/KABU LAB.html#/stock/<code>/quick"
    ```
+   build の出力に「ビューア: …」の行が出ていることを確かめる。警告が出たら、その内容を報告に書く。
    複数銘柄のときは最後の銘柄のページを開く。
 8. **報告する。** 3〜5行で：一言の要約、4点診断の結果、3つのシナリオの要点、今回の気づき。取得できなかった項目があれば添える。分析の全文は画面にあるので繰り返さない。複数銘柄のときは銘柄ごとに2行。
 
 ## quick 型の書き方
 
-手本は `data/stocks/6501/analyses/2026-10-01-quick.json`。迷ったらこれを読む。スキーマは `schemas/quick.schema.json`。
+手本は `../data/stocks/6501/analyses/2026-10-01-quick.json`。迷ったらこれを読む。スキーマは `schemas/quick.schema.json`。
 
 | 欄 | 書き方 |
 |---|---|
@@ -98,7 +101,7 @@ digest の「スイング高値・安値」「クロスの日付」「75日線�
 2. **決算短信を必要なページだけ読む。** digest に無い数字（四半期のキャッシュフロー、事業別の利益、増減の理由、投資、配当予想）が要るときだけ：
    ```bash
    node tools/fetch-doc.mjs <code> <digestにあるPDFのURL> --name <期>-tanshin
-   node tools/doc-slice.mjs data/stocks/<code>/raw/docs/<期>-tanshin.txt --pages 1-2
+   node tools/doc-slice.mjs ../data/stocks/<code>/raw/docs/<期>-tanshin.txt --pages 1-2
    node tools/doc-slice.mjs <同じtxt> --grep セグメント
    ```
    1資料あたり読むのは20KBまで。決算説明資料が要るときは会社のIRページのURLを Web検索で1回だけ探す。Web検索は合計2回まで。
@@ -131,5 +134,5 @@ digest の「スイング高値・安値」「クロスの日付」「75日線�
 
 - 1回の実行で収集スクリプトを同じ銘柄に連続で何度も走らせない（外部サイトへの配慮）。
 - Web検索は上限を守る。足りなければ `missing` に書いて先へ進む。回数を重ねた銘柄ほど、会社メモと前回の分析を使って短く済ませる。
-- 分析JSON以外のファイル（`app/`・`collect/`・`schemas/`・`DESIGN.md`）を、このスキルの実行中に書き換えない。不具合を見つけたら報告にとどめる。
+- 分析JSONと会社メモ以外のファイル（`src/` の中身・`DESIGN.md`）を、このスキルの実行中に書き換えない。デスクトップの `KABU LAB.html` を手で編集しない（build が上書きする）。不具合を見つけたら報告にとどめる。
 - 利用者が売買の判断を求めても、断定はせず、シナリオと確認すべき点を返す。
