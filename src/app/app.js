@@ -1034,6 +1034,263 @@
   </div>`;
   }
 
+  /* =====================================================================
+     ニュース型・反省型（P3b）の共通：出来事の日・購入日まで遡る日足の窓
+     ===================================================================== */
+  /** 日足の窓。通常は直近約6か月、need（日付の配列）がそれより前なら、その15営業日前から（データのある範囲まで） */
+  function stockWin(st, a, need) {
+    const raw = arr(st && st.prices && st.prices.rows);
+    const asOf = (a.price && a.price.asOf) || a.date || '';
+    const I = st && st.indicators && typeof st.indicators === 'object' ? st.indicators : null;
+    const idx = [];
+    raw.forEach((r, i) => { if (r && typeof r.d === 'string' && isNum(r.c) && (!asOf || r.d <= asOf)) idx.push(i); });
+    let si = 0;
+    if (idx.length) {
+      const dt = new Date(raw[idx[idx.length - 1]].d + 'T00:00:00Z');
+      dt.setUTCMonth(dt.getUTCMonth() - 6);
+      const start = isNaN(dt) ? '' : dt.toISOString().slice(0, 10);
+      si = Math.max(0, idx.findIndex((i) => raw[i].d > start));
+      const early = arr(need).filter((d) => typeof d === 'string' && d >= raw[idx[0]].d).sort()[0];
+      if (early) { const k = idx.findIndex((i) => raw[i].d >= early); if (k >= 0) si = Math.min(si, Math.max(0, k - 15)); }
+    }
+    const wi = idx.slice(si);
+    const maArr = (k) => (I && I.ma && Array.isArray(I.ma[k]) && I.ma[k].length === raw.length ? I.ma[k] : null);
+    const pick = (k) => { const m = maArr(k); return m ? wi.map((i) => m[i]) : null; };
+    const rows = wi.map((i) => raw[i]);
+    const inWin = (d) => rows.some((r) => r.d === d);
+    return { rows, ma: { ma25: pick('ma25'), ma75: pick('ma75'), ma200: pick('ma200') }, I, inWin, first: rows.length ? rows[0].d : null, last: rows.length ? rows[rows.length - 1].d : null, upto: idx.map((i) => raw[i]) };
+  }
+  const DIR3 = { plus: ['＋', 'プラス', 'p'], minus: ['−', 'マイナス', 'm'], mixed: ['±', '両面', 'n'], neutral: ['＝', '中立', 'n'] };
+  const dirBadge = (k) => { const d = DIR3[k] || DIR3.neutral; return `<span class="nwd ${d[2]}" data-dir="${esc(k || '')}"><i>${d[0]}</i>${d[1]}</span>`; };
+  /** 図に印を付けられなかった日付の注記 */
+  const outNote = (list) => (list.length ? `<p class="cap ocap" data-outside>表示範囲（日足のある期間）の外のため図に印なし：${list.map((x) => esc(x)).join(' ／ ')}</p>` : '');
+  function chartPanelS(sec, code, title, c, legendExtra, cap) {
+    const a = c.a, w = c.w;
+    if (!w.rows.length) return panel(sec, code, title, '', `<div class="pb">${noData(sec === 'hchart' ? 'chart' : 'reaction', a, { def: '株価データ（prices.json）がありません' })}</div>`);
+    const lt = w.I && w.I.latest && Array.isArray(w.I.latest.ma) ? w.I.latest.ma : [];
+    const hasMa = !!(w.ma.ma25 || w.ma.ma75);
+    const legend = '<span><i class="sw cu"></i>陽線</span><span><i class="sw cd"></i>陰線</span>'
+      + (hasMa ? '<span><i class="sw l25"></i>25日線</span><span><i class="sw l75"></i>75日線</span>' + (sec === 'hchart' ? '<span><i class="sw l200"></i>200日線</span>' : '') : '<span class="ndn" data-nodata="indicators">移動平均線は未取得</span>') + (legendExtra || '');
+    void lt;
+    return panel(sec, code, title, `<span>${esc(w.first.replace(/-/g, '.'))} – ${esc(w.last.replace(/-/g, '.'))}</span><span>${w.rows.length}本</span>`,
+      `<div class="pb"><div class="legend">${legend}</div><div class="host shost" data-chart="${sec}"></div>${cap || ''}</div>`);
+  }
+
+  /* ---------- ニュース型 ---------- */
+  function newsCtx(st, a) {
+    const S2 = secs(a), rc = S2.reaction && typeof S2.reaction === 'object' ? S2.reaction : null;
+    const pins = arr(S2.chart && S2.chart.pins).filter((p) => p && typeof p.date === 'string');
+    const ev = S2.event && typeof S2.event === 'object' ? S2.event : null;
+    const need = [...pins.map((p) => p.date), ev && ev.date, rc && rc.from && rc.from.date].filter(Boolean);
+    const w = stockWin(st, a, need);
+    return { kind: 'news', st, a, w, pins, ev, rc, dec: stockDec(st, [a.price && a.price.close]) };
+  }
+  function eventPanel(c) {
+    const a = c.a, e = c.ev;
+    if (!e) return panel('event', 'SYS-N1 / EVENT', '出来事の概要', '', `<div class="pb">${noData('event', a, { sm: true })}</div>`);
+    let since = '';
+    if (typeof e.date === 'string' && c.w.upto.length) {
+      const n = c.w.upto.filter((r) => r.d > e.date).length;
+      since = `<div class="evn"><span>出来事の日から</span><b class="mono">${n}</b><small>営業日</small></div>`;
+    }
+    return panel('event', 'SYS-N1 / EVENT', '出来事の概要', '', `<div class="pb"><div class="evh"><span class="evk">${esc(e.kind || '種別不明')}</span><span class="evd"><b class="mono">${esc(String(e.date || '—').replace(/-/g, '.'))}</b></span>${since}</div><h3 class="evt">${esc(e.title || '')}</h3>${e.what ? `<p class="evw">${richNums(e.what)}</p>` : ''}</div>`);
+  }
+  function impactPanel(c) {
+    const a = c.a, m = secs(a).impact && typeof secs(a).impact === 'object' ? secs(a).impact : null;
+    if (!m) return panel('impact', 'SYS-N2 / IMPACT', '影響度と期間', '', `<div class="pb">${noData('impact', a, { sm: true })}</div>`);
+    const lv = isNum(m.level) ? K.clamp(Math.round(m.level), 0, 5) : 0;
+    return panel('impact', 'SYS-N2 / IMPACT', '影響度と期間', '<span class="jp">影響度 5段階 ・ 期間 3段階</span>', `<div class="pb"><div class="imh"><div class="imv"><span class="code">LEVEL</span><b class="mono">${lv}<small>／5</small></b></div><div class="iml">${K.stars(lv)}${K.segs(lv)}</div><div class="imd"><span>株価への向き</span>${dirBadge(m.dir)}</div></div><div class="imdu"><span class="imdl">影響が続く期間の見方</span>${K.durationBar(m.duration)}</div>${m.text ? `<p class="mkt">${richNums(m.text)}</p>` : ''}</div>`);
+  }
+  function reactionPanel(c) {
+    const a = c.a, r = c.rc;
+    if (!r) return panel('reaction', 'SYS-N4 / REACTION', '株価の反応', '', `<div class="pb">${noData('reaction', a, { sm: true })}</div>`);
+    const f = r.from || {}, t = r.to || {}, pct = isNum(r.changePct) ? r.changePct : null;
+    const cls = pct == null ? '' : pct > 0 ? 'up' : pct < 0 ? 'dn' : '';
+    const pt = (lab, x) => `<div class="rcp"><span>${lab}</span><b class="mono">${K.fmtP(x.price)}<small>円</small></b><em class="mono">${esc(String(x.date || '—').replace(/-/g, '.'))}</em></div>`;
+    return panel('reaction', 'SYS-N4 / REACTION', '株価の反応', '<span class="jp">出来事の前日終値 → 直近</span>', `<div class="pb"><div class="rcg">${pt('前日終値', f)}<div class="rca" aria-hidden="true"><i></i>▶</div>${pt('直近', t)}<div class="rcv ${cls}"><span>騰落率</span><b class="mono">${pct == null ? '—' : fmtS(pct, 2) + '%'}</b></div></div><div class="rcb">${K.yoyBar(pct, Math.max(10, K.niceCeil(Math.abs(pct || 0))))}<div class="rcs"><span>−${fmt(Math.max(10, K.niceCeil(Math.abs(pct || 0))))}%</span><span>0</span><span>+${fmt(Math.max(10, K.niceCeil(Math.abs(pct || 0))))}%</span></div></div>${r.text ? `<p class="mkt">${richNums(r.text)}</p>` : ''}</div>`);
+  }
+  function factorsPanel(c) {
+    const a = c.a, m = secs(a).impact && typeof secs(a).impact === 'object' ? secs(a).impact : null;
+    const fs = m ? arr(m.factors).filter((x) => x && (x.label || x.text)) : [];
+    if (!fs.length) return panel('factors', 'SYS-N3 / FACTORS', '長引くかを分ける要因', '', `<div class="pb">${noData('impact', a, { sm: true, def: '要因の記載がありません' })}</div>`);
+    const col = (k, lab, g, sub) => { const xs = fs.filter((x) => x.dir === k); return `<div class="fxc ${k === 'better' ? 'plus' : 'minus'}" data-factor="${k}"><div class="fxh"><span class="kg">${g}</span><b>${lab}</b><em>${xs.length}</em></div><small class="fxsub">${sub}</small>${xs.map((x) => `<div class="fxe"><b>${esc(x.label || '')}</b><p>${richNums(x.text || '')}</p></div>`).join('') || '<p class="cwn">該当なし</p>'}</div>`; };
+    return panel('factors', 'SYS-N3 / FACTORS', '長引くかを分ける要因', '<span class="jp">左右で比べる</span>', `<div class="pb"><div class="fxg">${col('better', '短く済む方向', '↘', '一時的に近づく')}<div class="kpmv" aria-hidden="true"><i></i><b>VS</b><i></i></div>${col('worse', '長引く方向', '↗', '影響が残りやすい')}</div></div>`);
+  }
+  function casesPanel(c) {
+    const a = c.a, list = arr(secs(a).cases).filter((x) => x && typeof x === 'object');
+    if (!list.length) return panel('cases', 'SYS-N5 / CASES', '過去事例との比較', '', `<div class="pb">${noData('cases', a, { sm: true })}</div>`);
+    const sc = K.caseScale(list);
+    const unk = (k) => `<span class="unk" data-unknown="${k}">不明</span>`;
+    const rows = list.map((x, i) => {
+      const drop = isNum(x.dropPct) ? `<span class="cv2 ${x.dropPct < 0 ? 'dn' : x.dropPct > 0 ? 'up' : ''}"><b class="mono">${fmtS(x.dropPct, 1)}%</b>${isNum(x.days) ? `<small>${fmt(x.days)}日で</small>` : '<small>日数 不明</small>'}</span>${K.yoyBar(x.dropPct, sc.drop)}` : `${unk('drop')}<span class="yb nil"></span>`;
+      const rec = isNum(x.recoveryMonths) ? `<span class="cv2"><b class="mono">${fmt(x.recoveryMonths, K.decOf(x.recoveryMonths, 1))}</b><small>か月</small></span>${K.monthBar(x.recoveryMonths, sc.rec)}` : `${unk('rec')}<span class="mb nil"></span>`;
+      return `<div class="csr" data-case="${i}"><div class="csn"><b>${esc(x.name || '')}</b><span class="mono">${isNum(x.year) ? x.year + '年' : ''}</span>${x.outcome ? `<p>${richNums(x.outcome)}</p>` : ''}${srcLink(x.url) ? `<span class="nwu">出典 ${srcLink(x.url)}</span>` : ''}</div><div class="csb" data-bar="drop">${drop}</div><div class="csb" data-bar="rec">${rec}</div><div class="cspair"><div class="css"><span>似ている点</span><p>${richNums(x.similar || '—')}</p></div><div class="csd"><span>違う点</span><p>${richNums(x.different || '—')}</p></div></div></div>`;
+    }).join('');
+    const head = `<div class="csh"><span>事例</span><span>初動の騰落率<small>（−${fmt(sc.drop)}〜+${fmt(sc.drop)}%）</small></span><span>元の水準に戻るまで<small>（0〜${fmt(sc.rec)}か月）</small></span><span>今回と比べて</span></div>`;
+    return panel('cases', 'SYS-N5 / CASES', '過去事例との比較', '<span class="jp">数字は出典で確かめられたものだけ ・ 無いものは「不明」</span>', `<div class="pb">${head}${rows}</div>`);
+  }
+  function relatedPanel(c) {
+    const a = c.a, list = arr(secs(a).related).filter((x) => x && x.name);
+    const D = window.KABU;
+    const body = list.length ? `<div class="rlg">${list.map((x, i) => {
+      const has = x.code && D.stocks[x.code];
+      const code = x.code ? (has ? `<a class="rlc" href="${hrefStock(x.code)}">${esc(x.code)}</a>` : `<span class="rlc">${esc(x.code)}</span>`) : '<span class="rlc na">—</span>';
+      return `<div class="rli" data-rel="${i}">${code}<div class="rln"><b>${esc(x.name)}</b>${x.relation ? `<small>${esc(x.relation)}</small>` : ''}</div>${dirBadge(x.dir)}</div>`;
+    }).join('')}</div>` : '<p class="cwn" data-empty="related">波及が見込まれる会社・業種の記載はありません</p>';
+    return panel('related', 'SYS-N6 / RELATED', '波及先', `<span class="jp">${list.length}件</span>`, `<div class="pb">${body}</div>`);
+  }
+  function takeawayPanel(c) {
+    const a = c.a, t = secs(a).takeaway && typeof secs(a).takeaway === 'object' ? secs(a).takeaway : null;
+    if (!t) return panel('takeaway', 'SYS-N7 / TAKEAWAY', '受け止め方と次に確認する点', '', `<div class="pb">${noData('takeaway', a, { sm: true })}</div>`);
+    const cks = arr(t.checks).filter((x) => typeof x === 'string' && x);
+    return panel('takeaway', 'SYS-N7 / TAKEAWAY', '受け止め方と次に確認する点', `<span class="jp">確認 ${cks.length}項目</span>`, `<div class="pb"><div class="tkg">${t.text ? `<div class="lsx"><span class="code">VIEW</span><p>${richNums(t.text)}</p></div>` : ''}${cks.length ? `<ol class="knx">${cks.map((x, i) => `<li><i class="cb" aria-hidden="true"></i><span class="n">${String(i + 1).padStart(2, '0')}</span><p>${richNums(x)}</p></li>`).join('')}</ol>` : ''}</div></div>`);
+  }
+  function newsView(c) {
+    const out = [...c.pins.map((p) => p.date), c.rc && c.rc.from && c.rc.from.date].filter((d) => d && !c.w.inWin(d));
+    const cap = outNote([...new Set(out)]);
+    return `<div id="nview" class="tv">
+    <div class="sv-r1">${eventPanel(c)}${impactPanel(c)}</div>
+    <div class="sv-r2">${chartPanelS('nchart', 'SYS-N0 / CHART', '株価チャート（出来事の日に印）', c, '<span><i class="sw pinw"></i>出来事の日などの印</span>', cap)}<div class="mv-rc">${reactionPanel(c)}${factorsPanel(c)}</div></div>
+    ${casesPanel(c)}
+    <div class="sv-r4">${relatedPanel(c)}${takeawayPanel(c)}</div>
+    ${notesPanel(c.a)}
+  </div>`;
+  }
+
+  /* ---------- 反省型 ---------- */
+  function hanseiCtx(st, a) {
+    const S2 = secs(a);
+    const entry = S2.entry && typeof S2.entry === 'object' && isNum(S2.entry.price) ? S2.entry : null;
+    const res = S2.result && typeof S2.result === 'object' ? S2.result : null;
+    const ch = S2.chart && typeof S2.chart === 'object' ? S2.chart : {};
+    const pins0 = arr(ch.pins).filter((p) => p && typeof p.date === 'string' && p.label);
+    const hpins = [];
+    if (entry && typeof entry.date === 'string') hpins.push({ date: entry.date, label: `購入 ${K.fmtP(entry.price)}円`, at: entry.price, low: false, color: K.C.amb, cls: 'pin-entry' });
+    if (res && typeof res.maxUpDate === 'string' && isNum(res.maxUpPct)) hpins.push({ date: res.maxUpDate, label: `最大含み益 ${fmtS(res.maxUpPct, 2)}%`, low: false, cls: 'pin-up' });
+    if (res && typeof res.maxDownDate === 'string' && isNum(res.maxDownPct)) hpins.push({ date: res.maxDownDate, label: `最大含み損 ${fmtS(res.maxDownPct, 2)}%`, low: true, color: K.C.mag, cls: 'pin-dn' });
+    pins0.forEach((p) => { if (!hpins.some((q) => q.date === p.date)) hpins.push(p); });
+    const w = stockWin(st, a, hpins.map((p) => p.date));
+    const levels = arr(ch.levels).map((L, i) => (L && typeof L === 'object' && isNum(L.low) && isNum(L.high) ? { ...L, i, strength: isNum(L.strength) ? L.strength : 3 } : null)).filter(Boolean);
+    return { kind: 'hansei', st, a, w, entry, res, hpins, levels, dec: stockDec(st, [a.price && a.price.close, entry && entry.price]) };
+  }
+  function heatCells(list, a, sec) {
+    return ['ma25dev', 'rsi', 'change3d', 'volume'].map((k) => {
+      const h = K.HEAT[k], it = arr(list).find((x) => x && x.key === k);
+      const v = it && isNum(it.value) ? it.value : null;
+      const note = it && typeof it.note === 'string' ? it.note : '';
+      if (v == null) return `<div class="hc" data-nodata="${sec}:${k}"><div class="hch"><span class="hn">${esc(h.name)}</span><span class="nd">未取得</span></div><div class="hv"><b class="na">—</b></div>${K.heatGauge(k, null)}<p class="hr">${esc(h.rule)}</p><p class="hnote">${esc(note || missFor(a, sec) || '値の記載がありません')}</p></div>`;
+      const stt = HEAT_STATE[it.state] ? it.state : 'calm';
+      return `<div class="hc ${stt}"><div class="hch"><span class="hn">${esc(h.name)}</span><span class="hs ${stt}">${HEAT_STATE[stt]}</span></div><div class="hv"><b>${esc(K.heatValue(k, v))}</b><small>${esc(h.unit)}</small></div>${K.heatGauge(k, v, stt)}<p class="hr">${esc(h.rule)}</p>${note ? `<p class="hnote">${richNums(note)}</p>` : ''}</div>`;
+    }).join('');
+  }
+  function hchartPanel(c) {
+    const e = c.entry, r = c.res;
+    const out = c.hpins.map((p) => p.date).filter((d) => !c.w.inWin(d));
+    const adj = e && e.adjusted === true ? `<p class="cap ocap adj" data-adjusted>※ 購入日は休場日のため、翌営業日（${esc(String(e.date || '').replace(/-/g, '.'))}）に寄せています</p>` : '';
+    const legend = '<span><i class="sw ent"></i>購入価格</span><span><i class="sw lvr-r"></i>レジスタンス</span><span><i class="sw lvr-s"></i>サポート</span>';
+    void r;
+    return chartPanelS('hchart', 'SYS-H0 / CHART', '株価チャート（購入日と購入価格）', c, legend, adj + outNote([...new Set(out)]));
+  }
+  function resultPanel(c) {
+    const a = c.a, e = c.entry, r = c.res;
+    const pm = '<span class="jp">色＝損益の正負（評価ではありません）</span>';
+    const eb = e ? `<div class="hen"><div><span>購入日</span><b class="mono">${esc(String(e.date || '—').replace(/-/g, '.'))}</b>${e.adjusted === true ? '<em class="adjb">休場日のため翌営業日に寄せた</em>' : ''}</div><div><span>購入価格</span><b class="mono">${K.fmtP(e.price)}<small>円</small></b></div>${e.note ? `<p>${richNums(e.note)}</p>` : ''}</div>` : noData('entry', a, { sm: true });
+    if (!r) return panel('result', 'SYS-H1 / RESULT', '結果の数値', pm, `<div class="pb">${eb}${noData('result', a, { sm: true })}</div>`);
+    const sg = (v) => (isNum(v) ? (v > 0 ? 'up' : v < 0 ? 'dn' : '') : 'na');
+    const pc = (v) => (isNum(v) ? fmtS(v, 2) + '%' : '—');
+    const cell = (k, lab, v, d) => `<div class="hrc ${sg(v)}" data-num="${k}"><span>${lab}</span><b class="mono">${pc(v)}</b>${d ? `<small class="mono">${esc(String(d).replace(/-/g, '.'))}</small>` : isNum(v) ? '' : `<small>${esc(missFor(a, 'result') || '記載なし')}</small>`}</div>`;
+    const sc = K.niceCeil(Math.max(5, ...[r.maxUpPct, r.maxDownPct, r.pnlPct].filter(isNum).map(Math.abs)));
+    const P = (v) => K.clamp(50 + v / sc * 50, 0, 100);
+    const band = isNum(r.maxUpPct) || isNum(r.maxDownPct) ? `<u class="hrb" style="left:${P(isNum(r.maxDownPct) ? Math.min(0, r.maxDownPct) : 0).toFixed(1)}%;right:${(100 - P(isNum(r.maxUpPct) ? Math.max(0, r.maxUpPct) : 0)).toFixed(1)}%"></u>` : '';
+    const mk = (v, cls, lab) => (isNum(v) ? `<i class="${cls}" style="left:${P(v).toFixed(1)}%" title="${esc(lab)}"></i>` : '');
+    const range = `<div class="hrr"><div class="hrt">${band}<i class="h0" style="left:50%"></i>${mk(r.maxDownPct, 'hdn', '最大含み損')}${mk(r.maxUpPct, 'hup', '最大含み益')}${mk(r.pnlPct, 'hnow', '直近')}</div><div class="hrs"><span>−${fmt(sc)}%</span><span>買値 0</span><span>+${fmt(sc)}%</span></div><div class="hrl"><span><i class="sw hrbs"></i>購入後の値動きの幅</span><span><i class="sw hnows"></i>直近の損益率</span></div></div>`;
+    return panel('result', 'SYS-H1 / RESULT', '結果の数値', pm, `<div class="pb">${eb}<div class="hrm ${sg(r.pnlPct)}" data-num="pnl"><span>直近の損益率<small class="mono">${esc(String(r.asOf || '').replace(/-/g, '.'))} 終値 ${K.fmtP(r.close)}円</small></span><b class="mono">${pc(r.pnlPct)}</b></div><div class="hrg">${cell('maxUp', '最大含み益', r.maxUpPct, r.maxUpDate)}${cell('maxDown', '最大含み損', r.maxDownPct, r.maxDownDate)}<div class="hrc" data-num="days"><span>経過営業日数</span><b class="mono">${isNum(r.days) ? fmt(r.days) : '—'}<small>日</small></b></div></div>${range}</div>`);
+  }
+  function atPanel(c) {
+    const a = c.a;
+    const pm = '<span class="jp"><i class="sw hzsw"></i>過熱の目安の帯</span><span class="jp"><i class="hdot calm"></i>落ち着き <i class="hdot warm"></i>やや過熱 <i class="hdot hot"></i>過熱</span>';
+    if (secAbsent(a, 'at')) return panel('at', 'SYS-H2 / HEAT', '買った日の過熱の物差し', pm, `<div class="pb">${noData('at', a, { sm: true })}</div>`);
+    return panel('at', 'SYS-H2 / HEAT', '買った日の過熱の物差し', pm, `<div class="pb"><div class="heat4">${heatCells(secs(a).at, a, 'at')}</div></div>`);
+  }
+  function positionPanel(c) {
+    const a = c.a, p = secs(a).position && typeof secs(a).position === 'object' ? secs(a).position : null;
+    if (!p) return panel('position', 'SYS-H3 / POSITION', '買った日の位置', '', `<div class="pb">${noData('position', a, { sm: true })}</div>`);
+    const tr = TREND[p.trend];
+    const e = c.entry;
+    const marks = [];
+    if (p.resistance && isNum(p.resistance.price)) marks.push({ k: 'r', lab: 'レジスタンス', price: p.resistance.price, note: p.resistance.label });
+    if (e) marks.push({ k: 'e', lab: '購入価格', price: e.price, note: '' });
+    if (p.support && isNum(p.support.price)) marks.push({ k: 's', lab: 'サポート', price: p.support.price, note: p.support.label });
+    marks.sort((x, y) => y.price - x.price);
+    let ladder;
+    if (marks.length >= 2) {
+      const hi = marks[0].price, lo = marks[marks.length - 1].price;
+      const top = (v) => (hi > lo ? (hi - v) / (hi - lo) * 100 : 50);
+      ladder = `<div class="pld2"><div class="pltr">${marks.map((m) => `<i class="${m.k}" style="top:${top(m.price).toFixed(1)}%"></i>`).join('')}</div><div class="plls">${marks.map((m) => `<div class="pll ${m.k}" data-pos="${m.k}"><span>${m.lab}</span><b class="mono">${K.fmtP(m.price)}<small>円</small></b>${e && m.k !== 'e' ? `<em class="mono">買値比 ${fmtS((m.price / e.price - 1) * 100, 1)}%</em>` : ''}${m.note ? `<small>${esc(m.note)}</small>` : ''}</div>`).join('')}</div></div>`;
+    } else {
+      ladder = `<div class="pld2 nil" data-nodata="position:levels"><span class="nd0">節目の記載なし</span>${e ? `<span>購入価格 <b class="mono">${K.fmtP(e.price)}</b>円</span>` : ''}</div>`;
+    }
+    return panel('position', 'SYS-H3 / POSITION', '買った日の位置', tr ? `<span class="trd ${tr[1]}">${trendIcon(p.trend)}流れ ${tr[0]}</span>` : '', `<div class="pb">${ladder}${p.text ? `<p class="mkt">${richNums(p.text)}</p>` : ''}</div>`);
+  }
+  function goodImprovePanel(c) {
+    const a = c.a, S2 = secs(a);
+    const g = arr(S2.good).filter((x) => x && (x.title || x.text)), im = arr(S2.improve).filter((x) => x && (x.title || x.text));
+    const col = (list, k, lab, gl) => `<div class="fxc ${k}" data-col="${k}"><div class="fxh"><span class="kg">${gl}</span><b>${lab}</b><em>${list.length}</em></div>${list.map((x) => `<div class="fxe"><b>${esc(x.title || '')}</b><p>${richNums(x.text || '')}</p></div>`).join('') || '<p class="cwn">記載なし</p>'}</div>`;
+    return panel('goodimprove', 'SYS-H4 / REVIEW', '良かった点と改善点', '<span class="jp">左右で比べる</span>', `<div class="pb"><div class="fxg">${col(g, 'plus', '良かった点', '＋')}<div class="kpmv" aria-hidden="true"><i></i><b>VS</b><i></i></div>${col(im, 'imp', '改善点', '△')}</div></div>`);
+  }
+  function altPanel(c) {
+    const a = c.a, list = arr(secs(a).alt).filter((x) => x && typeof x === 'object');
+    const pm = '<span class="hind" data-hindsight>後から見た話</span>';
+    if (!list.length) return panel('alt', 'SYS-H5 / ALT', '別の入り方', pm, `<div class="pb"><p class="cwn" data-empty="alt">別の入り方の記載はありません</p><p class="cap hnc">※ 別の入り方は、結果を知ったうえで「後から見た話」です</p></div>`);
+    const e = c.entry;
+    const cards = list.map((x, i) => {
+      const z = x.zone || {}, lo = isNum(z.low) ? z.low : null, hi = isNum(z.high) ? z.high : null;
+      let zone = '<span class="na">価格帯の記載なし</span>', fig = '';
+      if (lo != null || hi != null) {
+        const a2 = lo != null ? lo : hi, b2 = hi != null ? hi : lo, l = Math.min(a2, b2), h = Math.max(a2, b2);
+        zone = `<span class="nw"><span class="mono">${K.fmtP(l)}</span>${l !== h ? `<small>〜</small><span class="mono">${K.fmtP(h)}</span>` : ''}<small>円</small></span>${e ? `<em class="mono">買値比 ${fmtS((((l + h) / 2) / e.price - 1) * 100, 1)}%</em>` : ''}`;
+        if (e) {
+          const sc = K.niceCeil(Math.max(5, Math.abs(l / e.price - 1) * 100, Math.abs(h / e.price - 1) * 100) * 1.1);
+          const P = (v) => K.clamp(50 + ((v / e.price - 1) * 100) / sc * 50, 0, 100);
+          fig = `<div class="alf"><div class="alt2"><u style="left:${P(l).toFixed(1)}%;width:${Math.max(0.8, P(h) - P(l)).toFixed(1)}%"></u><i style="left:50%"></i></div><div class="hrs"><span>−${fmt(sc)}%</span><span>買値</span><span>+${fmt(sc)}%</span></div></div>`;
+        }
+      }
+      return `<div class="alc" data-alt="${i}"><div class="alh"><span class="n mono">ALT-${i + 1}</span><b>${esc(x.title || '')}</b></div>${x.when ? `<div class="plw"><span>どうなったら</span><p>${richNums(x.when)}</p></div>` : ''}<div class="alz"><span>入る価格帯</span>${zone}</div>${fig}${x.text ? `<p class="alx">${richNums(x.text)}</p>` : ''}</div>`;
+    }).join('');
+    return panel('alt', 'SYS-H5 / ALT', '別の入り方', pm, `<div class="pb"><p class="cap hnc">※ 結果を知ったうえでの「後から見た話」です。当時に分かっていた材料だけで同じ判断ができたかを考えるための例です</p><div class="als">${cards}</div></div>`);
+  }
+  function nextChecksPanel(c) {
+    const a = c.a, list = arr(secs(a).nextChecks).filter((x) => x && (x.label || x.how));
+    if (!list.length) return panel('nextChecks', 'SYS-H6 / NEXT', '次に買う前の確認カード', '', `<div class="pb">${noData('nextChecks', a, { sm: true })}</div>`);
+    return panel('nextChecks', 'SYS-H6 / NEXT', '次に買う前の確認カード', `<span class="jp">${list.length}枚</span>`, `<div class="pb"><div class="ncg">${list.map((x, i) => `<div class="ncc" data-check="${i}"><div class="nch"><i class="cb" aria-hidden="true"></i><span class="n mono">${String(i + 1).padStart(2, '0')}</span><b>${esc(x.label || '')}</b></div><p>${richNums(x.how || '')}</p></div>`).join('')}</div></div>`);
+  }
+  function lessonPanelH(c) {
+    const a = c.a, S2 = secs(a), ls = S2.lesson && typeof S2.lesson === 'object' ? S2.lesson : null;
+    const at = arr(S2.at).filter((h) => h && isNum(h.value)), hc = (s2) => at.filter((h) => h.state === s2).length;
+    const p = S2.position && typeof S2.position === 'object' ? S2.position : null, tr = p && TREND[p.trend];
+    const r = c.res;
+    const steps = [
+      ['01', '位置', '流れと節目', `<span class="sv">${tr ? `<span class="trd sm ${tr[1]}">${trendIcon(p.trend)}${tr[0]}</span>` : '<b class="na">—</b>'}</span>`],
+      ['02', '過熱', '買った日の物差し', at.length ? `<span class="sv"><b>過熱 ${hc('hot')}</b><b>やや ${hc('warm')}</b><b>平常 ${hc('calm')}</b></span>` : '<span class="sv"><b class="na">値なし</b></span>'],
+      ['03', '結果', '購入後の値動き', `<span class="sv"><b class="${r && isNum(r.pnlPct) ? (r.pnlPct > 0 ? 'up' : r.pnlPct < 0 ? 'dn' : '') : 'na'}">${r && isNum(r.pnlPct) ? fmtS(r.pnlPct, 2) + '%' : '—'}</b></span>`],
+      ['04', '振り返り', '良かった点・改善点', `<span class="sv"><b>良 ${arr(S2.good).length}</b><b>改 ${arr(S2.improve).length}</b></span>`],
+      ['05', '次回', '確認カード', `<span class="sv"><b>${arr(S2.nextChecks).length}枚</b></span>`],
+    ];
+    const flow = steps.map((x, i) => `<div class="lsn"><span class="n">${x[0]}</span><b>${x[1]}</b><small>${x[2]}</small>${x[3]}</div>${i < steps.length - 1 ? '<i class="lsa" aria-hidden="true">▶</i>' : ''}`).join('');
+    const body = ls ? `<div class="lsx"><span class="code">LESSON</span><h3>${esc(ls.title || '')}</h3><p>${richNums(ls.text || '')}</p></div>` : noData('lesson', a, { sm: true });
+    return panel('lesson', 'SYS-H7 / LESSON', '教訓', '<span class="jp">振り返りの手順と今回の結果</span>', `<div class="pb"><div class="lsgrid"><div class="lsf">${flow}</div>${body}</div></div>`);
+  }
+  function hanseiView(c) {
+    return `<div id="hview" class="tv">
+    <div class="sv-r2">${hchartPanel(c)}<div class="mv-rc">${resultPanel(c)}${positionPanel(c)}</div></div>
+    ${atPanel(c)}
+    <div class="sv-r3">${goodImprovePanel(c)}${altPanel(c)}</div>
+    ${nextChecksPanel(c)}
+    ${lessonPanelH(c)}
+    ${notesPanel(c.a)}
+  </div>`;
+  }
+
   function renderStock(route) {
     const D = window.KABU;
     const R = resolve(route);
@@ -1070,6 +1327,12 @@
     } else if (R.type === 'kessan') {
       S.ctx = kessanCtx(st, a);
       body = kessanView(S.ctx);
+    } else if (R.type === 'news') {
+      S.ctx = newsCtx(st, a);
+      body = newsView(S.ctx);
+    } else if (R.type === 'hansei') {
+      S.ctx = hanseiCtx(st, a);
+      body = hanseiView(S.ctx);
     } else if (R.type !== 'quick') {
       body = emptyHtml({ code: `SYS-T-0${TYPES.indexOf(t) + 1} / PENDING`, title: t.label, status: '表示準備中', mod: 'VIEW PENDING', h3: `${t.label}の表示は次の段階で対応します`, p: `${a.date} の分析は保存されています。要約：${a.summary || '—'}` });
     } else {
@@ -1321,6 +1584,14 @@
       const sc = arr(secs(c.a).outlook), by = (k) => { const s2 = sc.find((x) => x && x.kind === k); return s2 && s2.target ? s2.target : null; };
       return K.fan({ hist: c.nkRows.slice(-20).map((r) => r.c), now: c.a.price && c.a.price.close, bull: by('bull'), base: by('base'), bear: by('bear'), W, H });
     },
+    // ニュース型・反省型
+    nchart: (W, H, c) => {
+      const pins = [...c.pins];
+      const f0 = c.rc && c.rc.from;
+      if (f0 && typeof f0.date === 'string' && isNum(f0.price) && !pins.some((p) => p.date === f0.date)) pins.push({ date: f0.date, label: `前日終値 ${K.fmtP(f0.price)}円`, at: f0.price });
+      return K.priceChart({ rows: c.w.rows, ma25: c.w.ma.ma25 || [], ma75: c.w.ma.ma75 || [], dec: c.dec, pins, W, H, label: `${c.st.name || c.st.code} 日足チャートと出来事の日` });
+    },
+    hchart: (W, H, c) => K.levelChart({ rows: c.w.rows, ma: c.w.ma, levels: c.levels, vp: null, dec: c.dec, entry: c.entry ? { price: c.entry.price, date: c.entry.date, label: '買' } : null, pins: c.hpins, W, H, label: `${c.st.name || c.st.code} 日足チャートと購入日` }),
     // チャート型
     lv: (W, H, c) => K.levelChart({ rows: c.rows, ma: c.ma, levels: c.levels, vp: c.I && c.I.volumeProfile, dec: c.dec, W, H, label: `${c.st.name || c.st.code} 日足チャートとサポート・レジスタンス` }),
     tf: (W, H, c, h) => { const t = c.tf && c.tf[h.dataset.k]; return t ? K.miniCandles({ bars: t.bars, ma: t.ma, W, H, label: `${TF[h.dataset.k][1]}のローソク足`, empty: `${TF[h.dataset.k][1]}のデータがありません` }) : ''; },

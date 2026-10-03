@@ -1348,3 +1348,188 @@ a.mi.go:hover,a.mi.go:focus-visible{background:rgba(62,230,255,.07); outline:non
   .mki{grid-template-columns:minmax(0,1fr) auto 104px 70px}
   .gkh,.gk{grid-template-columns:26px minmax(0,1.4fr) 108px minmax(0,1fr); column-gap:10px}
 }
+
+/* =====================================================================
+   P3b：ニュース型（#nview）・反省型（#hview）
+   ===================================================================== */
+.tv>*+*{margin-top:var(--g)}
+.tv .rowC{margin-top:var(--g)}
+.tv .pb{padding:7px 12px 9px}
+.sv-r1{display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1fr); gap:var(--g)}
+.sv-r2{display:grid; grid-template-columns:minmax(0,1.55fr) minmax(0,1fr); gap:var(--g); align-items:stretch}
+.sv-r3{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.5fr); gap:var(--g)}
+.sv-r4{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.25fr); gap:var(--g)}
+.host.shost{flex:none; height:clamp(380px, calc(100vh - 400px), 560px); margin:4px 0 2px}
+.ocap{margin-top:4px; font-family:var(--jp); color:var(--tx2)}
+.ocap.adj{color:#ffd28a}
+.sw.pinw{width:10px; height:10px; border:1.5px solid var(--cy); background:#071019; transform:rotate(45deg)}
+.sw.ent{width:16px; height:0; border-top:2px dashed var(--amber)}
+/* 出来事の概要 */
+.evh{display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; padding-bottom:6px; border-bottom:1px solid var(--line2)}
+.evk{font:700 12.5px/22px var(--jp); color:#05080d; background:var(--amber); padding:0 9px}
+.evd b{font-size:15px; color:var(--wh)}
+.evn{margin-left:auto; display:flex; align-items:baseline; gap:5px; font-size:12px; color:var(--tx2)}
+.evn b{font-size:20px; color:var(--cy); text-shadow:var(--glow)}
+.evt{margin:8px 0 4px; font:700 18px/1.4 var(--jp); color:var(--wh); text-wrap:pretty}
+.evw{font-size:13px; line-height:1.7}
+/* 影響度と期間 */
+.imh{display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:14px; align-items:center}
+.imv{display:flex; flex-direction:column; gap:2px}
+.imv b{font-size:32px; line-height:1; color:var(--amber); text-shadow:0 0 8px rgba(255,179,64,.45)}
+.imv b small{font-size:14px; color:var(--tx2); text-shadow:none; margin-left:2px}
+.iml{display:flex; flex-direction:column; gap:5px}
+.iml .lvl{font:500 20px/1 var(--jp); color:rgba(157,179,194,.6); letter-spacing:.06em}
+.iml .lvl b{color:var(--amber); font-weight:700}
+.iml .segs i{height:9px}
+.imd{display:flex; flex-direction:column; align-items:flex-end; gap:4px; font-size:12px; color:var(--tx2)}
+.imd .nwd{font-size:13px; line-height:22px}
+.imdu{margin-top:10px}
+.imdl{display:block; margin-bottom:5px; font-size:12px; color:var(--tx2)}
+.dub{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px}
+.du{position:relative; display:flex; flex-direction:column; gap:1px; padding:6px 10px 6px; border:1px solid var(--line); background:rgba(62,230,255,.025);
+  clip-path:polygon(0 0,calc(100% - 9px) 0,100% 50%,calc(100% - 9px) 100%,0 100%,9px 50%)}
+.du:first-child{clip-path:polygon(0 0,calc(100% - 9px) 0,100% 50%,calc(100% - 9px) 100%,0 100%)}
+.du i{position:absolute; left:0; right:0; top:0; height:3px; background:rgba(127,151,168,.25)}
+.du b{font-size:13.5px; padding-left:6px; color:var(--tx2)}
+.du small{font-size:12px; padding-left:6px; color:var(--tx3)}
+.du.past{background:rgba(255,179,64,.07)}
+.du.past i{background:rgba(255,179,64,.45)}
+.du.on{background:linear-gradient(180deg,rgba(255,179,64,.28),rgba(255,179,64,.08)); border-color:var(--amber)}
+.du.on i{background:var(--amber); box-shadow:0 0 8px rgba(255,179,64,.6)}
+.du.on b{color:var(--wh)} .du.on small{color:#ffd28a}
+/* 株価の反応 */
+.rcg{display:grid; grid-template-columns:auto 34px auto minmax(0,1fr); align-items:center; gap:8px}
+.rcp{display:flex; flex-direction:column; gap:2px}
+.rcp>span{font-size:12px; color:var(--tx2)}
+.rcp b{font-size:18px; color:var(--wh)}
+.rcp b small{font:500 12px var(--jp); color:var(--tx2); margin-left:2px}
+.rcp em{font-size:12px; font-style:normal; color:var(--tx3)}
+.rca{display:flex; align-items:center; color:var(--cy); font-size:12px}
+.rca i{flex:1; height:1px; background:var(--cyl)}
+.rcv{justify-self:end; display:flex; flex-direction:column; align-items:flex-end; gap:2px}
+.rcv>span{font-size:12px; color:var(--tx2)}
+.rcv b{font-size:26px; line-height:1.1; color:#cfdde6}
+.rcv.up b{color:var(--cy); text-shadow:var(--glow)} .rcv.dn b{color:var(--mag); text-shadow:0 0 8px rgba(255,92,163,.45)}
+.rcb{margin-top:9px}
+.rcs{display:flex; justify-content:space-between; margin-top:4px; font:500 12px/1 var(--mono); color:var(--tx3)}
+.fxh small{font-size:12px; color:var(--tx2)}
+/* 過去事例 */
+.csh,.csr{display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,.8fr) minmax(0,.8fr) minmax(0,1.6fr); column-gap:16px}
+.csh{padding:0 4px 4px; font-size:12px; color:var(--tx3); border-bottom:1px solid var(--line)}
+.csh small{display:block; font:500 12px var(--mono); color:var(--tx3)}
+.csr{align-items:start; padding:9px 4px; border-bottom:1px solid var(--line2)}
+.csr:last-child{border-bottom:0}
+.csn b{display:block; font-size:13.5px; line-height:1.45; color:var(--wh)}
+.csn>.mono{font-size:12px; color:var(--tx2)}
+.csn p{margin-top:3px; font-size:12.5px; line-height:1.55; color:var(--tx)}
+.csn .nwu{display:block; margin-top:4px}
+.csb{display:flex; flex-direction:column; gap:5px; padding-top:2px}
+.cv2{display:flex; align-items:baseline; gap:5px}
+.cv2 b{font-size:18px; color:var(--wh)}
+.cv2.dn b{color:var(--mag)} .cv2.up b{color:var(--cy)}
+.cv2 small{font-size:12px; color:var(--tx2)}
+.unk{align-self:flex-start; font:700 12px/18px var(--jp); color:var(--tx2); border:1px dashed rgba(157,179,194,.55); padding:0 8px}
+.mb{position:relative; display:block; height:8px; background:rgba(62,230,255,.06)}
+.mb u{position:absolute; left:0; top:0; bottom:0; background:linear-gradient(90deg,rgba(62,230,255,.35),var(--cy)); text-decoration:none}
+.mb.nil{height:0; margin:4px 0; background:none; border-top:1px dashed rgba(127,151,168,.35)}
+.cspair{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px}
+.css,.csd{padding:5px 8px 6px; border:1px solid var(--line2)}
+.css{border-left:2px solid var(--cy2); background:rgba(62,230,255,.035)}
+.csd{border-left:2px solid var(--amber); background:rgba(255,179,64,.035)}
+.css>span,.csd>span{display:block; font-size:12px; font-weight:700; color:var(--cy2)}
+.csd>span{color:#ffd28a}
+.css p,.csd p{font-size:12.5px; line-height:1.55}
+/* 波及先・受け止め方 */
+.rlg{display:flex; flex-direction:column; gap:4px}
+.rli{display:grid; grid-template-columns:62px minmax(0,1fr) auto; align-items:center; gap:10px; padding:6px 8px; border:1px solid var(--line2); background:rgba(62,230,255,.025)}
+.rlc{font:700 14px/1 var(--orb); color:var(--cy); letter-spacing:.06em; text-decoration:none}
+a.rlc:hover{text-decoration:underline}
+.rlc.na{color:var(--tx3)}
+.rln b{display:block; font-size:13px; line-height:1.4}
+.rln small{font-size:12px; color:var(--tx2)}
+.tkg{display:flex; flex-direction:column; gap:8px}
+.tkg .lsx p{font-size:13px}
+/* 反省型：結果の数値 */
+.hen{display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 18px; padding-bottom:7px; border-bottom:1px solid var(--line2)}
+.hen>div{display:flex; align-items:baseline; gap:8px; flex-wrap:wrap}
+.hen span{font-size:12px; color:var(--tx2)}
+.hen b{font-size:16px; color:var(--wh)}
+.hen b small{font:500 12px var(--jp); color:var(--tx2); margin-left:2px}
+.hen p{flex-basis:100%; font-size:12.5px; line-height:1.5; color:var(--tx)}
+.adjb{font:700 12px/18px var(--jp); font-style:normal; color:#ffd28a; border:1px solid rgba(255,179,64,.5); background:rgba(255,179,64,.08); padding:0 6px}
+.hrm{display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-top:8px}
+.hrm>span{display:flex; flex-direction:column; font-size:13px; color:var(--tx)}
+.hrm>span small{font-size:12px; color:var(--tx3)}
+.hrm b{font-size:34px; line-height:1.1; color:#cfdde6}
+.hrm.up b,.hrc.up b{color:var(--cy)} .hrm.dn b,.hrc.dn b{color:var(--mag)}
+.hrm.up b{text-shadow:var(--glow)}
+.hrg{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:var(--g); margin-top:8px}
+.hrc{display:flex; flex-direction:column; gap:2px; min-width:0; padding:6px 9px; border:1px solid var(--line); background:rgba(62,230,255,.03)}
+.hrc>span{font-size:12px; color:var(--tx2)}
+.hrc b{font-size:18px; color:var(--wh)}
+.hrc b small{font:500 12px var(--jp); color:var(--tx2); margin-left:2px}
+.hrc small{font-size:12px; color:var(--tx3)}
+.hrr{margin-top:10px}
+.hrt{position:relative; height:14px; background:rgba(62,230,255,.05); border:1px solid rgba(62,230,255,.18)}
+.hrt .hrb{position:absolute; top:3px; bottom:3px; background:repeating-linear-gradient(90deg,rgba(255,92,163,.35),rgba(62,230,255,.35)); text-decoration:none}
+.hrt i{position:absolute; top:-4px; bottom:-4px; width:2px; margin-left:-1px}
+.hrt .h0{background:var(--amber)}
+.hrt .hdn{background:var(--mag)} .hrt .hup{background:var(--cy)}
+.hrt .hnow{width:10px; height:10px; top:1px; bottom:auto; margin-left:-5px; background:var(--wh); transform:rotate(45deg); box-shadow:var(--glow)}
+.hrs{display:flex; justify-content:space-between; margin-top:4px; font:500 12px/1 var(--mono); color:var(--tx3)}
+.hrl{display:flex; flex-wrap:wrap; gap:4px 14px; margin-top:5px; font-size:12px; color:var(--tx2)}
+.hrl span{display:inline-flex; align-items:center; gap:5px}
+.sw.hrbs{width:16px; height:8px; background:linear-gradient(90deg,rgba(255,92,163,.5),rgba(62,230,255,.5))}
+.sw.hnows{width:8px; height:8px; background:var(--wh); transform:rotate(45deg)}
+/* 買った日の位置 */
+.pld2{display:grid; grid-template-columns:22px minmax(0,1fr); gap:12px; min-height:150px}
+.pltr{position:relative; margin:10px 0; border-left:2px solid var(--line); margin-left:9px}
+.pltr i{position:absolute; left:-7px; width:12px; height:12px; margin-top:-6px; transform:rotate(45deg); border:1.5px solid}
+.pltr i.r{border-color:#ff78b4; background:rgba(255,92,163,.3)} .pltr i.s{border-color:var(--cy2); background:rgba(62,230,255,.3)} .pltr i.e{border-color:var(--amber); background:var(--amber)}
+.plls{display:flex; flex-direction:column; justify-content:space-between; gap:6px}
+.pll{display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 10px; padding:4px 8px; border-left:3px solid}
+.pll.r{border-color:#ff78b4} .pll.s{border-color:var(--cy2)} .pll.e{border-color:var(--amber); background:rgba(255,179,64,.07)}
+.pll span{font-size:12px; color:var(--tx2); min-width:6em}
+.pll b{font-size:15px; color:var(--wh)}
+.pll b small{font:500 12px var(--jp); color:var(--tx2); margin-left:2px}
+.pll em{font-size:12px; font-style:normal; color:var(--tx2)}
+.pll>small{flex-basis:100%; font-size:12px; color:var(--tx3)}
+.pld2.nil{display:flex; align-items:center; gap:12px; min-height:0; font-size:12.5px; color:var(--tx2)}
+.fxc.imp{border-top:2px solid var(--amber); background:linear-gradient(180deg,rgba(255,179,64,.07),rgba(255,179,64,.01))}
+.fxc.imp .kg{color:var(--amber); border-color:rgba(255,179,64,.5)}
+/* 別の入り方 */
+.hind{font:700 12px/18px var(--jp); color:#05080d; background:var(--amber); padding:0 8px}
+.hnc{font-family:var(--jp); color:#ffd28a; margin-bottom:6px}
+.als{display:flex; flex-direction:column; gap:var(--g)}
+.alc{display:flex; flex-direction:column; gap:6px; padding:8px 10px 9px; border:1px dashed rgba(255,179,64,.45); background:rgba(8,17,26,.55)}
+.alh{display:flex; align-items:baseline; gap:10px}
+.alh .n{font-size:12px; color:var(--amber)}
+.alh b{font-size:13.5px; color:var(--wh)}
+.alz{display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 10px; font-size:12.5px}
+.alz>span:first-child{font-size:12px; color:var(--tx2)}
+.alz .mono{font-weight:700; font-size:15px; color:var(--wh)}
+.alz small{font-size:12px; color:var(--tx2); margin:0 1px}
+.alz em{font-size:12px; font-style:normal; color:var(--tx2)}
+.alz .na{color:var(--tx3)}
+.alt2{position:relative; height:12px; background:rgba(62,230,255,.05); border:1px solid rgba(62,230,255,.18)}
+.alt2 u{position:absolute; top:1px; bottom:1px; background:repeating-linear-gradient(135deg,rgba(216,231,239,.45) 0 2px,transparent 2px 5px); border-left:2px solid var(--wh); border-right:2px solid var(--wh); text-decoration:none}
+.alt2 i{position:absolute; top:-4px; bottom:-4px; width:2px; margin-left:-1px; background:var(--amber)}
+.alx{font-size:12.5px; line-height:1.6}
+/* 次回の確認カード */
+.ncg{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:var(--g)}
+.ncc{display:flex; flex-direction:column; gap:4px; padding:8px 10px 9px; border:1px solid var(--line); border-top:2px solid var(--cy); background:linear-gradient(180deg,rgba(62,230,255,.07),rgba(62,230,255,.01))}
+.nch{display:flex; align-items:center; gap:8px}
+.nch .cb{width:14px; height:14px; flex:none; border:1.5px solid var(--cy); box-shadow:0 0 6px rgba(62,230,255,.4)}
+.nch .n{font-size:12px; color:var(--cy)}
+.nch b{font-size:13.5px; line-height:1.4; color:var(--wh)}
+.ncc p{font-size:12.5px; line-height:1.6}
+.lsn .sv b.up{color:var(--cy)} .lsn .sv b.dn{color:#ff8cc0}
+@media (max-width:1399px){
+  .sv-r2{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)}
+  .csh,.csr{grid-template-columns:minmax(0,1.1fr) minmax(0,.8fr) minmax(0,.8fr) minmax(0,1.4fr); column-gap:12px}
+  .cspair{grid-template-columns:minmax(0,1fr)}
+}
+.fxsub{font-size:12px; color:var(--tx2); margin-top:-2px}
+.alz em.mono{font-size:12px; font-weight:500; color:var(--tx2)}
+#hview .sv-r3{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}
+.pld2{min-height:120px}

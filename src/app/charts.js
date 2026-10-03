@@ -1588,7 +1588,7 @@
   }
 
   /* ---------- 影響の期間（3段階：一時的／数か月／長引く） ---------- */
-  const DURATION = [['short', '一時的', '数日〜数週'], ['mid', '数か月', '数か月'], ['long', '長引く', '1年以上']];
+  const DURATION = [['short', '一時的', '数日〜数週'], ['mid', '数か月', '1年未満'], ['long', '長引く', '1年以上']];
   function durationBar(k) {
     const at = DURATION.findIndex((x) => x[0] === k);
     const cells = DURATION.map(([key, lab, sub], i) => `<div class="du${i === at ? ' on' : i < at ? ' past' : ''}" data-du="${key}"${i === at ? ' aria-current="true"' : ''}><i></i><b>${lab}</b><small>${sub}</small></div>`).join('');
