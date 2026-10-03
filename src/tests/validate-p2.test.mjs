@@ -12,9 +12,9 @@ const ng = (a, re) => {
   assert.match(msgs(e), re);
 };
 
-test('対応する型は quick・chart・kessan', () => {
-  assert.deepEqual(SUPPORTED_TYPES, ['quick', 'chart', 'kessan']);
-  ng({ ...load('chart-sample.json'), type: 'news' }, /未対応の型/);
+test('P2 の型（quick・chart・kessan）に対応し、未知の型は不合格', () => {
+  for (const t of ['quick', 'chart', 'kessan']) assert.ok(SUPPORTED_TYPES.includes(t), t);
+  ng({ ...load('chart-sample.json'), type: 'foo' }, /未対応の型/);
 });
 
 for (const f of ['chart-sample.json', 'chart-extreme.json', 'chart-sparse.json', 'kessan-sample.json', 'kessan-extreme.json', 'kessan-sparse.json']) {

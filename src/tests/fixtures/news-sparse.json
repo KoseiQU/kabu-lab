@@ -1,0 +1,34 @@
+{
+ "schema": "kabu-analysis@1",
+ "type": "news",
+ "code": "8058",
+ "name": "三菱商事",
+ "date": "2026-10-02",
+ "price": { "close": 3150.5, "change": 0, "changePct": 0, "asOf": "2026-10-02" },
+ "summary": "出来事は小さく、株価の反応も小さい",
+ "sections": {
+  "event": { "title": "子会社の役員交代", "date": "2026-10-02", "kind": "人事", "what": "子会社の役員が交代した。" },
+  "impact": {
+   "level": 1,
+   "dir": "mixed",
+   "duration": "short",
+   "text": "影響は小さい。",
+   "factors": [
+    { "label": "要因A", "dir": "better", "text": "小さい" },
+    { "label": "要因B", "dir": "worse", "text": "小さい" }
+   ]
+  },
+  "reaction": { "from": { "date": "2026-10-02", "price": 3150.5 }, "to": { "date": "2026-10-02", "price": 3150.5 }, "changePct": 0, "text": "反応なし。" },
+  "chart": { "pins": [ { "date": "2026-10-02", "label": "役員交代" } ] },
+  "cases": [
+   { "name": "似た事例A", "year": 2020, "dropPct": null, "days": null, "recoveryMonths": null, "outcome": "不明", "similar": "人事", "different": "規模", "url": null },
+   { "name": "似た事例B", "year": 2021, "dropPct": null, "days": null, "recoveryMonths": null, "outcome": "不明", "similar": "人事", "different": "業種", "url": null }
+  ],
+  "related": [],
+  "takeaway": { "text": "様子を見る。", "checks": [ "次の決算" ] }
+ },
+ "terms": [],
+ "insight": "小さな出来事は株価にほとんど効かない。",
+ "sources": [ { "title": "株探 三菱商事", "url": "https://kabutan.jp/stock/?code=8058" } ],
+ "missing": [ "過去事例の数字（出典で確認できず）" ]
+}

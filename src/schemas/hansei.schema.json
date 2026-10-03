@@ -1,0 +1,152 @@
+{
+ "$schema": "http://json-schema.org/draft-07/schema#",
+ "$id": "kabu-lab/hansei.schema.json",
+ "title": "KABU LAB 分析JSON（hansei: 反省）",
+ "description": "DESIGN.md §5 の共通骨格＋ §5.6 の sections。「いま売るべきか」には答えない（振り返りと次回の確認点だけ）。数字は tools/entry-stats.mjs の出力から。意味検証（at の固定順・日付と損益の整合・断定語）は tools/validate.mjs が追加で行う。",
+ "type": "object",
+ "required": ["schema", "type", "code", "name", "date", "price", "summary", "sections", "terms", "insight", "sources", "missing"],
+ "properties": {
+  "schema": { "type": "string", "enum": ["kabu-analysis@1"] },
+  "type": { "type": "string", "enum": ["hansei"] },
+  "code": { "type": "string", "pattern": "^[0-9][0-9A-Z]{3}$" },
+  "name": { "type": "string", "minLength": 1, "maxLength": 40 },
+  "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+  "price": {
+   "type": "object",
+   "required": ["close", "change", "changePct", "asOf"],
+   "properties": {
+    "close": { "type": "number", "minimum": 0 },
+    "change": { "type": "number" },
+    "changePct": { "type": "number" },
+    "asOf": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+   }
+  },
+  "summary": { "type": "string", "minLength": 1, "maxLength": 60 },
+  "sections": {
+   "type": "object",
+   "required": ["entry", "result", "at", "position", "good", "improve", "alt", "nextChecks", "chart", "lesson"],
+   "properties": {
+    "entry": {
+     "type": "object",
+     "description": "adjusted は購入日を営業日に寄せたとき true",
+     "required": ["date", "price", "adjusted", "note"],
+     "properties": {
+      "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+      "price": { "type": "number", "minimum": 0 },
+      "adjusted": { "type": "boolean" },
+      "note": { "type": "string", "minLength": 0, "maxLength": 80 }
+     }
+    },
+    "result": {
+     "type": "object",
+     "description": "最終取引日（asOf）までの結果。max* は購入日の翌営業日以降の高値・安値から（買った当日だけなら null 可）",
+     "required": ["asOf", "close", "pnlPct", "maxUpPct", "maxUpDate", "maxDownPct", "maxDownDate", "days"],
+     "properties": {
+      "asOf": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+      "close": { "type": "number", "minimum": 0 },
+      "pnlPct": { "type": "number" },
+      "maxUpPct": { "type": ["number", "null"] },
+      "maxUpDate": { "type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+      "maxDownPct": { "type": ["number", "null"] },
+      "maxDownDate": { "type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+      "days": { "type": "integer", "minimum": 0 }
+     }
+    },
+    "at": {
+     "type": "array", "minItems": 4, "maxItems": 4,
+     "description": "買った日の過熱の物差し。chart の heat と同じ形。ma25dev→rsi→change3d→volume の順",
+     "items": {
+      "type": "object",
+      "required": ["key", "value", "state", "note"],
+      "properties": {
+       "key": { "type": "string", "enum": ["ma25dev", "rsi", "change3d", "volume"] },
+       "value": { "type": ["number", "null"] },
+       "state": { "type": "string", "enum": ["calm", "warm", "hot"] },
+       "note": { "type": "string", "minLength": 0, "maxLength": 60 }
+      }
+     }
+    },
+    "position": {
+     "type": "object",
+     "description": "買った日がチャートのどこだったか。support・resistance は無ければ null",
+     "required": ["trend", "text", "support", "resistance"],
+     "properties": {
+      "trend": { "type": "string", "enum": ["up", "flat", "down"] },
+      "text": { "type": "string", "minLength": 1, "maxLength": 160 },
+      "support": { "type": ["object", "null"], "required": ["price", "label"], "properties": { "price": { "type": "number", "minimum": 0 }, "label": { "type": "string", "minLength": 1, "maxLength": 30 } } },
+      "resistance": { "type": ["object", "null"], "required": ["price", "label"], "properties": { "price": { "type": "number", "minimum": 0 }, "label": { "type": "string", "minLength": 1, "maxLength": 30 } } }
+     }
+    },
+    "good": {
+     "type": "array", "minItems": 0, "maxItems": 3,
+     "items": { "type": "object", "required": ["title", "text"], "properties": { "title": { "type": "string", "minLength": 1, "maxLength": 20 }, "text": { "type": "string", "minLength": 1, "maxLength": 120 } } }
+    },
+    "improve": {
+     "type": "array", "minItems": 1, "maxItems": 3,
+     "items": { "type": "object", "required": ["title", "text"], "properties": { "title": { "type": "string", "minLength": 1, "maxLength": 20 }, "text": { "type": "string", "minLength": 1, "maxLength": 120 } } }
+    },
+    "alt": {
+     "type": "array", "minItems": 0, "maxItems": 2,
+     "description": "別の入り方。画面に「後から見た話」と注記する",
+     "items": {
+      "type": "object",
+      "required": ["title", "when", "zone", "text"],
+      "properties": {
+       "title": { "type": "string", "minLength": 1, "maxLength": 20 },
+       "when": { "type": "string", "minLength": 1, "maxLength": 80 },
+       "zone": { "type": "object", "required": ["low", "high"], "properties": { "low": { "type": ["number", "null"], "minimum": 0 }, "high": { "type": ["number", "null"], "minimum": 0 } } },
+       "text": { "type": "string", "minLength": 1, "maxLength": 120 }
+      }
+     }
+    },
+    "nextChecks": {
+     "type": "array", "minItems": 3, "maxItems": 5,
+     "description": "次に買う前に確認すること",
+     "items": { "type": "object", "required": ["label", "how"], "properties": { "label": { "type": "string", "minLength": 1, "maxLength": 20 }, "how": { "type": "string", "minLength": 1, "maxLength": 80 } } }
+    },
+    "chart": {
+     "type": "object",
+     "description": "購入日と購入価格の印は entry から描く",
+     "required": ["pins", "levels"],
+     "properties": {
+      "pins": {
+       "type": "array", "minItems": 0, "maxItems": 4,
+       "items": { "type": "object", "required": ["date", "label"], "properties": { "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }, "label": { "type": "string", "minLength": 1, "maxLength": 20 } } }
+      },
+      "levels": {
+       "type": "array", "minItems": 0, "maxItems": 4,
+       "items": {
+        "type": "object",
+        "required": ["kind", "low", "high", "label"],
+        "properties": {
+         "kind": { "type": "string", "enum": ["resistance", "support"] },
+         "low": { "type": "number", "minimum": 0 },
+         "high": { "type": "number", "minimum": 0 },
+         "label": { "type": "string", "minLength": 1, "maxLength": 30 }
+        }
+       }
+      }
+     }
+    },
+    "lesson": {
+     "type": "object",
+     "required": ["title", "text"],
+     "properties": {
+      "title": { "type": "string", "minLength": 1, "maxLength": 30 },
+      "text": { "type": "string", "minLength": 1, "maxLength": 160 }
+     }
+    }
+   }
+  },
+  "terms": {
+   "type": "array", "maxItems": 10,
+   "items": { "type": "object", "required": ["term", "def"], "properties": { "term": { "type": "string", "minLength": 1, "maxLength": 20 }, "def": { "type": "string", "minLength": 1, "maxLength": 80 } } }
+  },
+  "insight": { "type": "string", "minLength": 1, "maxLength": 120 },
+  "sources": {
+   "type": "array", "minItems": 1,
+   "items": { "type": "object", "required": ["title", "url"], "properties": { "title": { "type": "string", "minLength": 1, "maxLength": 60 }, "url": { "type": "string", "pattern": "^https?://" } } }
+  },
+  "missing": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 80 } }
+ }
+}

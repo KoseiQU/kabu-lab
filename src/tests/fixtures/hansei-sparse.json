@@ -1,0 +1,34 @@
+{
+ "schema": "kabu-analysis@1",
+ "type": "hansei",
+ "code": "8001",
+ "name": "伊藤忠商事",
+ "date": "2026-10-02",
+ "price": { "close": 1880.5, "change": 0, "changePct": 0, "asOf": "2026-10-02" },
+ "summary": "最終取引日に買ったばかりで、まだ値動きがない",
+ "sections": {
+  "entry": { "date": "2026-10-02", "price": 1880.5, "adjusted": true, "note": "" },
+  "result": { "asOf": "2026-10-02", "close": 1880.5, "pnlPct": 0, "maxUpPct": null, "maxUpDate": null, "maxDownPct": null, "maxDownDate": null, "days": 0 },
+  "at": [
+   { "key": "ma25dev", "value": null, "state": "calm", "note": "" },
+   { "key": "rsi", "value": null, "state": "calm", "note": "" },
+   { "key": "change3d", "value": null, "state": "calm", "note": "" },
+   { "key": "volume", "value": null, "state": "calm", "note": "" }
+  ],
+  "position": { "trend": "flat", "text": "判断材料が少ない。", "support": null, "resistance": null },
+  "good": [],
+  "improve": [ { "title": "記録を残す", "text": "買った理由を書き残しておく。" } ],
+  "alt": [],
+  "nextChecks": [
+   { "label": "流れ", "how": "移動平均線の向き" },
+   { "label": "過熱", "how": "RSI" },
+   { "label": "壁", "how": "直前の高値" }
+  ],
+  "chart": { "pins": [], "levels": [] },
+  "lesson": { "title": "記録から始める", "text": "振り返るには、買った理由の記録が要る。" }
+ },
+ "terms": [],
+ "insight": "買った直後は振り返る材料がまだない。",
+ "sources": [ { "title": "Yahoo Finance", "url": "https://finance.yahoo.com/" } ],
+ "missing": [ "購入後の値動き（購入日が最終取引日のため）" ]
+}

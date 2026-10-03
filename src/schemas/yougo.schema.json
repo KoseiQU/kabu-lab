@@ -1,0 +1,49 @@
+{
+ "$schema": "http://json-schema.org/draft-07/schema#",
+ "$id": "kabu-lab/yougo.schema.json",
+ "title": "KABU LAB 用語JSON（yougo: 用語）",
+ "description": "DESIGN.md §5.7。銘柄の分析ではないので骨格が別（schema は kabu-term@1）。1語1ファイルで data/glossary/<用語>.json（ファイル名は / \\ : * ? \" < > | と空白を _ に置換）。reading・seesaw・related・sources は任意。意味検証（flow の件数・related の自己参照・ファイル名）は tools/validate.mjs が追加で行う。",
+ "type": "object",
+ "required": ["schema", "type", "term", "category", "def", "body", "analogy", "flow", "example", "stockLink", "pitfall", "addedAt"],
+ "properties": {
+  "schema": { "type": "string", "enum": ["kabu-term@1"] },
+  "type": { "type": "string", "enum": ["yougo"] },
+  "term": { "type": "string", "minLength": 1, "maxLength": 20 },
+  "reading": { "type": "string", "minLength": 1, "maxLength": 40 },
+  "category": { "type": "string", "enum": ["指標", "チャート", "決算", "需給", "マクロ", "制度", "その他"] },
+  "def": { "type": "string", "minLength": 1, "maxLength": 80 },
+  "body": { "type": "string", "minLength": 1, "maxLength": 300 },
+  "analogy": { "type": "string", "minLength": 1, "maxLength": 120 },
+  "flow": {
+   "type": "array", "minItems": 2, "maxItems": 5,
+   "description": "因果の流れ図（上から順に矢印でつなぐ）",
+   "items": {
+    "type": "object",
+    "required": ["label", "dir"],
+    "properties": {
+     "label": { "type": "string", "minLength": 1, "maxLength": 16 },
+     "dir": { "type": "string", "enum": ["up", "down", "none"] }
+    }
+   }
+  },
+  "seesaw": {
+   "type": "object",
+   "description": "逆に動く2つの関係を説明するときだけ",
+   "required": ["left", "right", "note"],
+   "properties": {
+    "left": { "type": "string", "minLength": 1, "maxLength": 12 },
+    "right": { "type": "string", "minLength": 1, "maxLength": 12 },
+    "note": { "type": "string", "minLength": 1, "maxLength": 60 }
+   }
+  },
+  "example": { "type": "string", "minLength": 1, "maxLength": 160 },
+  "stockLink": { "type": "string", "minLength": 1, "maxLength": 160 },
+  "pitfall": { "type": "string", "minLength": 1, "maxLength": 120 },
+  "related": { "type": "array", "minItems": 0, "maxItems": 5, "items": { "type": "string", "minLength": 1, "maxLength": 20 } },
+  "addedAt": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+  "sources": {
+   "type": "array",
+   "items": { "type": "object", "required": ["title", "url"], "properties": { "title": { "type": "string", "minLength": 1, "maxLength": 60 }, "url": { "type": "string", "pattern": "^https?://" } } }
+  }
+ }
+}

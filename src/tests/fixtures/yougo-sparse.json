@@ -1,0 +1,14 @@
+{
+ "schema": "kabu-term@1",
+ "type": "yougo",
+ "term": "PER",
+ "category": "指標",
+ "def": "株価が1年分の利益の何倍か",
+ "body": "利益に比べて株価が高いか安いかを見る物差し。",
+ "analogy": "お店の値段が、1年の儲けの何年分か。",
+ "flow": [ { "label": "利益が増える", "dir": "up" }, { "label": "PERが下がる", "dir": "down" } ],
+ "example": "株価1,000円・1株益100円ならPERは10倍。",
+ "stockLink": "同じ業種の会社と比べて使う。",
+ "pitfall": "低いから必ずお得とは限らない。",
+ "addedAt": "2026-10-03"
+}

@@ -1,0 +1,55 @@
+{
+ "schema": "kabu-analysis@1",
+ "type": "market",
+ "code": null,
+ "name": "市場",
+ "date": "2026-10-02",
+ "price": { "close": 68309.46, "change": 0, "changePct": 0, "asOf": "2026-10-02" },
+ "summary": "指標だけで判断した最小の市場分析",
+ "sections": {
+  "level": {
+   "verdict": "判断保留",
+   "position": 0.5,
+   "text": "予想PERが取れず、200日線との位置だけで見ている。",
+   "gauges": [
+    { "key": "per", "label": "予想PER", "value": null, "unit": "倍", "ref": null, "refLabel": "", "max": 25 },
+    { "key": "ma200dev", "label": "200日線との乖離", "value": 0, "unit": "%", "ref": null, "refLabel": "", "max": 20 }
+   ]
+  },
+  "outlook": [
+   { "kind": "bull", "title": "強気", "text": "上に抜ける", "target": { "label": "70,000円", "price": 70000 }, "breakIf": "円高" },
+   { "kind": "base", "title": "中立", "text": "横ばい", "target": { "label": "横ばい", "low": 68309.46, "high": 68309.46 }, "breakIf": "材料が出る" },
+   { "kind": "bear", "title": "弱気", "text": "下に抜ける", "target": { "label": "60,000円", "price": 60000 }, "breakIf": "上方修正" }
+  ],
+  "fx": {
+   "direction": "range",
+   "text": "もみ合い。",
+   "effects": [
+    { "who": "輸出企業", "dir": "plus", "text": "影響は小さい" },
+    { "who": "輸入企業", "dir": "minus", "text": "影響は小さい" }
+   ],
+   "outlook": "方向感なし。"
+  },
+  "rates": {
+   "items": [ { "key": "us10y", "label": "米10年金利", "value": null, "unit": "%", "note": "" } ],
+   "text": "金利は取得できなかった。"
+  },
+  "geo": [
+   { "name": "リスクA", "level": 1, "text": "小さい。", "sectors": [ { "name": "業種A", "dir": "minus" } ] },
+   { "name": "リスクB", "level": 1, "text": "小さい。", "sectors": [ { "name": "業種B", "dir": "minus" } ] },
+   { "name": "リスクC", "level": 1, "text": "小さい。", "sectors": [ { "name": "業種C", "dir": "plus" } ] },
+   { "name": "リスクD", "level": 1, "text": "小さい。", "sectors": [ { "name": "業種D", "dir": "plus" } ] },
+   { "name": "リスクE", "level": 1, "text": "小さい。", "sectors": [ { "name": "業種E", "dir": "minus" } ] }
+  ],
+  "news": [
+   { "title": "材料なし", "text": "目立つニュースなし。", "dir": "neutral", "sectors": [], "url": "https://www.nikkei.com/" },
+   { "title": "材料なし", "text": "目立つニュースなし。", "dir": "neutral", "sectors": [], "url": "https://www.nikkei.com/" },
+   { "title": "材料なし", "text": "目立つニュースなし。", "dir": "neutral", "sectors": [], "url": "https://www.nikkei.com/" }
+  ],
+  "calendar": []
+ },
+ "terms": [],
+ "insight": "取れた数字が少ないときは、判断を保留する。",
+ "sources": [ { "title": "Yahoo Finance", "url": "https://finance.yahoo.com/" } ],
+ "missing": [ "日経平均の予想PER（取得失敗）", "日本10年金利（取得失敗）", "米10年金利（取得失敗）", "今後2週間の予定（取得失敗）" ]
+}
