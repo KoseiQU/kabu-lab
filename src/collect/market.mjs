@@ -3,7 +3,7 @@
 // 1サイト最大4リクエストの制約のため、Yahoo の spark エンドポイント（chart API の複数銘柄版）で1回にまとめて取得する。
 import { join } from 'node:path';
 import { defaultFetcher } from './lib/fetch.mjs';
-import { ROOT, isMain, writeJson, jstDate, fail } from './lib/util.mjs';
+import { DATA_DIR, isMain, writeJson, jstDate, fail } from './lib/util.mjs';
 
 export const SYMBOLS = [
   { key: 'nikkei225', symbol: '^N225', name: '日経平均', unit: '円' },
@@ -65,7 +65,7 @@ if (isMain(import.meta.url)) {
     const json = await defaultFetcher().json(sparkUrl(SYMBOLS.map((s) => s.symbol)));
     const m = parseMarket(json);
     if (m.missing.length === SYMBOLS.length) throw new Error('全銘柄の値が取れませんでした（応答形式の変化の可能性）');
-    const path = join(ROOT, 'data', 'market', `${m.date}-raw.json`);
+    const path = join(DATA_DIR, 'market', `${m.date}-raw.json`);
     writeJson(path, m);
     for (const it of Object.values(m.items)) if (it) console.log(`${it.name} ${it.value}${it.unit}（${it.change >= 0 ? '+' : ''}${it.change} / ${it.changePct}%）${it.asOf}`);
     if (m.missing.length) console.log(`未取得: ${m.missing.join('、')}`);

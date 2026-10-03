@@ -1171,9 +1171,9 @@
     document.body.style.setProperty('--botH', '23px');
     $('#main').innerHTML = `<div class="boot"><section class="panel"><div class="pi">
       <span class="code">SYS-00 / BOOT</span>
-      <h1>${kind === 'broken' ? 'データファイル（app/data.js）を読み込めませんでした' : 'データファイル（app/data.js）がまだありません'}</h1>
-      <p>${kind === 'broken' ? 'data.js が途中で壊れているようです。作り直せば直ります。' : 'アプリは data/ の中身から作る app/data.js を読んで表示します。'}</p>
-      <ol><li>ターミナルで KABU LAB のフォルダ（kabu-lab）を開く</li><li><code>node build.mjs</code> を実行する</li><li>このページを再読み込みする</li></ol>
+      <h1>${kind === 'broken' ? 'データファイル（src/app/data.js）を読み込めませんでした' : 'データファイル（src/app/data.js）がまだありません'}</h1>
+      <p>${kind === 'broken' ? 'data.js が途中で壊れているようです。作り直せば直ります。' : 'アプリは data/ の中身から作る src/app/data.js を読んで表示します。'}</p>
+      <ol><li>ターミナルで KABU LAB のプログラムのフォルダ（kabu-lab/src）を開く</li><li><code>node build.mjs</code> を実行する</li><li>このページを再読み込みする</li></ol>
       <div class="cmdl"><em>$</em>node build.mjs<i class="cur"></i></div>
     </div></section></div>`;
   }

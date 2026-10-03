@@ -3,7 +3,7 @@
 // 抽出は項目ごとに try し、1項目の失敗で全体を落とさない。取れない項目は null にして missing に入れる。
 import { join } from 'node:path';
 import { defaultFetcher } from './lib/fetch.mjs';
-import { ROOT, isMain, writeJson, writeText, checkCode, fail } from './lib/util.mjs';
+import { DATA_DIR, isMain, writeJson, writeText, checkCode, fail } from './lib/util.mjs';
 
 export const kabutanUrl = (code) => `https://kabutan.jp/stock/?code=${code}`;
 
@@ -257,7 +257,7 @@ export async function fetchKabutan(code, { fetcher = defaultFetcher(), saveHtml 
 }
 
 export function profilePath(code) {
-  return join(ROOT, 'data', 'stocks', code, 'profile.json');
+  return join(DATA_DIR, 'stocks', code, 'profile.json');
 }
 
 if (isMain(import.meta.url)) {

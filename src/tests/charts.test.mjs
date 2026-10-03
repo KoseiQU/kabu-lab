@@ -8,10 +8,11 @@ import '../app/charts.js';
 
 const K = globalThis.KABU_CHARTS;
 const ROOT = new URL('..', import.meta.url).pathname;
+const DATA = join(ROOT, '..', 'data');
 const BAD = /NaN|undefined|Infinity/;
 const clean = (s, what) => assert.ok(!BAD.test(s), `${what} に NaN/undefined/Infinity: …${String(s).match(BAD) && s.slice(Math.max(0, s.search(BAD) - 60), s.search(BAD) + 20)}…`);
-const sample = JSON.parse(readFileSync(join(ROOT, 'data/stocks/6501/analyses/2026-10-01-quick.json'), 'utf8'));
-const prices6501 = JSON.parse(readFileSync(join(ROOT, 'data/stocks/6501/prices.json'), 'utf8')).rows;
+const sample = JSON.parse(readFileSync(join(DATA, 'stocks/6501/analyses/2026-10-01-quick.json'), 'utf8'));
+const prices6501 = JSON.parse(readFileSync(join(DATA, 'stocks/6501/prices.json'), 'utf8')).rows;
 const fixture = JSON.parse(readFileSync(join(ROOT, 'tests/fixtures/sparse-quick.json'), 'utf8'));
 const bar = (d, c, v = 1000) => ({ d, o: c, h: c, l: c, c, v });
 
@@ -210,8 +211,8 @@ test('実データ型フィクスチャ: スキーマ合格で、差し戻しの
 });
 
 test('チャートのピン: 5個でも札どうし・ローソク足・右端のタグ領域に重ならない（幅を変えても）', () => {
-  const a8001 = JSON.parse(readFileSync(join(ROOT, 'data/stocks/8001/analyses/2026-10-02-quick.json'), 'utf8'));
-  const p8001 = JSON.parse(readFileSync(join(ROOT, 'data/stocks/8001/prices.json'), 'utf8')).rows.filter((r) => r.d > '2026-04-02' && r.d <= '2026-10-02');
+  const a8001 = JSON.parse(readFileSync(join(DATA, 'stocks/8001/analyses/2026-10-02-quick.json'), 'utf8'));
+  const p8001 = JSON.parse(readFileSync(join(DATA, 'stocks/8001/prices.json'), 'utf8')).rows.filter((r) => r.d > '2026-04-02' && r.d <= '2026-10-02');
   for (const tc of [realistic.cases[0], { prices: { rows: prices6501.filter((r) => r.d > '2026-04-01' && r.d <= '2026-10-01') }, analysis: sample }, { prices: { rows: p8001 }, analysis: a8001 }]) {
     const rows = tc.prices.rows.slice(-122), c = tc.analysis.sections.chart;
     for (const [W, H] of [[520, 400], [560, 420], [640, 440], [700, 460], [800, 520], [940, 600]]) {

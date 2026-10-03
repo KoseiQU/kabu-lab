@@ -1,8 +1,15 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+// ROOT = src/（プログラム一式）。分析データは src の兄弟の data/（環境変数 KABU_DATA_DIR があればそちら）。
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+export const REPO_DIR = resolve(ROOT, '..');
+export function resolveDataDir(env = process.env) {
+  return env.KABU_DATA_DIR ? resolve(env.KABU_DATA_DIR) : join(REPO_DIR, 'data');
+}
+/** data の場所はここだけで決める（collect・build・tools・tests が使う） */
+export const DATA_DIR = resolveDataDir();
 
 export function isMain(metaUrl) {
   return process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === metaUrl;

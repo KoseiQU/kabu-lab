@@ -1,6 +1,6 @@
 // 決算短信などのPDFを取得してテキスト化する。
 // 使い方: node tools/fetch-doc.mjs <code> <url> [--name <名前>] [--dir <保存先>]（--dir はテスト用。既定は raw/docs）
-//   → data/stocks/<code>/raw/docs/<名前>.pdf と <名前>.txt（tools/pdf2text.py でページ区切り付き）
+//   → ../data/stocks/<code>/raw/docs/<名前>.pdf と <名前>.txt（src から見た場所。KABU_DATA_DIR で変更可）（tools/pdf2text.py でページ区切り付き）
 //   標準出力にページ数・文字数・各ページ先頭40字の目次を出す。続きは tools/doc-slice.mjs で必要なページだけ読む。
 // 共通fetch（UA明示・15秒・リトライ1回・同一サイト4リクエストまで）。最大20MB。Content-Type が PDF でなければエラー。
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
@@ -8,7 +8,7 @@ import { join, dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { defaultFetcher } from '../collect/lib/fetch.mjs';
-import { checkCode } from '../collect/lib/util.mjs';
+import { checkCode, DATA_DIR } from '../collect/lib/util.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const MAX_BYTES = 20 * 1024 * 1024;
@@ -66,7 +66,7 @@ if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.m
   } catch (e) {
     die(e.message);
   }
-  const dir = di > 0 ? resolve(process.argv[di + 1]) : join(ROOT, 'data', 'stocks', code, 'raw', 'docs');
+  const dir = di > 0 ? resolve(process.argv[di + 1]) : join(DATA_DIR, 'stocks', code, 'raw', 'docs');
   let got;
   try {
     got = await defaultFetcher().binary(url, { maxBytes: MAX_BYTES, accept: 'application/pdf' });

@@ -11,7 +11,7 @@ import { computeAll } from './lib/indicators.mjs';
 import { buildDigest, DIGEST_LIMIT } from './lib/digest.mjs';
 import { fetchFinance, financePath } from './kabutan-finance.mjs';
 import { buildKessanDigest } from './lib/digest-kessan.mjs';
-import { ROOT, writeJson, writeRowsJson, writeText, checkCode, fail, isDigestFresh } from './lib/util.mjs';
+import { DATA_DIR, writeJson, writeRowsJson, writeText, checkCode, fail, isDigestFresh } from './lib/util.mjs';
 
 const TYPES = ['quick', 'chart', 'kessan'];
 
@@ -33,7 +33,7 @@ try {
 }
 if (!TYPES.includes(type)) fail(`未対応の型です: ${type}（対応: ${TYPES.join(', ')}）`);
 
-const dir = join(ROOT, 'data', 'stocks', code);
+const dir = join(DATA_DIR, 'stocks', code);
 if (ifStale) {
   const dp = join(dir, type === 'kessan' ? 'digest-kessan.md' : 'digest.md');
   const need = type === 'kessan' ? [dp, financePath(code)] : [dp, pricesPath(code), profilePath(code)];

@@ -161,7 +161,7 @@ test('kessan: deep は任意（あれば中身を検査）', () => {
 });
 
 test('quick の既存検証は変わらない', () => {
-  const q = JSON.parse(readFileSync(new URL('../data/stocks/6501/analyses/2026-10-01-quick.json', import.meta.url), 'utf8'));
+  const q = JSON.parse(readFileSync(new URL('../../data/stocks/6501/analyses/2026-10-01-quick.json', import.meta.url), 'utf8'));
   assert.deepEqual(validateAnalysis(q), []);
   ng({ ...q, type: 'chart' }, /必須キー "timeframes"/);
 });

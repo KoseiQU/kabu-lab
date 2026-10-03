@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { validateAnalysis, validateSchema, BANNED_WORDS } from '../tools/validate.mjs';
 
-const SAMPLE_PATH = new URL('../data/stocks/6501/analyses/2026-10-01-quick.json', import.meta.url);
+const SAMPLE_PATH = new URL('../../data/stocks/6501/analyses/2026-10-01-quick.json', import.meta.url);
 const sample = () => JSON.parse(readFileSync(SAMPLE_PATH, 'utf8'));
 const msgs = (errs) => errs.map((e) => `${e.path}: ${e.message}`).join('\n');
 

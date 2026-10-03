@@ -7,10 +7,11 @@ import '../app/charts.js';
 
 const K = globalThis.KABU_CHARTS;
 const ROOT = new URL('..', import.meta.url).pathname;
+const DATA = join(ROOT, '..', 'data');
 const BAD = /NaN|undefined|Infinity/;
 const clean = (s, what) => assert.ok(!BAD.test(s), `${what} に NaN/undefined/Infinity: …${String(s).slice(Math.max(0, String(s).search(BAD) - 60), String(s).search(BAD) + 20)}…`);
 const fx = (n) => JSON.parse(readFileSync(join(ROOT, `tests/fixtures/${n}.json`), 'utf8'));
-const prices = JSON.parse(readFileSync(join(ROOT, 'data/stocks/6501/prices.json'), 'utf8')).rows;
+const prices = JSON.parse(readFileSync(join(DATA, 'stocks/6501/prices.json'), 'utf8')).rows;
 const bar = (d, c, v = 1000) => ({ d, o: c, h: c, l: c, c, v });
 const svgSize = (s) => { const m = /width="([\d.]+)" height="([\d.]+)"/.exec(s); return m ? [+m[1], +m[2]] : null; };
 const nums = (s, re) => [...s.matchAll(re)].map((m) => +m[1]);
@@ -168,7 +169,7 @@ test('ring（進捗リング）: pct と均等ペースの角度、100%超は内
 });
 
 test('bulletModel（中計の目標の範囲 vs 実績 vs 今期予想）: 日立の実データ4本・軸は0起点にしない・未達／範囲内／超過の判定', () => {
-  const real = JSON.parse(readFileSync(join(ROOT, 'data/stocks/6501/analyses/2026-10-02-kessan.json'), 'utf8')).sections.deep.plan.targets;
+  const real = JSON.parse(readFileSync(join(DATA, 'stocks/6501/analyses/2026-10-02-kessan.json'), 'utf8')).sections.deep.plan.targets;
   const want = [['in', 'above'], ['below', 'in'], ['in', 'in'], ['below', 'below']];
   real.forEach((t, i) => {
     const m = K.bulletModel(t);

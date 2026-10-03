@@ -2,8 +2,8 @@
 // type（quick / chart / kessan）を見て schemas/<type>.schema.json を選ぶ。未知の型は NG。
 // JSON Schema（draft-07 の一部: type, required, properties, items, enum, minItems, maxItems,
 // minimum, maximum, minLength, maxLength, pattern）＋ 意味検証（順序・種別・禁止語）。
-import { readFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { readFileSync, existsSync } from 'node:fs';
+import { dirname, join, resolve, isAbsolute } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -178,10 +178,17 @@ export function validateAnalysis(a, { root = ROOT } = {}) {
   return [...validateSchema(a, schema), ...semanticErrors(a, { checklistItems: loadChecklistItems(root) })];
 }
 
+/** パスの解決: 絶対パス／今いる場所からの相対パス。見つからなければ src からの相対パスも試す */
+export function resolveInput(file) {
+  if (isAbsolute(file) || existsSync(file)) return resolve(file);
+  const fromSrc = resolve(ROOT, file);
+  return existsSync(fromSrc) ? fromSrc : resolve(file);
+}
+
 export function validateFile(file) {
   let a;
   try {
-    a = JSON.parse(readFileSync(file, 'utf8'));
+    a = JSON.parse(readFileSync(resolveInput(file), 'utf8'));
   } catch (e) {
     return [{ path: '$', message: `JSONとして読めません: ${e.message}` }];
   }

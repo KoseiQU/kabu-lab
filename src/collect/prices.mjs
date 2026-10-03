@@ -2,7 +2,7 @@
 // 使い方: node collect/prices.mjs <code>
 import { join } from 'node:path';
 import { defaultFetcher } from './lib/fetch.mjs';
-import { ROOT, isMain, writeRowsJson, checkCode, fail } from './lib/util.mjs';
+import { DATA_DIR, isMain, writeRowsJson, checkCode, fail } from './lib/util.mjs';
 
 export const chartUrl = (symbol, range = '2y') =>
   `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=1d`;
@@ -62,7 +62,7 @@ export async function fetchPrices(code, { fetcher = defaultFetcher() } = {}) {
 }
 
 export function pricesPath(code) {
-  return join(ROOT, 'data', 'stocks', code, 'prices.json');
+  return join(DATA_DIR, 'stocks', code, 'prices.json');
 }
 
 if (isMain(import.meta.url)) {

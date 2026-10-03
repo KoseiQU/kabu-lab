@@ -1,7 +1,7 @@
 /* KABU LAB — charts.js
    SVG／HTML の描画部品。すべて「データ＋寸法 → 文字列」の純粋関数で、DOM には触らない。
    ブラウザでは <script src="charts.js">、Node では import して globalThis.KABU_CHARTS を使う。
-   見た目の正は mocks/mock-6-final.html。軸・目盛り・ラベル位置はデータから自動計算する。 */
+   見た目の正は archive/mocks/mock-6-final.html。軸・目盛り・ラベル位置はデータから自動計算する。 */
 (function (G) {
   'use strict';
 

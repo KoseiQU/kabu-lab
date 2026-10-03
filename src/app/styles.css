@@ -1,5 +1,5 @@
 /* KABU LAB — styles.css
-   見た目の正は mocks/mock-6-final.html。ここはそのCSSの移植＋アプリ固有の追加（末尾）。 */
+   見た目の正は archive/mocks/mock-6-final.html。ここはそのCSSの移植＋アプリ固有の追加（末尾）。 */
 :root{
   --bg:#05080d;
   --cy:#3ee6ff; --cy2:#a6f3ff; --cyd:rgba(62,230,255,.16); --cyl:rgba(62,230,255,.32);

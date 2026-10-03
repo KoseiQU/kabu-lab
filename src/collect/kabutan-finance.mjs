@@ -4,7 +4,7 @@
 // 抽出は表ごと・項目ごとに try し、取れないものは null にして missing に入れる。
 import { join } from 'node:path';
 import { defaultFetcher } from './lib/fetch.mjs';
-import { ROOT, isMain, writeJson, writeText, checkCode, fail } from './lib/util.mjs';
+import { DATA_DIR, isMain, writeJson, writeText, checkCode, fail } from './lib/util.mjs';
 import { stripTags, toHalf, parseNum, between, rows, cells } from './kabutan.mjs';
 
 export const financeUrl = (code) => `https://kabutan.jp/stock/finance?code=${code}`;
@@ -235,7 +235,7 @@ export async function fetchFinance(code, { fetcher = defaultFetcher(), saveHtml 
 }
 
 export function financePath(code) {
-  return join(ROOT, 'data', 'stocks', code, 'finance.json');
+  return join(DATA_DIR, 'stocks', code, 'finance.json');
 }
 
 if (isMain(import.meta.url)) {

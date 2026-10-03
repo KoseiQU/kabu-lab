@@ -8,7 +8,8 @@ import vm from 'node:vm';
 import { buildData, writeDataJs, PRICE_BARS } from '../build.mjs';
 
 const ROOT = new URL('..', import.meta.url).pathname;
-const sample = JSON.parse(readFileSync(join(ROOT, 'data/stocks/6501/analyses/2026-10-01-quick.json'), 'utf8'));
+const DATA = join(ROOT, '..', 'data');
+const sample = JSON.parse(readFileSync(join(DATA, 'stocks/6501/analyses/2026-10-01-quick.json'), 'utf8'));
 const w = (p, o) => {
   mkdirSync(join(p, '..'), { recursive: true });
   writeFileSync(p, typeof o === 'string' ? o : JSON.stringify(o));
