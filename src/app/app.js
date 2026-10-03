@@ -166,6 +166,7 @@
   ];
   /** ヘッダの現在地。銘柄ページはホームを光らせず、銘柄の項目（銘柄ページのときだけ出す）を現在地にする（レールと F2 の表示に揃える） */
   const navKey = (route) => route.view;
+  const hrefTerm = (term) => '#/glossary/' + encodeURIComponent(term);
   const hrefStock = (code, type, date) => '#/stock/' + encodeURIComponent(code) + (type ? '/' + type : '') + (date ? '/' + date : '');
 
   function resolve(route) {
@@ -326,18 +327,21 @@
   }
   function termCard() {
     const D = window.KABU, g = arr(D.glossary).filter((x) => x && x.term);
-    const head = `<div class="ph"><span class="code">EDU-01 / TERM</span><h2>今日の用語カード</h2><div class="pm">${goLink('#/glossary', '用語帳', 'term')}</div></div>`;
-    if (!g.length) return `<section class="panel" data-sec="term"><div class="pi">${head}<div class="nodata sm" data-standby="term"><span class="nd">用語なし</span><p class="why">分析を実行すると、出てきた用語がここに日替わりで並びます</p></div></div></section>`;
+    if (!g.length) {
+      const head0 = `<div class="ph"><span class="code">EDU-01 / TERM</span><h2>今日の用語カード</h2><div class="pm">${goLink('#/glossary', '用語帳', 'term')}</div></div>`;
+      return `<section class="panel" data-sec="term"><div class="pi">${head0}<div class="nodata sm" data-standby="term"><span class="nd">用語なし</span><p class="why">分析を実行すると、出てきた用語がここに日替わりで並びます</p></div></div></section>`;
+    }
     const now = new Date();
     const day = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 864e5);
     const t = g[day % g.length];
+    const head = `<div class="ph"><span class="code">EDU-01 / TERM</span><h2>今日の用語カード</h2><div class="pm">${goLink(hrefTerm(t.term), '用語帳', 'term')}</div></div>`;
     const len = [...t.term].reduce((w, ch) => w + (ch.charCodeAt(0) < 0x2e80 ? 0.78 : 1), 0);
     const size = Math.round(Math.max(18, Math.min(34, 150 / Math.max(1, len))));
     const viz = t.term === 'PER'
       ? '<div class="perviz" aria-hidden="true"><div class="row"><span>1年分の利益</span><i class="unit"></i></div><div class="row"><span>株価</span><i class="px2"></i><span class="x">×N</span></div></div>'
       : fxHtml(t.term);
     const org = t.firstCode ? `<div class="org">${esc(t.firstCode)} <span>${esc(t.firstName || '')}</span> ${esc(mmdd(t.firstDate))}</div>` : '';
-    return `<section class="panel" data-sec="term"><div class="pi">${head}<div class="h-term"><div class="w" style="font-size:${size}px">${esc(t.term)}</div><p>${esc(t.def || '')}</p>${viz || org}</div></div></section>`;
+    return `<section class="panel" data-sec="term"><div class="pi">${head}<div class="h-term"><a class="w" href="${hrefTerm(t.term)}" data-term-go style="font-size:${size}px">${esc(t.term)}</a><p>${esc(t.def || '')}</p>${viz || org}</div></div></section>`;
   }
   function renderHome() {
     const D = window.KABU;
@@ -430,10 +434,10 @@
         ${o.cmd ? `<div class="cmdl"><em>&gt;</em>${esc(o.cmd)}${o.arg ? ` <var>${esc(o.arg)}</var>` : ''}<i class="cur"></i></div>` : ''}</div></div>
     </div></section></div>`;
   }
-  function footHtml(sources, missing) {
+  function footHtml(sources, missing, fallback) {
     const links = arr(sources).filter((s) => s && s.title).map((s) => (/^https?:\/\//.test(s.url || '') ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title)}</a>` : esc(s.title))).join('<span class="sep">・</span>');
     const miss = arr(missing).filter((m) => typeof m === 'string' && m);
-    return `<footer class="foot-b"><span class="lft"><span class="src" data-sources>出典：${links || '<span>記載なし</span>'}</span>${miss.length ? `<span class="miss" data-missing-list><b>未取得</b>${miss.map(esc).join(' ／ ')}</span>` : ''}</span><span class="warn">本ツールは学習用の分析であり、売買の推奨ではありません</span></footer>`;
+    return `<footer class="foot-b"><span class="lft"><span class="src" data-sources>出典：${links || fallback || '<span>記載なし</span>'}</span>${miss.length ? `<span class="miss" data-missing-list><b>未取得</b>${miss.map(esc).join(' ／ ')}</span>` : ''}</span><span class="warn">本ツールは学習用の分析であり、売買の推奨ではありません</span></footer>`;
   }
 
   /* ---------- クイック診断の各枠 ---------- */
@@ -1345,6 +1349,7 @@
       const ctx = {
         st, a, dec, upto: w.upto, win: w.win,
         ma25: K.sma(closesAll, 25).slice(w.si), ma75: K.sma(closesAll, 75).slice(w.si),
+        review: reviewOf('stock', st.code || R.code, a.date),
       };
       S.ctx = ctx;
       body = `<div id="quick">
@@ -1352,6 +1357,7 @@
       <div class="rcol">${diagPanel(a)}${valuePanel(a)}<div class="pair">${perfPanel(a)}${segPanel(a)}</div></div>
     </div>
     <div class="rowB">${scenPanel(a, dec)}${marginPanel(a)}${checkPanel(a)}</div>
+    ${reviewPanel(a, ctx.review)}
     ${notesPanel(a)}
   </div>`;
     }
@@ -1385,7 +1391,7 @@
     const asOf = a ? (a.price && a.price.asOf) || a.date : null;
     const nk = seriesOf(D, '^N225'), fx = seriesOf(D, 'JPY=X');
     const upto = (S2) => (S2 ? S2.rows.filter((r) => r && typeof r.d === 'string' && isNum(r.c) && (!asOf || r.d <= asOf)) : []);
-    return { kind: 'market', a, list, badDate, raw, asOf, nk, fx, nkRows: upto(nk), fxRows: upto(fx), series: M.series || null };
+    return { kind: 'market', a, list, badDate, raw, asOf, nk, fx, nkRows: upto(nk), fxRows: upto(fx), series: M.series || null, review: a ? reviewOf('market', null, a.date) : null };
   }
   function mkHeader(c) {
     const a = c.a, it = c.raw && c.raw.items ? c.raw.items : {};
@@ -1464,7 +1470,7 @@
     const close = a.price && isNum(a.price.close) ? a.price.close : null;
     const pm = `<span class="jp">来年末までの日経平均 ・ 起点 <span class="mono">${K.fmtP(close)}</span>円</span>`;
     if (!list.length) return panel('outlook', 'MKT-A2 / SCENARIO', '3つのシナリオ', pm, `<div class="pb">${noData('outlook', a)}</div>`);
-    return panel('outlook', 'MKT-A2 / SCENARIO', '3つのシナリオ', pm, `<div class="pb"><div class="scn mk-scn"><div class="host" data-chart="mkfan"></div><div class="scards">${scenCards(list)}</div></div><div class="mk-review" data-slot="review" hidden></div></div>`);
+    return panel('outlook', 'MKT-A2 / SCENARIO', '3つのシナリオ', pm, `<div class="pb"><div class="scn mk-scn"><div class="host" data-chart="mkfan"></div><div class="scards">${scenCards(list)}</div></div><div class="mk-review" data-slot="review"><div class="mrh"><span class="code">REVIEW / シナリオの答え合わせ</span>${goLink('#/notes', '答え合わせの一覧', 'review')}</div>${reviewBody(c.review, 'market', a.date)}</div></div>`);
   }
   function fxPanel(c) {
     const a = c.a, F = secs(a).fx && typeof secs(a).fx === 'object' ? secs(a).fx : null;
@@ -1587,6 +1593,8 @@
       const sc = arr(secs(c.a).outlook), by = (k) => { const s2 = sc.find((x) => x && x.kind === k); return s2 && s2.target ? s2.target : null; };
       return K.fan({ hist: c.nkRows.slice(-20).map((r) => r.c), now: c.a.price && c.a.price.close, bull: by('bull'), base: by('base'), bear: by('bear'), W, H });
     },
+    // シナリオの答え合わせ（クイック診断・市場ページ）
+    review: (W, H, c) => (c.review ? K.reviewChart(c.review, W, H) : ''),
     // ニュース型・反省型
     nchart: (W, H, c) => {
       const pins = [...c.pins];
@@ -1700,22 +1708,307 @@
     </div></section></div>`;
   }
 
-  /** 用語帳・気づきノート（中身は P3c）。ルートと「準備中」の枠だけ */
-  function renderPending(route) {
-    const D = window.KABU;
-    const g = arr(D.glossary).filter((x) => x && x.term), n = arr(D.notes).filter((x) => x && x.text);
-    const o = route.view === 'glossary'
-      ? { code: 'EDU-02 / GLOSSARY', title: '用語帳', h3: '用語帳は準備中です', p: `全分析の用語（いま ${g.length}語）を1つの一覧にして、検索・分類・暗記用の「定義をかくす」切替をここに並べます。`, view: 'GLOSSARY 用語帳' }
-      : { code: 'EDU-03 / NOTES', title: '気づきノート', h3: '気づきノートは準備中です', p: `全分析の気づき・教訓・次回の確認点（いま ${n.length}件）を日付の新しい順に並べ、型と銘柄で絞り込めるようにします。`, view: 'NOTES 気づきノート' };
-    $('#main').innerHTML = `<section class="view" id="v-${route.view}" aria-label="${o.title}" data-view="${route.view}">${emptyHtml({ code: o.code, title: o.title, status: '準備中', mod: 'MODULE PENDING', h3: o.h3, p: o.p, note: '今日の用語はホームの「今日の用語カード」で見られます。' })}</section>`;
-    return { cmd: '', view: o.view, date: localDate(D.generatedAt) };
+  /* =====================================================================
+     P3c：シナリオの答え合わせ（銘柄ページのクイック診断・市場ページ・気づきノートの一覧）
+     build が作った review をそのまま使う（画面は再計算しない）
+     ===================================================================== */
+  const RVK = { bull: ['強気', 'bull'], base: ['中立', 'mid'], bear: ['弱気', 'bear'] };
+  /** 分析1本に対応する答え合わせ（銘柄は code と日付、市場は日付で引く） */
+  function reviewOf(kind, code, date) {
+    return arr(window.KABU.review).find((r) => r && r.kind === kind && r.date === date && (kind === 'market' || r.code === code)) || null;
   }
+  const rvAfter = (rv) => arr(rv && rv.after).filter((r) => r && typeof r.d === 'string' && isNum(r.c));
+  const rvPct = (rv) => { const b = rv && rv.base && rv.base.price, l = rv && rv.latest && rv.latest.c; return isNum(b) && isNum(l) && b ? (l - b) / b * 100 : null; };
+  const rvChip = (k) => (RVK[k] ? `<span class="rvc ${RVK[k][1]}" data-rvk="${k}">${RVK[k][0]}</span>` : '');
+  /** いちばん近い目安の文（帯の中なら「帯の中」） */
+  function rvNearest(rv) {
+    const n = rv && rv.nearest;
+    if (!n || !RVK[n.kind]) return '<span class="rvna">比べられる目安なし</span>';
+    const t = arr(rv.targets).find((x) => x && x.kind === n.kind) || {};
+    const inBand = isNum(t.low) && isNum(t.high) && n.distPct === 0;
+    return `${rvChip(n.kind)}<span class="rvnd">${inBand ? '帯の中' : `距離 <span class="mono">${fmt(n.distPct, 2)}</span>%`}</span>`;
+  }
+  const RV_NOTE = '機械的な距離の比較であり、評価ではありません';
+  function reviewNone(rv, mode, date) {
+    const msg = mode === 'market' ? '分析日より後の日経平均の終値がまだありません。次に /kabu 市場 を実行すると表示されます' : '分析日より後の株価がまだありません。次に /kabu を実行すると表示されます';
+    return `<div class="rv0" data-review="${esc(date || '')}" data-review-none><span class="nd0">答え合わせ</span><p>${esc(msg)}</p></div>`;
+  }
+  /** 答え合わせの中身（図＋数値。銘柄ページは崩れる条件も並べる） */
+  function reviewBody(rv, mode, date) {
+    const after = rvAfter(rv);
+    if (!rv || !after.length || !isNum(rv.base && rv.base.price)) return reviewNone(rv, mode, date);
+    const pct = rvPct(rv);
+    const unit = mode === 'market' ? '円' : '円';
+    const legend = '<div class="legend"><span><i class="sw rvl"></i>その後の終値</span><span><i class="sw rvb"></i>基準価格</span><span><i class="sw rvt"></i>目安（線）</span><span><i class="sw rvbd"></i>目安（帯）</span></div>';
+    const nums = `<div class="rv-num">
+      <div class="rvk" data-num="days"><span>経過</span><b><span class="mono">${fmt(rv.days)}</span><small>営業日</small></b>${rv.young ? '<em class="rv-young" data-young>まだ日が浅い</em>' : ''}</div>
+      <div class="rvk" data-num="move"><span>基準 → 直近（${esc(mmdd(rv.latest.d))}）</span><b><span class="mono">${K.fmtP(rv.base.price)}</span><i>→</i><span class="mono">${K.fmtP(rv.latest.c)}</span><small>${unit}</small></b><em class="rvpc ${isNum(pct) ? (pct > 0 ? 'up' : pct < 0 ? 'dn' : '') : ''}">${isNum(pct) ? fmtS(pct, 2) + '%' : '—'}</em></div>
+      <div class="rvk" data-num="nearest"><span>現在値にいちばん近い目安</span><b class="rvnb">${rvNearest(rv)}</b></div>
+      <p class="rv-note" data-review-note>※ ${RV_NOTE}${rv.young ? '。5営業日未満なので、まだ日が浅い段階の比較です' : ''}</p>
+    </div>`;
+    const brk = mode === 'stock' ? `<div class="rv-brk"><span class="code">BREAK-IF / 崩れる条件</span>${['bull', 'base', 'bear'].map((k) => { const t = arr(rv.targets).find((x) => x && x.kind === k); return t ? `<div class="rvbr" data-brk="${k}"><div class="rvbh">${rvChip(k)}<span class="rvtl">${esc(t.label || '目安の記載なし')}</span></div><p>${t.breakIf ? esc(t.breakIf) : '<span class="rvna">崩れる条件の記載なし</span>'}</p></div>` : ''; }).join('')}<p class="cap">当たり外れは判定しません。条件が崩れたかどうかは自分で確かめます</p></div>` : '';
+    return `<div class="rv rv-${mode}" data-review="${esc(rv.date)}" data-days="${rv.days}"><div class="rv-fig">${legend}<div class="host rvhost" data-chart="review"></div></div>${nums}${brk}</div>`;
+  }
+  function reviewPanel(a, rv) {
+    const pm = rv && isNum(rv.base && rv.base.price) ? `<span class="jp">分析日 ${esc(mmdd(rv.date))} ・ 基準 <span class="mono">${K.fmtP(rv.base.price)}</span>円</span>${goLink('#/notes', '答え合わせの一覧', 'review')}` : goLink('#/notes', '答え合わせの一覧', 'review');
+    return `<div class="rowR">${panel('review', 'SYS-10 / REVIEW', 'シナリオの答え合わせ', pm, `<div class="pb">${reviewBody(rv, 'stock', a.date)}</div>`)}</div>`;
+  }
+
+  /* =====================================================================
+     P3c：用語帳（#/glossary、#/glossary/<用語>）
+     一覧は全語を1回だけ描き、検索・分類・かくす切替は hidden とクラスの付け替えで反映する（入力のフォーカスを保つ）
+     ===================================================================== */
+  const GL_CATS = ['指標', 'チャート', '決算', '需給', 'マクロ', '制度', 'その他'];
+  const GL_NONE = '未分類';
+  const glList = () => arr(window.KABU.glossary).filter((x) => x && typeof x.term === 'string' && x.term);
+  const glCat = (t) => (GL_CATS.includes(t.category) ? t.category : GL_NONE);
+  const glNorm = (s) => String(s == null ? '' : s).normalize('NFKC').toLowerCase();
+  const glDet = (t) => (t && t.detail && typeof t.detail === 'object' ? t.detail : null);
+  const GL0 = () => ({ q: '', cat: 'all', hide: false, reveal: null });
+  S.gl = GL0();
+  /** 初出の分析へのリンク（無ければ null） */
+  function glFirst(t) {
+    if (!t.firstDate || !t.firstType) return null;
+    if (t.firstType === 'market') return { href: hrefMarket(t.firstDate), who: '市場', date: t.firstDate };
+    if (t.firstCode && typeOf(t.firstType)) return { href: hrefStock(t.firstCode, t.firstType, t.firstDate), who: `${t.firstCode} ${t.firstName || ''}`.trim(), date: t.firstDate };
+    return null;
+  }
+  const glFirstHtml = (t, cls) => { const f0 = glFirst(t); return f0 ? `<a class="${cls}" href="${f0.href}" data-first><span>初出</span>${esc(f0.who)}<span class="mono">${esc(f0.date)}</span> ›</a>` : ''; };
+  function glHeader(list) {
+    const det = list.filter(glDet).length;
+    const latest = list.reduce((m, t) => { const d = (glDet(t) && glDet(t).addedAt) || t.firstDate; return typeof d === 'string' && d > m ? d : m; }, '');
+    const cats = new Set(list.map(glCat)).size;
+    return `<div class="sh ed-sh">
+    <div class="sh-id"><div class="ticker">TERM</div><div><h1>用語帳</h1><div class="tags"><span>分析に出てきた用語＋用語の解説</span><span>暗記用「定義をかくす」</span></div></div></div>
+    <div class="sh-price"><svg class="ret" aria-hidden="true"><use href="#ret"/></svg><div><div class="lbl"><span>収録語数</span></div><div class="pxrow"><span class="px"><span class="num">${fmt(list.length)}</span><small>語</small></span></div></div></div>
+    <div class="sh-kv"><span>詳しい解説つき</span><b>${fmt(det)}<span>語</span></b></div>
+    <div class="sh-kv"><span>分類</span><b>${fmt(cats)}<span>種</span></b></div>
+    <div class="sh-kv"><span>最新の追加</span><b>${latest ? esc(latest) : '—'}</b></div>
+    <div class="sh-fill"><svg viewBox="0 0 150 26" aria-hidden="true" fill="none" stroke="#3ee6ff"><path d="M0 13h40" stroke-opacity=".35"/><path d="M46 6h20v14H46zM70 6h20v14H70z" stroke-opacity=".5"/><path d="M96 13h12" stroke-dasharray="2 3" stroke-opacity=".45"/><rect x="114" y="4" width="18" height="18" stroke-opacity=".6" transform="rotate(45 123 13)"/><circle cx="123" cy="13" r="2.5" fill="#3ee6ff" stroke="none"/><path d="M138 13h12" stroke-opacity=".35"/></svg></div>
+  </div>`;
+  }
+  function edTabs(items, right) {
+    return `<nav class="tabs" aria-label="画面の中の切替">${items.map(([href, code, lab, on]) => (href ? `<a class="tab${on ? ' on' : ''}" href="${href}"><i>${code}</i>${esc(lab)}${on ? '<span class="dot"></span>' : ''}</a>` : `<span class="tab${on ? ' on' : ''}"><i>${code}</i>${esc(lab)}${on ? '<span class="dot"></span>' : ''}</span>`)).join('')}<div class="rt">${right}</div></nav>`;
+  }
+  /** 一覧の1語 */
+  function glItem(t, open) {
+    const d = glDet(t), cat = glCat(t);
+    const q = glNorm([t.term, d && d.reading, t.def].filter(Boolean).join(' '));
+    return `<div class="gi${d ? ' det' : ''}${open ? ' on' : ''}" data-term="${esc(t.term)}" data-cat="${esc(cat)}" data-q="${esc(q)}">`
+      + `<div class="gih"><button type="button" class="gw" data-gw>${esc(t.term)}</button>${d ? '<span class="gdm" title="詳しい解説つき"><i>◆</i>解説つき</span>' : ''}<a class="gi-go" href="${hrefTerm(t.term)}" aria-label="${esc(t.term)}を開く">開く ›</a></div>`
+      + `<p class="gdf" data-def>${esc(t.def || '定義の記載なし')}</p>`
+      + `<div class="gim"><span class="gc${cat === GL_NONE ? ' na' : ''}">${esc(cat)}</span>${glFirstHtml(t, 'gfa')}${!glFirst(t) && d && d.addedAt ? `<span class="gad">解説を追加 <span class="mono">${esc(d.addedAt)}</span></span>` : ''}</div></div>`;
+  }
+  function glListPanel(list, openTerm) {
+    const counts = {};
+    list.forEach((t) => { const c = glCat(t); counts[c] = (counts[c] || 0) + 1; });
+    const cats = [...GL_CATS, ...(counts[GL_NONE] ? [GL_NONE] : [])];
+    const chips = `<button type="button" class="gcat" data-gl-cat="all" aria-pressed="true">すべて<b>${list.length}</b></button>`
+      + cats.map((c) => `<button type="button" class="gcat${counts[c] ? '' : ' zero'}" data-gl-cat="${esc(c)}" aria-pressed="false"${counts[c] ? '' : ' aria-disabled="true"'}>${esc(c)}<b>${counts[c] || 0}</b></button>`).join('');
+    const tool = `<div class="gtool"><label class="gq"><svg aria-hidden="true"><use href="#i-yogo"/></svg><input type="search" data-gl-q placeholder="用語・読み・定義で探す" aria-label="用語を検索（入力のたびに絞り込み）" autocomplete="off" spellcheck="false"></label>`
+      + `<div class="gcats" role="group" aria-label="分類で絞り込む">${chips}</div>`
+      + `<button type="button" class="ghide" data-gl-hide aria-pressed="false"><i class="tg" aria-hidden="true"></i><span>定義をかくす</span></button></div>`;
+    const hint = '<p class="ghint" data-gl-hint hidden>定義をかくしています。語を押す（または ↑↓ キーで選ぶ）と、その語の定義だけが見えます。詳しい解説は「開く」から。</p>';
+    const items = list.map((t) => glItem(t, t.term === openTerm)).join('');
+    return panel('glist', 'EDU-01 / INDEX', '用語の一覧', `<span class="jp" data-gl-count>${list.length}語</span>`,
+      `<div class="pb">${tool}${hint}<div class="glst" data-gl-list>${items}</div><div class="g0" data-gl-none hidden><span class="nd0">該当なし</span><p>条件に合う語はありません。検索語か分類を変えてください。用語帳に足すには <code class="mono">/kabu 用語 &lt;言葉&gt;</code></p></div></div>`);
+  }
+  /** 詳しい解説（detail がある語） */
+  function glDetail(t, list) {
+    const d = glDet(t);
+    const cat = glCat(t), has = new Set(list.map((x) => x.term));
+    const meta = `<div class="gd-meta"><span class="gc${cat === GL_NONE ? ' na' : ''}">${esc(cat)}</span>${glFirstHtml(t, 'gfa')}${d && d.addedAt ? `<span class="gad">解説を追加 <span class="mono">${esc(d.addedAt)}</span></span>` : ''}</div>`;
+    const head = `<div class="gd-hd"><b class="gd-w">${esc(t.term)}</b>${d && d.reading ? `<span class="gd-r">${esc(d.reading)}</span>` : ''}</div>${meta}<div class="gd-def"><span class="tl">定義</span><p>${richNums(t.def || '')}</p></div>`;
+    if (!d) {
+      return panel('gdetail', 'EDU-02 / TERM', '用語の解説', `<span class="jp">一言の定義だけ</span>`, `<div class="pb"><div class="gd-top gd-one">${head}<div class="nodata sm" data-nodata="gdetail"><span class="nd">未実行</span><p class="why">この語の詳しい解説（因果の流れ図・たとえ・数字の例）はまだありません</p><div class="cmdl"><em>&gt;</em>/kabu 用語 ${esc(t.term)}<i class="cur"></i></div></div></div></div>`, ` data-open-term="${esc(t.term)}"`);
+    }
+    const flow = arr(d.flow).filter((x) => x && x.label);
+    const sw = d.seesaw && d.seesaw.left && d.seesaw.right ? d.seesaw : null;
+    const rel = arr(d.related).filter((x) => typeof x === 'string' && x);
+    const src = arr(d.sources).filter((x) => x && x.title);
+    const card = (key, code, lab, txt) => (txt ? `<div class="gtx" data-gd="${key}"><span class="code">${code}</span><b>${lab}</b><p>${richNums(txt)}</p></div>` : '');
+    const left = `<div class="gd-l">${head}${flow.length ? `<div class="gd-sec" data-gd="flow"><span class="code">FLOW / 因果の流れ</span>${K.flowHtml(flow)}<p class="cap">▲＝上がる・増える　▼＝下がる・減る　―＝向きなし</p></div>` : ''}${d.analogy ? `<div class="gtx gan" data-gd="analogy"><span class="code">ANALOGY / たとえ</span><p>${richNums(d.analogy)}</p></div>` : ''}</div>`;
+    const right = `<div class="gd-r2">${sw ? `<div class="gd-sec" data-gd="seesaw"><span class="code">SEESAW / 逆に動く2つ</span>${K.seesawHtml(sw)}</div>` : ''}`
+      + `<div class="gd-sec" data-gd="related"><span class="code">RELATED / 関連語</span><div class="grel">${rel.length ? rel.map((r) => (has.has(r) ? `<a class="grl" href="${hrefTerm(r)}" data-rel-link>${esc(r)} ›</a>` : `<span class="grl na" data-rel-text>${esc(r)}</span>`)).join('') : '<span class="rvna">関連語の記載なし</span>'}</div>${rel.some((r) => !has.has(r)) ? '<p class="cap">枠が点線の語は、まだ用語帳にありません</p>' : ''}</div>`
+      + `<div class="gd-sec" data-gd="sources"><span class="code">SOURCE / 出典</span>${src.length ? `<ul class="gsrc">${src.map((x) => `<li>${/^https?:\/\//.test(x.url || '') ? `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)} ↗</a>` : esc(x.title)}</li>`).join('')}</ul>` : '<p class="rvna">出典の記載なし（一般的な説明）</p>'}</div></div>`;
+    const txt = `<div class="gd-txt">${card('body', 'BODY', 'しくみ', d.body)}${card('example', 'EXAMPLE', '数字の例', d.example)}${card('stockLink', 'STOCK', '株価との関係', d.stockLink)}${card('pitfall', 'PITFALL', 'よくある誤解', d.pitfall)}</div>`;
+    return panel('gdetail', 'EDU-02 / TERM', '用語の解説', `<span class="jp">◆ 詳しい解説つき</span>`, `<div class="pb"><div class="gd-top">${left}${right}</div>${txt}</div>`, ` data-open-term="${esc(t.term)}"`);
+  }
+  function glMissing(term) {
+    return panel('gmissing', 'EDU-02 / TERM', '用語の解説', '', `<div class="pb"><div class="nodata" data-nodata="gmissing"><span class="nd">未収録</span><p class="why">「${esc(term)}」はまだ用語帳にありません</p><p>次のコマンドで解説を作ると、用語帳に追加されます。</p><div class="cmdl"><em>&gt;</em>/kabu 用語 ${esc(term)}<i class="cur"></i></div></div></div>`);
+  }
+  function renderGlossary(route) {
+    const D = window.KABU, list = glList();
+    S.ctx = null; S.ckSel = null; S.ckItems = []; S.lvPin = null;
+    const want = route.term || null;
+    const t = want ? list.find((x) => x.term === want) || null : null;
+    let body;
+    if (!list.length) {
+      body = emptyHtml({ code: 'EDU-02 / GLOSSARY', title: '用語帳', status: '未実行', h3: '用語帳はまだ空です', p: '分析を実行すると、出てきた用語がここに集まります。言葉を1つ選んで解説（因果の流れ図つき）を作ると、用語帳に追加されます。', note: want ? `「<b>${esc(want)}</b>」もまだありません。` : '', cmd: `/kabu 用語`, arg: want || '<言葉か質問>' });
+    } else {
+      body = `<div id="gview" class="ev">${want ? (t ? glDetail(t, list) : glMissing(want)) : ''}${glListPanel(list, t && t.term)}</div>`;
+    }
+    const tabs = edTabs([['#/glossary', 'E-01', '用語の一覧', !want], [null, 'E-02', want ? `解説：${want}` : '解説（語を選ぶ）', !!want]],
+      '<span class="lgd"><i style="background:var(--cy)"></i>上がる・増える</span><span class="lgd"><i style="background:var(--mag)"></i>下がる・減る</span><span class="lgd"><i style="background:var(--amber)"></i>注意</span>');
+    const srcs = t && glDet(t) ? arr(glDet(t).sources) : [];
+    $('#main').innerHTML = `<section class="view" id="v-glossary" aria-label="用語帳" data-view="glossary">${glHeader(list)}${tabs}${body}${footHtml(srcs, [], '用語の定義＝各分析（初出の分析へのリンク）・用語の解説（語ごとの出典）')}</section>`;
+    glApply();
+    return { cmd: `/kabu 用語 ${want || '<言葉か質問>'}`, view: 'GLOSSARY 用語帳', date: localDate(D.generatedAt) };
+  }
+  /** 検索語・分類・かくす切替を一覧に反映（再描画しない） */
+  function glApply() {
+    const L = $('[data-gl-list]');
+    if (!L) return;
+    const G = S.gl, q = glNorm(G.q).trim();
+    const words = q ? q.split(/\s+/) : [];
+    let n = 0;
+    const items = $$('.gi', L);
+    items.forEach((el) => {
+      const ok = (G.cat === 'all' || el.dataset.cat === G.cat) && words.every((w) => el.dataset.q.includes(w));
+      el.hidden = !ok;
+      if (ok) n++;
+      const rev = G.hide && G.reveal === el.dataset.term;
+      el.classList.toggle('rev', rev);
+      const b = $('[data-gw]', el);
+      if (b) { if (G.hide) b.setAttribute('aria-expanded', rev ? 'true' : 'false'); else b.removeAttribute('aria-expanded'); }
+    });
+    L.classList.toggle('hide', !!G.hide);
+    const inp = $('[data-gl-q]');
+    if (inp && inp.value !== G.q) inp.value = G.q;
+    $$('[data-gl-cat]').forEach((c) => c.setAttribute('aria-pressed', c.dataset.glCat === G.cat ? 'true' : 'false'));
+    const hb = $('[data-gl-hide]');
+    if (hb) { hb.setAttribute('aria-pressed', G.hide ? 'true' : 'false'); hb.classList.toggle('on', !!G.hide); }
+    const hint = $('[data-gl-hint]');
+    if (hint) hint.hidden = !G.hide;
+    const cnt = $('[data-gl-count]');
+    if (cnt) cnt.textContent = n === items.length ? `${items.length}語` : `${n}語 ／ 全${items.length}語`;
+    const none = $('[data-gl-none]');
+    if (none) none.hidden = n > 0;
+  }
+  /** 一覧の語を押したとき：かくす中はその語だけ定義を見せる（もう一度押すと伏せる）、通常は解説を開く */
+  function glPress(term) {
+    if (S.gl.hide) { S.gl.reveal = S.gl.reveal === term ? null : term; glApply(); return; }
+    location.hash = hrefTerm(term);
+  }
+  function glSet(o) { Object.assign(S.gl, o); if (!('reveal' in o)) S.gl.reveal = null; glApply(); }
+
+  /* =====================================================================
+     P3c：気づきノート（#/notes）
+     ===================================================================== */
+  const NKIND = { insight: ['気づき', 'INSIGHT', 'ins'], lesson: ['教訓', 'LESSON', 'les'], nextCheck: ['次回の確認', 'CHECK', 'nxt'] };
+  const NTYPE = { quick: 'クイック', kessan: '決算', chart: 'チャート', news: 'ニュース', hansei: '反省', market: '市場' };
+  const NT0 = () => ({ kind: 'all', type: 'all', code: 'all' });
+  S.nt = NT0();
+  const noteList = () => arr(window.KABU.notes).filter((x) => x && typeof x === 'object' && (x.text || x.title)).map((x) => ({ ...x, kind: NKIND[x.kind] ? x.kind : 'insight' }));
+  const noteCode = (n) => (n.code ? String(n.code) : n.type === 'market' ? 'market' : 'other');
+  const noteWho = (n) => (n.code ? `${n.code} ${n.name || ''}`.trim() : n.type === 'market' ? '市場' : n.name || '—');
+  const noteHref = (n) => (n.code && typeOf(n.type) ? hrefStock(n.code, n.type, n.date) : n.code ? hrefStock(n.code) : n.type === 'market' ? hrefMarket(n.date) : null);
+  function ntHeader(list, rv) {
+    const codes = new Set(list.map(noteCode));
+    const latest = list.reduce((m, n) => (typeof n.date === 'string' && n.date > m ? n.date : m), '');
+    return `<div class="sh ed-sh">
+    <div class="sh-id"><div class="ticker">NOTE</div><div><h1>気づきノート</h1><div class="tags"><span>気づき・教訓・次回の確認</span><span>シナリオの答え合わせ</span></div></div></div>
+    <div class="sh-price"><svg class="ret" aria-hidden="true"><use href="#ret"/></svg><div><div class="lbl"><span>ノートの件数</span></div><div class="pxrow"><span class="px"><span class="num">${fmt(list.length)}</span><small>件</small></span></div></div></div>
+    <div class="sh-kv"><span>銘柄・市場</span><b>${fmt(codes.size)}<span>件</span></b></div>
+    <div class="sh-kv"><span>答え合わせ</span><b>${fmt(rv.length)}<span>件</span></b></div>
+    <div class="sh-kv"><span>最新</span><b>${latest ? esc(latest) : '—'}</b></div>
+    <div class="sh-fill"><svg viewBox="0 0 150 26" aria-hidden="true" fill="none" stroke="#3ee6ff"><path d="M0 13h40" stroke-opacity=".35"/><path d="M46 5h18v16H46z" stroke-opacity=".5"/><path d="M49 10h12M49 14h12M49 18h7" stroke-opacity=".5"/><path d="M78 13h30" stroke-dasharray="2 3" stroke-opacity=".45"/><rect x="114" y="4" width="18" height="18" stroke-opacity=".6" transform="rotate(45 123 13)"/><circle cx="123" cy="13" r="2.5" fill="#3ee6ff" stroke="none"/><path d="M138 13h12" stroke-opacity=".35"/></svg></div>
+  </div>`;
+  }
+  /** 集計：種別ごとの件数（大きな数字と比率の棒）、銘柄ごと・型ごとの件数（小さな棒） */
+  function ntSumPanel(list) {
+    const tot = Math.max(1, list.length);
+    const kinds = Object.keys(NKIND).map((k) => { const n = list.filter((x) => x.kind === k).length; return `<div class="nks ${NKIND[k][2]}" data-sum-kind="${k}"><span class="code">${NKIND[k][1]}</span><b>${NKIND[k][0]}</b><span class="nkn"><span class="mono">${n}</span><small>件</small></span><span class="nkb"><u style="width:${(n / tot * 100).toFixed(1)}%"></u></span></div>`; }).join('');
+    const bars = (pairs, key) => { const mx = Math.max(1, ...pairs.map((p) => p[2])); return pairs.map(([k, lab, n]) => `<div class="nbr" data-sum-${key}="${esc(k)}"><span class="nm" title="${esc(lab)}">${esc(lab)}</span><span class="nbt"><u class="a-gx" style="width:${(n / mx * 100).toFixed(1)}%"></u></span><b class="mono">${n}</b></div>`).join(''); };
+    const by = new Map();
+    list.forEach((n) => { const k = noteCode(n); const e = by.get(k) || [k, noteWho(n), 0]; e[2]++; by.set(k, e); });
+    const codes = [...by.values()].sort((a, b) => b[2] - a[2] || String(a[0]).localeCompare(String(b[0])));
+    const types = Object.keys(NTYPE).map((k) => [k, NTYPE[k], list.filter((n) => n.type === k).length]).filter((x) => x[2] > 0);
+    return panel('nsum', 'EDU-03 / SUMMARY', '集計', `<span class="jp">全${list.length}件</span>`, `<div class="pb"><div class="nsum"><div class="nks3">${kinds}</div><div class="nbs"><span class="code">BY STOCK / 銘柄ごと</span>${bars(codes, 'code')}</div><div class="nbs"><span class="code">BY TYPE / 型ごと</span>${bars(types, 'type')}</div></div></div>`);
+  }
+  /** 次回の確認（hansei の nextChecks）をチェックカードで */
+  function ntChecksPanel(list) {
+    const xs = list.filter((n) => n.kind === 'nextCheck');
+    const pm = `<span class="jp">${xs.length}件 ・ 次に買う前に確かめること</span>`;
+    if (!xs.length) return panel('nchecks', 'EDU-04 / CHECK', '次回の確認', pm, `<div class="pb"><div class="nodata sm" data-nodata="nchecks"><span class="nd">未実行</span><p class="why">次回の確認は反省型の分析で作られます</p><div class="cmdl"><em>&gt;</em>/kabu &lt;銘柄&gt; 反省 &lt;購入日&gt; &lt;購入価格&gt;<i class="cur"></i></div></div></div>`);
+    const cards = xs.map((n, i) => { const h = noteHref(n); return `<div class="ncc" data-ncheck="${i}"><div class="nch"><i class="cb" aria-hidden="true"></i><span class="n mono">${String(i + 1).padStart(2, '0')}</span><b>${esc(n.title || '確認すること')}</b></div>${n.text ? `<p>${richNums(n.text)}</p>` : ''}<span class="nwm">${h ? `<a href="${h}" data-note-link>${esc(noteWho(n))} ›</a>` : `<span>${esc(noteWho(n))}</span>`}<span class="mono">${esc(n.date || '')}</span></span></div>`; }).join('');
+    return panel('nchecks', 'EDU-04 / CHECK', '次回の確認', pm, `<div class="pb"><div class="ncg ncg-n">${cards}</div></div>`);
+  }
+  /** 答え合わせの一覧（review 全件。スパークラインつき） */
+  function ntReviewPanel(rvs) {
+    const pm = `<span class="jp">${rvs.length}件 ・ ${RV_NOTE}</span>`;
+    if (!rvs.length) return panel('nreview', 'EDU-05 / REVIEW', 'シナリオの答え合わせ', '', `<div class="pb"><div class="nodata sm" data-nodata="nreview"><span class="nd">未実行</span><p class="why">答え合わせは、クイック診断と市場の分析のシナリオから作られます</p><div class="cmdl"><em>&gt;</em>/kabu &lt;銘柄&gt;<i class="cur"></i></div></div></div>`);
+    const rows = rvs.map((rv, i) => {
+      const after = rvAfter(rv), pct = rvPct(rv);
+      const href = rv.kind === 'market' ? hrefMarket(rv.date) : hrefStock(rv.code, 'quick', rv.date);
+      const who = rv.kind === 'market' ? '<span class="mono">MKT</span> 市場（日経平均）' : `<span class="mono">${esc(rv.code || '')}</span> ${esc(rv.name || '')}`;
+      const vals = isNum(rv.base && rv.base.price) ? [rv.base.price, ...after.map((r) => r.c)] : after.map((r) => r.c);
+      const sp = after.length ? K.spark(vals, !isNum(pct) || pct >= 0) : '<span class="rvna">まだ値なし</span>';
+      return `<a class="rvr" href="${href}" data-rvrow="${i}" data-rv-kind="${esc(rv.kind)}" aria-label="${esc(rv.kind === 'market' ? '市場' : rv.name || rv.code)} ${esc(rv.date)} の答え合わせを開く">`
+        + `<span class="rvw">${who}</span><span class="rvd mono">${esc(rv.date || '')}</span>`
+        + `<span class="rvdy"><span class="mono">${fmt(rv.days || 0)}</span>営業日${rv.young ? '<em class="rv-young" data-young>まだ日が浅い</em>' : ''}</span>`
+        + `<span class="rvsp">${sp}</span>`
+        + `<span class="rvmv">${after.length ? `<span class="mono">${K.fmtP(rv.base.price)}</span><i>→</i><span class="mono">${K.fmtP(rv.latest.c)}</span><em class="rvpc ${isNum(pct) ? (pct > 0 ? 'up' : pct < 0 ? 'dn' : '') : ''}">${isNum(pct) ? fmtS(pct, 2) + '%' : '—'}</em>` : `<span class="mono">${K.fmtP(rv.base && rv.base.price)}</span><span class="rvna">→ 分析日より後の値なし</span>`}</span>`
+        + `<span class="rvnb">${after.length ? rvNearest(rv) : '<span class="rvna">—</span>'}</span><span class="rvgo">開く ›</span></a>`;
+    }).join('');
+    return panel('nreview', 'EDU-05 / REVIEW', 'シナリオの答え合わせ', pm, `<div class="pb"><div class="rvh"><span>対象</span><span>分析日</span><span>経過</span><span>その後の終値</span><span>基準 → 直近</span><span>いちばん近い目安</span><span></span></div><div class="rvl">${rows}</div></div>`);
+  }
+  function ntListPanel(list) {
+    const chips = (group, pairs) => `<div class="ncs" role="group" aria-label="${group[1]}で絞り込む"><span class="ncl">${group[1]}</span><button type="button" class="gcat" data-nt-${group[0]}="all" aria-pressed="true">すべて<b>${list.length}</b></button>${pairs.map(([k, lab, n]) => `<button type="button" class="gcat" data-nt-${group[0]}="${esc(k)}" aria-pressed="false">${esc(lab)}<b>${n}</b></button>`).join('')}</div>`;
+    const kinds = Object.keys(NKIND).map((k) => [k, NKIND[k][0], list.filter((n) => n.kind === k).length]).filter((x) => x[2]);
+    const types = Object.keys(NTYPE).map((k) => [k, NTYPE[k], list.filter((n) => n.type === k).length]).filter((x) => x[2]);
+    const by = new Map();
+    list.forEach((n) => { const k = noteCode(n); const e = by.get(k) || [k, n.code ? String(n.code) + ' ' + (n.name || '') : noteWho(n), 0]; e[2]++; by.set(k, e); });
+    const codes = [...by.values()].sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+    const items = list.map((n, i) => {
+      const h = noteHref(n), K3 = NKIND[n.kind];
+      return `<article class="ni ${K3[2]}" data-note="${i}" data-kind="${n.kind}" data-type="${esc(n.type || '')}" data-code="${esc(noteCode(n))}">`
+        + `<div class="nih"><span class="nk ${K3[2]}">${K3[0]}</span>${NTYPE[n.type] ? `<span class="ntp">${NTYPE[n.type]}</span>` : ''}${h ? `<a class="nwho" href="${h}" data-note-link>${esc(noteWho(n))} ›</a>` : `<span class="nwho">${esc(noteWho(n))}</span>`}<span class="ndt mono">${esc(n.date || '')}</span></div>`
+        + `${n.title ? `<b class="ntt">${esc(n.title)}</b>` : ''}<p>${richNums(n.text || '')}</p></article>`;
+    }).join('');
+    return panel('nlist', 'EDU-06 / NOTES', 'ノートの一覧', `<span class="jp" data-nt-count>${list.length}件</span><span class="jp">新しい順</span>`,
+      `<div class="pb"><div class="ntool">${chips(['kind', '種別'], kinds)}${chips(['type', '型'], types)}${chips(['code', '銘柄'], codes)}</div><div class="nl" data-nt-list>${items}</div><div class="g0" data-nt-none hidden><span class="nd0">該当なし</span><p>条件に合うノートはありません。絞り込みを「すべて」に戻してください。</p></div></div>`);
+  }
+  function renderNotes() {
+    const D = window.KABU, list = noteList();
+    const rvs = arr(D.review).filter((r) => r && typeof r === 'object' && (r.kind === 'stock' || r.kind === 'market'));
+    S.ctx = null; S.ckSel = null; S.ckItems = []; S.lvPin = null;
+    let body;
+    if (!list.length && !rvs.length) {
+      body = emptyHtml({ code: 'EDU-03 / NOTES', title: '気づきノート', status: '未実行', h3: '気づきノートはまだ空です', p: '分析を実行すると、その分析の気づき・教訓・次回の確認点がここに日付の新しい順で並びます。クイック診断と市場の分析は、シナリオの答え合わせにも使われます。', cmd: '/kabu', arg: '<銘柄名 or コード> [型]' });
+    } else {
+      const listP = list.length ? ntListPanel(list) : panel('nlist', 'EDU-06 / NOTES', 'ノートの一覧', '', `<div class="pb"><div class="nodata sm" data-nodata="nlist"><span class="nd">未実行</span><p class="why">気づき・教訓のある分析がまだありません</p></div></div>`);
+      body = `<div id="nview" class="ev">${list.length ? ntSumPanel(list) : ''}${ntChecksPanel(list)}${ntReviewPanel(rvs)}${listP}</div>`;
+    }
+    const tabs = edTabs([['#/notes', 'E-03', '気づきノート', true]], `<span class="lgd"><i style="background:var(--cy)"></i>気づき</span><span class="lgd"><i style="background:#cfdde6"></i>教訓</span><span class="lgd"><i style="background:var(--amber)"></i>次回の確認</span>`);
+    $('#main').innerHTML = `<section class="view" id="v-notes" aria-label="気づきノート" data-view="notes">${ntHeader(list, rvs)}${tabs}${body}${footHtml([], [], '気づき・教訓・確認点＝各分析（元の分析へのリンク）<span class="sep">・</span>答え合わせの株価＝Yahoo!ファイナンス')}</section>`;
+    ntApply();
+    return { cmd: '', view: 'NOTES 気づきノート', date: localDate(D.generatedAt) };
+  }
+  function ntApply() {
+    const L = $('[data-nt-list]');
+    if (!L) return;
+    const T = S.nt;
+    let n = 0;
+    const items = $$('.ni', L);
+    items.forEach((el) => {
+      const ok = (T.kind === 'all' || el.dataset.kind === T.kind) && (T.type === 'all' || el.dataset.type === T.type) && (T.code === 'all' || el.dataset.code === T.code);
+      el.hidden = !ok;
+      if (ok) n++;
+    });
+    ['kind', 'type', 'code'].forEach((g) => $$(`[data-nt-${g}]`).forEach((c) => c.setAttribute('aria-pressed', c.getAttribute(`data-nt-${g}`) === T[g] ? 'true' : 'false')));
+    const cnt = $('[data-nt-count]');
+    if (cnt) cnt.textContent = n === items.length ? `${items.length}件` : `${n}件 ／ 全${items.length}件`;
+    const none = $('[data-nt-none]');
+    if (none) none.hidden = n > 0;
+  }
+  function ntSet(o) { Object.assign(S.nt, o); ntApply(); }
 
   function render(route) {
     S.route = route;
     if (!K) return;
     if (!dataOk()) { renderBoot(); return; }
-    const info = route.view === 'stock' ? renderStock(route) : route.view === 'market' ? renderMarket(route) : route.view === 'glossary' || route.view === 'notes' ? renderPending(route) : renderHome();
+    const info = route.view === 'stock' ? renderStock(route) : route.view === 'market' ? renderMarket(route) : route.view === 'glossary' ? renderGlossary(route) : route.view === 'notes' ? renderNotes() : renderHome();
     chrome(route, info);
     drawAll();
     animate(route.view === 'stock' ? 'stock:' + route.code : route.view);
@@ -1748,7 +2041,17 @@
     if (lr) lvSelect(lr.dataset.lv);
     const rg = t.closest('[data-mk-range]');
     if (rg) mkSetRange(rg.dataset.mkRange);
+    // 用語帳：語・分類・かくす切替
+    const gw = t.closest('[data-gw]');
+    if (gw) { glPress(gw.closest('.gi').dataset.term); return; }
+    const gc = t.closest('[data-gl-cat]');
+    if (gc) { if (gc.getAttribute('aria-disabled') !== 'true') glSet({ cat: gc.dataset.glCat }); return; }
+    if (t.closest('[data-gl-hide]')) { glSet({ hide: !S.gl.hide }); return; }
+    // 気づきノート：絞り込み
+    const nf = t.closest('[data-nt-kind], [data-nt-type], [data-nt-code]');
+    if (nf) { const g = ['kind', 'type', 'code'].find((k) => nf.hasAttribute('data-nt-' + k)); ntSet({ [g]: nf.getAttribute('data-nt-' + g) }); }
   });
+  document.addEventListener('input', (e) => { if (e.target && e.target.matches && e.target.matches('[data-gl-q]')) { S.gl.q = e.target.value; S.gl.reveal = null; glApply(); } });
   /** 市場の折れ線の期間（3か月・1年・2年）を切り替えて、その図だけ描き直す */
   function mkSetRange(k) {
     if (!K.RANGES[k]) return;
@@ -1778,6 +2081,13 @@
       if (j >= 0 && j < cells.length) { e.preventDefault(); cells[j].focus(); ckSelect(cells[j].dataset.ck, true); }
       return;
     }
+    // 用語帳：↑↓で語を移る（かくす中は選んだ語の定義だけ見せる）
+    const gw = e.target.closest && e.target.closest('[data-gw]');
+    if (gw && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      const bs = $$('.glst .gi:not([hidden]) [data-gw]'), i = bs.indexOf(gw), j = i + (e.key === 'ArrowDown' ? 1 : -1);
+      if (j >= 0 && j < bs.length) { e.preventDefault(); bs[j].focus(); if (S.gl.hide) { S.gl.reveal = bs[j].closest('.gi').dataset.term; glApply(); } }
+      return;
+    }
     if (e.key === 'F1') { e.preventDefault(); location.hash = '#/'; }
     if (e.key === 'F2') { const c = recentCode(); if (c) { e.preventDefault(); location.hash = hrefStock(c); } }
     const g = GNAV.find((x) => x.fk === e.key && x.key !== 'home');
@@ -1801,8 +2111,9 @@
     lvSelect, lvState: () => S.lvPin, rulesOf, PLAN_AXIS, PLAN_GAP,
     setTesting: (b) => { S.testing = !!b; if (b) { clearTimeout(S.animTimer); document.body.classList.remove('anim'); } },
     mkSetRange, mkState: () => S.mkRange,
-    snapshot: () => ({ recent: S.recent, seen: { ...S.seen }, mkRange: S.mkRange }),
-    restore: (s) => { if (!s) return; S.recent = s.recent; S.seen = { ...s.seen }; S.mkRange = s.mkRange || '1y'; try { if (s.recent) window.localStorage.setItem('kabu.recent', s.recent); else window.localStorage.removeItem('kabu.recent'); } catch (e) { /* 無視 */ } },
+    glSet, glPress, glState: () => ({ ...S.gl }), ntSet, ntState: () => ({ ...S.nt }), GL_CATS, reviewOf,
+    snapshot: () => ({ recent: S.recent, seen: { ...S.seen }, mkRange: S.mkRange, gl: { ...S.gl }, nt: { ...S.nt } }),
+    restore: (s) => { if (!s) return; S.recent = s.recent; S.seen = { ...s.seen }; S.mkRange = s.mkRange || '1y'; S.gl = { ...GL0(), ...(s.gl || {}) }; S.nt = { ...NT0(), ...(s.nt || {}) }; try { if (s.recent) window.localStorage.setItem('kabu.recent', s.recent); else window.localStorage.removeItem('kabu.recent'); } catch (e) { /* 無視 */ } },
   };
 
   render(parseHash(location.hash));
