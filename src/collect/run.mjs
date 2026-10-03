@@ -1,6 +1,6 @@
-// 入口: node collect/run.mjs <code> [--type quick|chart|kessan] [--if-stale]
+// 入口: node collect/run.mjs <code> [--type quick|chart|news|hansei|kessan] [--if-stale]
 // quick/chart: 株価(Yahoo)と株探の基本ページを取得し、指標を計算して prices.json・profile.json・digest.md を書く。
-//   （chart 型は quick と同じ収集・同じ digest を使う）
+//   （chart・news・hansei 型は quick と同じ収集・同じ digest を使う。hansei の数字は tools/entry-stats.mjs で補う）
 // kessan: 株探の決算ページだけを取得し finance.json・digest-kessan.md を書く（同じ実行で quick の収集はしない）。
 // --if-stale: その型の digest が最新（直近の大引け以降に作成、または作成から3時間以内）なら収集を省く。
 import { join } from 'node:path';
@@ -13,7 +13,7 @@ import { fetchFinance, financePath } from './kabutan-finance.mjs';
 import { buildKessanDigest } from './lib/digest-kessan.mjs';
 import { DATA_DIR, writeJson, writeRowsJson, writeText, checkCode, fail, isDigestFresh } from './lib/util.mjs';
 
-const TYPES = ['quick', 'chart', 'kessan'];
+const TYPES = ['quick', 'chart', 'news', 'hansei', 'kessan'];
 
 function parseArgs(argv) {
   const args = { code: null, type: 'quick', ifStale: false };
@@ -29,7 +29,7 @@ const { code, type, ifStale } = parseArgs(process.argv.slice(2));
 try {
   checkCode(code);
 } catch (e) {
-  fail(`${e.message}\n使い方: node collect/run.mjs <code> [--type quick|chart|kessan] [--if-stale]`);
+  fail(`${e.message}\n使い方: node collect/run.mjs <code> [--type quick|chart|news|hansei|kessan] [--if-stale]`);
 }
 if (!TYPES.includes(type)) fail(`未対応の型です: ${type}（対応: ${TYPES.join(', ')}）`);
 
