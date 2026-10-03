@@ -1,19 +1,35 @@
-# KABU LAB
+# KABU LAB — はじめに
 
-日本株の「銘柄分析 兼 勉強ツール」。仕様は `DESIGN.md`（契約）。運用費$0・依存パッケージなし（Node 24 標準＋pypdf）。
+日本株の「銘柄分析 兼 勉強ノート」です。AIは売買の正解を当てる道具ではなく、複数のシナリオと根拠を見せて相場観を養うための道具として使います。
+
+## 普段やること（この2つだけ）
+
+1. **結果を見る** … デスクトップの **「KABU LAB.html」** をダブルクリック。分析済みの銘柄一覧と、銘柄ごとの分析が開きます。
+2. **分析する** … Claude Code で次のように打ちます。終わると「KABU LAB.html」が自動で更新され、その銘柄のページが開きます。
 
 ```
-node collect/run.mjs 6501 [--type quick|chart] [--if-stale]  # 株価(Yahoo)・株探を収集し指標計算 → prices.json, profile.json, digest.md
-node collect/run.mjs 6501 --type kessan [--if-stale]         # 株探の決算ページ → finance.json, digest-kessan.md（株価は取らない）
-node collect/market.mjs                    # 指数・為替・金利・原油 → data/market/<日付>-raw.json
-node tools/fetch-doc.mjs 6501 <PDFのURL> --name 2027-1Q-tanshin   # PDF → raw/docs/<名前>.pdf/.txt、ページ数・文字数・目次
-node tools/doc-slice.mjs <txt> --pages 1-2,8 | --grep 調整後営業利益  # 必要なページ・行だけ（20KBまで）
-node tools/validate.mjs <分析JSON>          # type（quick/chart/kessan）でスキーマを選び、意味検証（禁止語・順序など）。NG は exit 1
-node build.mjs                             # data/ → app/data.js（window.KABU）。分析ファイル名の型と中身の type が違えば exit 1
-python3 tools/pdf2text.py <pdf> <out.txt>  # PDF → ページ区切り付きテキスト（fetch-doc が内部で使う）
-npm test                                   # = node --test tests/
+/kabu 日立              クイック診断（4点診断・チャート・業績・シナリオ・チェックリスト）
+/kabu 伊藤忠 チャート    サポート／レジスタンス・過熱・チェックリストの理由・売買タイミングの考え方
+/kabu 日立 決算          決算短信の解説。「決算 3点」で有報と中期経営計画も読む
+/kabu 日立 伊藤忠 三菱商事   複数まとめて（最後に1回だけ画面を更新）
 ```
 
-収集は1回の実行で1サイト最大4リクエスト・間隔1秒以上。生HTMLとPDFは `data/stocks/<code>/raw/`（コミットしない）。
-決算短信PDFのURLは `digest-kessan.md` の「決算短信PDF」節に載る（株探経由の tdnet-pdf.kabutan.jp）。
-`window.KABU.stocks[code]` の `indicators`（指標）と `finance`（決算）の形は `schemas/indicators.md` を参照。
+ニュース・反省・市場・用語の型は順次追加します。
+
+## このフォルダの中身
+
+| 名前 | 中身 | 触る？ |
+|---|---|---|
+| `KABU LAB.html`（デスクトップ） | 結果を見る画面。分析のたびに作り直されます | 開くだけ |
+| `data/` | 分析データの本体。銘柄ごとの分析結果・会社メモ・用語帳 | 消さない |
+| `src/` | プログラム一式（収集・検証・画面） | 触らなくてよい |
+| `archive/` | 制作時のデザインモックとスクリーンショット | 触らなくてよい |
+| `DESIGN.md` | 設計書（契約）。仕様を変えるときはここを先に直す | 読むだけ |
+
+## 困ったとき
+
+- **画面が古い／開かない** … ターミナルで `cd ~/Desktop/kabu-lab/src && node build.mjs` を実行すると「KABU LAB.html」を作り直します。
+- **分析に失敗した** … 銘柄コードの誤りか、株探・Yahoo!ファイナンスへの接続失敗がほとんどです。少し待って `/kabu` をやり直してください。
+- 開発者向けのコマンド一覧は `src/README.md` にあります。
+
+本ツールは学習用の分析であり、売買の推奨ではありません。数字は株探・Yahoo!ファイナンス・各社IRの一次情報で確認してください。
