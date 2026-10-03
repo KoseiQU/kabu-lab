@@ -1174,3 +1174,22 @@ a.rl,a.tab,a.k{text-decoration:none}
 /* 画面幅が対応下限（1280px）より狭いときは、崩して詰めずに横スクロールで全体を見せる（PC専用・1280〜1920px 対応） */
 html { overflow-x: auto; }
 body { min-width: 1280px; }
+
+/* =====================================================================
+   P3b：ヘッダの画面切替（ホーム・市場・用語帳・気づきノート）・ホームから各画面へのリンク
+   ===================================================================== */
+.gnav{flex:none; display:flex; align-items:stretch; border-right:1px solid var(--line)}
+.gn{position:relative; display:flex; align-items:center; gap:6px; padding:0 12px; color:var(--tx2); font-size:12.5px; text-decoration:none; white-space:nowrap}
+.gn svg{width:14px; height:14px; flex:none}
+.gn:hover{color:var(--tx); background:rgba(62,230,255,.06)}
+.gn.on{color:var(--cy); font-weight:700; background:linear-gradient(180deg,rgba(62,230,255,.2),rgba(62,230,255,.04))}
+.gn.on::after{content:""; position:absolute; left:0; right:0; bottom:0; height:2px; background:var(--cy); box-shadow:var(--glow)}
+.gn:focus-visible{outline:1px solid var(--cy); outline-offset:-2px}
+.rail .rl span{font-size:12px}
+.plink{font:500 12px/1 var(--jp); color:var(--cy2); text-decoration:none; border:1px solid var(--cyl); padding:3px 7px; background:rgba(62,230,255,.06); white-space:nowrap}
+.plink:hover,.plink:focus-visible{color:var(--wh); border-color:var(--cy); background:rgba(62,230,255,.14); outline:none}
+.mi .mcmd{display:block; margin-top:2px; font:500 12px/1.4 var(--mono); color:var(--cy2); word-break:keep-all; overflow-wrap:break-word}
+a.mi{text-decoration:none; color:inherit}
+a.mi.go:hover,a.mi.go:focus-visible{background:rgba(62,230,255,.07); outline:none}
+.mi .mgo{margin-left:auto; font:500 12px/1 var(--jp); font-style:normal; color:var(--cy)}
+@media (max-width:1679px){ .meta .u-mid,.cmdbox kbd{display:none} }

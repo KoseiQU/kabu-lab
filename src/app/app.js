@@ -25,9 +25,11 @@
     ['i-chart', 'チャート', '形と節目を確認', '中', 3, '/kabu <銘柄> チャート'],
     ['i-news', 'ニュース', '材料の影響を整理', '中', 3, '/kabu <銘柄> ニュース <出来事>'],
     ['i-hansei', '反省', '過去の読みを検証', '軽', 2, '/kabu <銘柄> 反省 <購入日> <購入価格>'],
-    ['i-market', '市場', '地合いとリスク', '中', 3, '/kabu 市場'],
-    ['i-yogo', '用語', '言葉を1つ覚える', '極軽', 1, '/kabu 用語 <言葉>'],
+    ['i-market', '市場', '地合いとリスク', '中', 3, '/kabu 市場', ['#/market', '市場ページ']],
+    ['i-yogo', '用語', '言葉を1つ覚える', '極軽', 1, '/kabu 用語 <言葉か質問>', ['#/glossary', '用語帳']],
   ];
+  /** パネル見出しの右端に置く「別の画面へ」リンク */
+  const goLink = (href, label, key) => `<a class="plink" href="${href}" data-go="${esc(key)}">${esc(label)} ›</a>`;
   const DIAG = {
     quality: { icon: 'i-q', label: '会社の質', l: '低', r: '高' },
     value: { icon: 'i-price', label: '値段', l: '安い', r: '高い' },
@@ -137,8 +139,20 @@
   function parseHash(h) {
     const p = String(h || '').replace(/^#\/?/, '').split('/').filter(Boolean).map((x) => { try { return decodeURIComponent(x); } catch (e) { return x; } });
     if (p[0] === 'stock' && p[1]) return { view: 'stock', code: p[1], type: p[2] || null, date: p[3] || null };
+    if (p[0] === 'market') return { view: 'market', date: p[1] || null };
+    if (p[0] === 'glossary') return { view: 'glossary', term: p[1] || null };
+    if (p[0] === 'notes') return { view: 'notes' };
     return { view: 'home' };
   }
+  const hrefMarket = (date) => '#/market' + (date ? '/' + date : '');
+  /** ヘッダの画面切替（ホーム・市場・用語帳・気づきノート）。銘柄ページはホームの下にある扱い */
+  const GNAV = [
+    { key: 'home', href: '#/', icon: 'i-home', label: 'ホーム', fk: 'F1' },
+    { key: 'market', href: '#/market', icon: 'i-market', label: '市場', fk: 'F7' },
+    { key: 'glossary', href: '#/glossary', icon: 'i-yogo', label: '用語帳', fk: 'F8' },
+    { key: 'notes', href: '#/notes', icon: 'i-note', label: '気づきノート', fk: 'F9' },
+  ];
+  const navKey = (route) => (route.view === 'stock' ? 'home' : route.view);
   const hrefStock = (code, type, date) => '#/stock/' + encodeURIComponent(code) + (type ? '/' + type : '') + (date ? '/' + date : '');
 
   function resolve(route) {
@@ -166,24 +180,32 @@
     const D = window.KABU;
     const rc = route.view === 'stock' && D.stocks[route.code] ? route.code : recentCode();
     const onStock = route.view === 'stock';
+    const nk = navKey(route);
+    const cur = (on) => (on ? ' on" aria-current="page' : '');
+    const railX = [['market', 'i-market', 'MKT', '市場ページ'], ['glossary', 'i-yogo', 'TERM', '用語帳'], ['notes', 'i-note', 'NOTE', '気づきノート']];
     $('#rail').innerHTML = LOGO
-      + `<a class="rl${onStock ? '' : ' on'}" href="#/" aria-label="ホーム（銘柄ライブラリ）"><svg><use href="#i-home"/></svg><span>HOME</span></a>`
-      + (rc ? `<a class="rl${onStock ? ' on' : ''}" href="${hrefStock(rc)}" aria-label="${esc((D.stocks[rc] && D.stocks[rc].name) || rc)} ${esc(rc)}"><svg><use href="#i-stock"/></svg><span>${esc(rc)}</span></a>` : '')
-      + '<div class="sep"></div><div class="foot"><i></i>SYS<br>OK</div>';
-    const cmd = onStock
+      + `<a class="rl${cur(route.view === 'home')}" href="#/" aria-label="ホーム（銘柄ライブラリ）" data-nav="home"><svg><use href="#i-home"/></svg><span>HOME</span></a>`
+      + (rc ? `<a class="rl${cur(onStock)}" href="${hrefStock(rc)}" aria-label="${esc((D.stocks[rc] && D.stocks[rc].name) || rc)} ${esc(rc)}" data-nav="stock"><svg><use href="#i-stock"/></svg><span>${esc(rc)}</span></a>` : '')
+      + '<div class="sep"></div>'
+      + railX.map(([k, ic, lab, aria]) => `<a class="rl${cur(nk === k)}" href="${GNAV.find((g) => g.key === k).href}" aria-label="${aria}" data-nav="${k}"><svg><use href="#${ic}"/></svg><span>${lab}</span></a>`).join('')
+      + '<div class="foot"><i></i>SYS<br>OK</div>';
+    const cmd = info.cmd
       ? `<span>${esc(info.cmd)}<i class="cur"></i></span>`
       : '<span><i class="cur"></i><span class="hint">/kabu &lt;銘柄名 or コード&gt; [型]</span></span>';
-    $('#top').innerHTML = '<div class="brand"><b>KABU LAB</b><span>銘柄分析 × 学習ノート</span></div>'
+    const gnav = `<nav class="gnav" aria-label="画面の切替">${GNAV.map((g) => `<a class="gn${cur(nk === g.key)}" href="${g.href}" data-gnav="${g.key}"><svg aria-hidden="true"><use href="#${g.icon}"/></svg>${g.label}</a>`).join('')}</nav>`;
+    $('#top').innerHTML = '<div class="brand"><b>KABU LAB</b><span>銘柄分析 × 学習ノート</span></div>' + gnav
       + `<div class="cmdw"><div class="cmdbox" aria-label="コマンド（表示のみ）"><span class="lbl">CMD</span><span class="pr">&gt;</span>${cmd}<kbd>ENTER</kbd></div></div>`
-      + `<div class="meta"><span>VIEW <b>${esc(info.view)}</b></span><span>DATE <b>${esc(info.date)}</b></span><span>MODE <b>LEARN</b></span></div>`;
+      + `<div class="meta"><span>VIEW <b>${esc(info.view)}</b></span><span>DATE <b>${esc(info.date)}</b></span><span class="u-mid">MODE <b>LEARN</b></span></div>`;
     // 下部：ティッカー（市場データがある時だけ）＋ファンクションキー
     const tape = tapeHtml();
-    const offs = [['F3', '決算'], ['F4', 'チャート'], ['F5', 'ニュース'], ['F6', '反省'], ['F7', '市場'], ['F8', '用語']];
+    const types = [['F3', 'kessan', '決算'], ['F4', 'chart', 'チャート'], ['F5', 'news', 'ニュース'], ['F6', 'hansei', '反省']];
+    const stockOn = onStock && !types.some(([, ty]) => ty === route.type);
     $('#bot').innerHTML = tape
       + '<nav class="fk" aria-label="ビュー切替">'
-      + `<a class="k${onStock ? '' : ' on'}" href="#/"><i>F1</i>HOME 銘柄ライブラリ</a>`
-      + (rc ? `<a class="k${onStock && !['kessan', 'chart'].includes(route.type) ? ' on' : ''}" href="${hrefStock(rc)}"><i>F2</i>STOCK ${esc(rc)}</a>` : '<span class="k off"><i>F2</i>STOCK —</span>')
-      + offs.map(([k, l]) => { const ty = { F3: 'kessan', F4: 'chart' }[k]; const on = onStock && route.type === ty; return ty && rc ? `<a class="k${on ? ' on' : ''}" href="${hrefStock(rc, ty)}"><i>${k}</i>${l}</a>` : `<span class="k off"><i>${k}</i>${l}</span>`; }).join('')
+      + `<a class="k${route.view === 'home' ? ' on' : ''}" href="#/"><i>F1</i>HOME 銘柄ライブラリ</a>`
+      + (rc ? `<a class="k${stockOn ? ' on' : ''}" href="${hrefStock(rc)}"><i>F2</i>STOCK ${esc(rc)}</a>` : '<span class="k off"><i>F2</i>STOCK —</span>')
+      + types.map(([k, ty, l]) => (rc ? `<a class="k${onStock && route.type === ty ? ' on' : ''}" href="${hrefStock(rc, ty)}"><i>${k}</i>${l}</a>` : `<span class="k off"><i>${k}</i>${l}</span>`)).join('')
+      + GNAV.slice(1).map((g) => `<a class="k${nk === g.key ? ' on' : ''}" href="${g.href}"><i>${g.fk}</i>${g.label}</a>`).join('')
       + '<span class="st"><b>学習用 ・ 売買推奨なし</b><span>CLOSE BASIS</span></span></nav>';
     document.body.style.setProperty('--botH', tape ? '41px' : '23px');
   }
@@ -230,7 +252,7 @@
   function marketPanel() {
     const D = window.KABU, raw = D.market && D.market.raw;
     const items = raw && raw.items && typeof raw.items === 'object' ? raw.items : null;
-    const head = `<div class="ph"><span class="code">MKT-01 / MARKET</span><h2>市場パネル</h2><div class="pm"><span>${esc(raw && raw.date ? raw.date : '')}</span></div></div>`;
+    const head = `<div class="ph"><span class="code">MKT-01 / MARKET</span><h2>市場パネル</h2><div class="pm"><span>${esc(raw && raw.date ? raw.date : '')}</span>${goLink('#/market', '市場ページ', 'market')}</div></div>`;
     if (!items || !Object.keys(items).length) {
       return `<section class="panel" data-sec="market"><div class="pi">${head}<div class="nodata" data-standby="market"><span class="nd">未実行</span><p class="why">市場データはまだ集めていません</p><div class="cmdl"><em>&gt;</em>/kabu 市場<i class="cur"></i></div></div></div></section>`;
     }
@@ -261,7 +283,7 @@
   function geoPanel() {
     const D = window.KABU, an = D.market && D.market.analysis;
     const list = an && an.sections && Array.isArray(an.sections.geo) ? an.sections.geo.filter((g) => g && (g.name || g.title)) : [];
-    const head = '<div class="ph"><span class="code">MKT-02 / GEO-RISK</span><h2>地政学リスク</h2><div class="pm"><span class="jp">影響度 5段階</span></div></div>';
+    const head = `<div class="ph"><span class="code">MKT-02 / GEO-RISK</span><h2>地政学リスク</h2><div class="pm"><span class="jp">影響度 5段階</span>${goLink('#/market', '市場ページ', 'geo')}</div></div>`;
     if (!list.length) {
       return `<section class="panel" data-sec="geo"><div class="pi">${head}<div class="nodata" data-standby="geo"><span class="nd">未実行</span><p class="why">地政学リスクのランキングは市場分析で作ります</p><div class="cmdl"><em>&gt;</em>/kabu 市場<i class="cur"></i></div></div></div></section>`;
     }
@@ -290,7 +312,7 @@
   }
   function termCard() {
     const D = window.KABU, g = arr(D.glossary).filter((x) => x && x.term);
-    const head = '<div class="ph"><span class="code">EDU-01 / TERM</span><h2>今日の用語カード</h2></div>';
+    const head = `<div class="ph"><span class="code">EDU-01 / TERM</span><h2>今日の用語カード</h2><div class="pm">${goLink('#/glossary', '用語帳', 'term')}</div></div>`;
     if (!g.length) return `<section class="panel" data-sec="term"><div class="pi">${head}<div class="nodata sm" data-standby="term"><span class="nd">用語なし</span><p class="why">分析を実行すると、出てきた用語がここに日替わりで並びます</p></div></div></section>`;
     const now = new Date();
     const day = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 864e5);
@@ -308,7 +330,10 @@
     const stocks = Object.values(D.stocks).filter((s) => s && typeof s === 'object');
     const analyzed = stocks.filter((s) => arr(s.analyses).length);
     const lastRun = stocks.reduce((m, s) => { const d = arr(s.analyses)[0] && s.analyses[0].date; return d && d > m ? d : m; }, '');
-    const menu = MENU.map((m, i) => `<div class="mi" title="${esc(m[5])}"><div class="ic"><svg><use href="#${m[0]}"/></svg><i>M-${String(i + 1).padStart(2, '0')}</i></div><b>${m[1]}</b><p>${m[2]}</p><div class="wt"><span>${[1, 2, 3, 4].map((k) => `<u class="${k <= m[4] ? 'on' : ''}"></u>`).join('')}</span>${m[3]}</div></div>`).join('');
+    const menu = MENU.map((m, i) => {
+      const inner = `<div class="ic"><svg><use href="#${m[0]}"/></svg><i>M-${String(i + 1).padStart(2, '0')}</i></div><b>${m[1]}</b><p>${m[2]}</p><code class="mcmd">${esc(m[5])}</code><div class="wt"><span>${[1, 2, 3, 4].map((k) => `<u class="${k <= m[4] ? 'on' : ''}"></u>`).join('')}</span>${m[3]}${m[6] ? '<em class="mgo">開く ›</em>' : ''}</div>`;
+      return m[6] ? `<a class="mi go" href="${m[6][0]}" data-menu="${m[0]}" aria-label="${esc(m[1])}：${esc(m[6][1])}を開く（コマンド ${esc(m[5])}）">${inner}</a>` : `<div class="mi" data-menu="${m[0]}">${inner}</div>`;
+    }).join('');
     const src = D.market && D.market.raw && D.market.raw.source;
     $('#main').innerHTML = `<section class="view" id="v-home" aria-label="ホーム（銘柄ライブラリ）">
   <div class="h-strip">
@@ -1057,6 +1082,15 @@
   }
 
   /* =====================================================================
+     市場ページ（#/market、#/market/<date>）
+     ===================================================================== */
+  function renderMarket(route) {
+    const D = window.KABU;
+    $('#main').innerHTML = `<section class="view" id="v-market" aria-label="市場ページ" data-view="market">${emptyHtml({ code: 'MKT-00 / MARKET', title: '市場', status: '準備中', mod: 'MODULE PENDING', h3: '市場ページは準備中です', p: '', cmd: '/kabu 市場' })}</section>`;
+    return { cmd: '/kabu 市場', view: 'MARKET 市場', date: localDate(D.generatedAt) };
+  }
+
+  /* =====================================================================
      図の描画（寸法を測って charts.js に渡す）
      ===================================================================== */
   const DRAW = {
@@ -1178,14 +1212,25 @@
     </div></section></div>`;
   }
 
+  /** 用語帳・気づきノート（中身は P3c）。ルートと「準備中」の枠だけ */
+  function renderPending(route) {
+    const D = window.KABU;
+    const g = arr(D.glossary).filter((x) => x && x.term), n = arr(D.notes).filter((x) => x && x.text);
+    const o = route.view === 'glossary'
+      ? { code: 'EDU-02 / GLOSSARY', title: '用語帳', h3: '用語帳は準備中です', p: `全分析の用語（いま ${g.length}語）を1つの一覧にして、検索・分類・暗記用の「定義をかくす」切替をここに並べます。`, view: 'GLOSSARY 用語帳' }
+      : { code: 'EDU-03 / NOTES', title: '気づきノート', h3: '気づきノートは準備中です', p: `全分析の気づき・教訓・次回の確認点（いま ${n.length}件）を日付の新しい順に並べ、型と銘柄で絞り込めるようにします。`, view: 'NOTES 気づきノート' };
+    $('#main').innerHTML = `<section class="view" id="v-${route.view}" aria-label="${o.title}" data-view="${route.view}">${emptyHtml({ code: o.code, title: o.title, status: '準備中', mod: 'MODULE PENDING', h3: o.h3, p: o.p, note: '今日の用語はホームの「今日の用語カード」で見られます。' })}</section>`;
+    return { cmd: '', view: o.view, date: localDate(D.generatedAt) };
+  }
+
   function render(route) {
     S.route = route;
     if (!K) return;
     if (!dataOk()) { renderBoot(); return; }
-    const info = route.view === 'stock' ? renderStock(route) : renderHome();
+    const info = route.view === 'stock' ? renderStock(route) : route.view === 'market' ? renderMarket(route) : route.view === 'glossary' || route.view === 'notes' ? renderPending(route) : renderHome();
     chrome(route, info);
     drawAll();
-    animate(route.view === 'stock' ? 'stock:' + route.code : 'home');
+    animate(route.view === 'stock' ? 'stock:' + route.code : route.view);
     if (!S.testing) window.scrollTo(0, 0);
   }
 
@@ -1237,6 +1282,8 @@
     }
     if (e.key === 'F1') { e.preventDefault(); location.hash = '#/'; }
     if (e.key === 'F2') { const c = recentCode(); if (c) { e.preventDefault(); location.hash = hrefStock(c); } }
+    const g = GNAV.find((x) => x.fk === e.key && x.key !== 'home');
+    if (g) { e.preventDefault(); location.hash = g.href; }
   });
   let rt = 0;
   window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { document.body.classList.remove('anim'); if (dataOk()) drawAll(); }, 150); });
