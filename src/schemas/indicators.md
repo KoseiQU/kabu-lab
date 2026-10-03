@@ -50,3 +50,54 @@ stocks[code] = { code, name, profile, prices, indicators, finance, analyses }
 | `cashflow` | `[{period, fcf, operating, investing, financing, cash, cashRatio}]`（通期のみ） |
 | `docs` | `[{date, url, pdf}]`（`url`=株探の閲覧ページ、`pdf`=PDF本体） |
 | `source` `fetchedAt` `missing` `units` | 出典・取得時刻・取れなかった項目・単位 |
+
+# P3a で window.KABU に足したキー（画面は再計算しない）
+
+既存のキーの形は変えていない（`market.raw` `market.analysis` `glossary[].term/def/first*` `notes[].date/code/name/type/text` はそのまま）。
+
+## market（`data/market/`）
+
+```
+market = { raw, analysis, analyses, series }
+```
+
+| キー | 形 |
+|---|---|
+| `raw` | 最新の `<日付>-raw.json`（6指標の直近値と前日比。従来どおり） |
+| `analysis` | 最新の市場型の分析（= `analyses[0]`。無ければ null） |
+| `analyses` | 市場型の分析 `<最終取引日>.json` の全件・日付降順（`_file` つき）。日付の切替（`#/market/<date>`）用。無ければ `[]` |
+| `series` | `series.json` そのまま。無ければ null。`{generatedAt, source:{title,url}, missing:[…], series:{"^N225"\|"JPY=X"\|"^TNX": {key:"nikkei225"\|"usdjpy"\|"us10y", name, unit:"円"\|"%", rows:[{d, c}]}}}`。日足の終値（約2年、日付は日本時間、昇順） |
+
+## review（シナリオの答え合わせ、DESIGN.md §5.8）
+
+quick の `scenarios` と market の `outlook` ごとに1件。日付降順の配列。
+
+```
+{ kind: "stock"|"market", code (市場は null), name, type: "quick"|"market", date, file,
+  base: {price, date},            // 分析の price.close と price.asOf
+  targets: [{kind: "bull"|"base"|"bear", label, price? | low?/high?, breakIf}],   // 数値の無い目安は label だけ
+  after: [{d, c}],                // base.date より後の終値（銘柄は prices.json の全日足、市場は series の日経平均）
+  days,                           // = after.length（経過営業日数）
+  young,                          // days < 5 なら true（「まだ日が浅い」）
+  latest: {d, c} | null,          // after の最後
+  nearest: {kind, distPct} | null // latest にいちばん近い目安。距離% = |終値−目安|÷目安、帯の中は 0。機械的な比較であり評価ではない
+}
+```
+
+## glossary（用語帳）
+
+各要素 `{term, def, firstCode, firstName, firstDate, firstType, category, detail}`。
+
+- 分析の `terms` から: `category`・`detail` は null。市場の分析の語は `firstCode` が null・`firstType` が `"market"`。
+- 用語型（`data/glossary/*.json`）がある語は `def` を用語型の定義で上書きし、`category`（指標／チャート／決算／需給／マクロ／制度／その他）と `detail`（用語型の本体から `schema`・`type` を除いたもの＋`_file`。`reading`・`body`・`analogy`・`flow`・`seesaw`・`example`・`stockLink`・`pitfall`・`related`・`addedAt`・`sources`）を持つ。分析に出てこない語は `firstCode` が null・`firstType` が `"yougo"`・`firstDate` が `addedAt`。
+- 旧 `data/glossary.json` も引き続き統合する。
+
+## notes（気づきノート）
+
+各要素 `{date, code, name, type, kind, text, title?}`、日付降順。`kind` は次の3種（旧 `data/notes.json` の要素には `kind` が無いことがある）。
+
+| kind | 元 | title |
+|---|---|---|
+| `insight` | 全分析（市場も含む。市場は `code` が null）の `insight` | なし |
+| `lesson` | chart・hansei の `sections.lesson` | `lesson.title` |
+| `nextCheck` | hansei の `sections.nextChecks[]`（1項目=1件） | `label`（`text` は `how`） |
