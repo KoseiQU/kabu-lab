@@ -259,7 +259,7 @@ digest.md にはこれらの結果と直近20日の四本値を載せる。チ�
 3. 見出しの収集 `collect/headlines.mjs` → `data/market/headlines.json`。
 4. build（ビューアも作り直す。`--no-viewer` で省略）。
 - どれかが失敗しても残りを続ける。結果を `data/refresh.json` に書く：`{at, steps:[{key: market/stocks/headlines/build, ok, message}], stocks:[{code, ok, lastDate, message}]}`。build はこれを data.js の `refresh` に入れる。全部成功で exit 0、一部失敗で exit 2、build 失敗で exit 1。
-- **見出し**：公開RSSだけを使う（NHK 経済 `https://www3.nhk.or.jp/rss/news/cat5.xml`、Yahoo!ニュース 経済 `https://news.yahoo.co.jp/rss/topics/business.xml`、日本銀行 新着 `https://www.boj.or.jp/rss/whatsnew.xml`。各1リクエスト）。`{fetchedAt, items:[{title, url, source, publishedAt}]}`。新しい順に最大30件、同じ題名は1つにまとめる。題名とリンクだけを持ち、本文は取らない。1つのRSSが失敗しても他は載せる。
+- **見出し**：公開RSSだけを使う（NHK 経済 `https://news.web.nhk/n-data/conf/na/rss/cat5.xml`、Yahoo!ニュース 経済 `https://news.yahoo.co.jp/rss/topics/business.xml`、日本銀行 新着 `https://www.boj.or.jp/rss/whatsnew.xml`。各1リクエスト）。`{fetchedAt, items:[{title, url, source, publishedAt}]}`。新しい順に最大30件、同じ題名は1つにまとめる。題名とリンクだけを持ち、本文は取らない。1つのRSSが失敗しても他は載せる。
 - 銘柄ごとの分析（クイック診断など）は自動でやり直さない。株価・チャート・答え合わせだけが進み、分析には鮮度の印が付く。
 
 **第2層 定時タスク（平日 7:30 と 16:00）**
@@ -325,6 +325,7 @@ digest.md にはこれらの結果と直近20日の四本値を載せる。チ�
 - 2026-10-03 利用者指示: フォルダが散らかっていて分かりにくい → 直下を5つに整理（README・DESIGN・data・src・archive）。分析結果だけを見る単体ビューアをデスクトップに置き、build のたびに更新する。
 - 2026-10-03 学習機能（用語帳・気づきノート・シナリオの答え合わせ）を採用。朝のニュースは市場型に含め、定時実行はしない。
 - 2026-10-05 利用者指示「日々ニュースも情勢も変わる。毎回最新に更新される仕組みを、API課金なしで」→ 自動更新（§5.9）を採用。**2026-10-03 の「定時実行はしない」は失効。** 範囲＝数字・見出し・解説つき市場分析、時刻＝平日の朝と大引け後の両方。市場型のファイル名は最終取引日から実行日に変更（既存の 2026-10-02.json はそのまま）。
+- 2026-10-05 NHK 経済の RSS は旧URL（www3.nhk.or.jp）が2026-08-08で更新停止していたため、現行の news.web.nhk に差し替え。最新の項目が7日より古い RSS は「更新が止まっている可能性」として画面に出す。
 - 2026-10-04 P3 完了（P3a 基盤・P3b 画面1・P3c 画面2・P3d スキル設置と市場型・用語型の実データ通し）。テスト204本。review の「その後」は `price.asOf` より後で切る（基準価格との整合を優先）。
 - 2026-10-03 P3 着手（利用者指示「4つの型を一気に」）。ニュース型は主役の会社を1社決めて銘柄の分析として保存（会社を特定できない出来事は市場型）。用語型は `data/glossary/<用語>.json` の1語1ファイル（旧 `data/glossary.json`・`notes.json` も build は読み続ける）。アナリストの見方の別枠は P3 の後に判断。チャート型・決算型は利用者未評価のまま進める。
 
