@@ -10,7 +10,7 @@ import { createFetcher } from './lib/fetch.mjs';
 import { DATA_DIR, isMain, writeJson } from './lib/util.mjs';
 
 export const FEEDS = [
-  { name: 'NHK 経済', url: 'https://www3.nhk.or.jp/rss/news/cat5.xml' },
+  { name: 'NHK 経済', url: 'https://news.web.nhk/n-data/conf/na/rss/cat5.xml' },
   { name: 'Yahoo!ニュース 経済', url: 'https://news.yahoo.co.jp/rss/topics/business.xml' },
   { name: '日本銀行 新着', url: 'https://www.boj.or.jp/rss/whatsnew.xml' },
 ];
