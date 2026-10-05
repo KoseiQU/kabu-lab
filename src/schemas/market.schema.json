@@ -2,7 +2,7 @@
  "$schema": "http://json-schema.org/draft-07/schema#",
  "$id": "kabu-lab/market.schema.json",
  "title": "KABU LAB 分析JSON（market: 市場）",
- "description": "DESIGN.md §5 の共通骨格（code は null・name は「市場」・price は日経平均）＋ §5.4 の sections。保存先は data/market/<実行日>.json（§5.9。2026-10-05 以前は最終取引日）。意味検証（outlook の順序・geo の影響順・gauges の範囲）は tools/validate.mjs が追加で行う。",
+ "description": "DESIGN.md §5 の共通骨格（code は null・name は「市場」・price は日経平均）＋ §5.4 の sections（§5.9 の edition・§5.10 の sectorNote・themes は任意欄）。保存先は data/market/<実行日>.json（§5.9。2026-10-05 以前は最終取引日）。意味検証（outlook の順序・geo の影響順・gauges の範囲・themes の追い風／向かい風の件数とコードの重複・市場型の断定語）は tools/validate.mjs が追加で行う。",
  "type": "object",
  "required": ["schema", "type", "code", "name", "date", "price", "summary", "sections", "terms", "insight", "sources", "missing"],
  "properties": {
@@ -174,6 +174,39 @@
     "edition": {
      "type": "string", "enum": ["pre", "post", "other"],
      "description": "任意（§5.9）。pre＝寄り付き前の版・post＝大引け後の版・other＝それ以外。画面は分析日の横に表示する"
+    },
+    "sectorNote": {
+     "type": "string", "minLength": 1, "maxLength": 160,
+     "description": "任意（§5.10）。上がった業種・下がった業種の理由を一言（digest の業種の騰落率とニュースから）"
+    },
+    "themes": {
+     "type": "array", "minItems": 3, "maxItems": 6,
+     "description": "任意（§5.10）。追い風（tailwind）2件以上・向かい風（headwind）1件以上（validate.mjs が検査）。注目候補は売買の推奨ではない（理由と崩れる条件を必ず付ける）",
+     "items": {
+      "type": "object",
+      "required": ["name", "dir", "horizon", "sectorKey", "reason", "stocks", "breakIf"],
+      "properties": {
+       "name": { "type": "string", "minLength": 1, "maxLength": 16 },
+       "dir": { "type": "string", "enum": ["tailwind", "headwind"] },
+       "horizon": { "type": "string", "enum": ["short", "mid"], "description": "short＝数日〜数週・mid＝数か月" },
+       "sectorKey": { "type": ["string", "null"], "pattern": "^16(1[7-9]|2[0-9]|3[0-3])$", "description": "TOPIX-17 業種別ETFのコード（1617〜1633）。該当なしは null" },
+       "reason": { "type": "string", "minLength": 1, "maxLength": 120 },
+       "stocks": {
+        "type": "array", "minItems": 0, "maxItems": 3,
+        "description": "そのジャンルの代表的な上場企業（実在のコード。自信のないコードは書かない）",
+        "items": {
+         "type": "object",
+         "required": ["code", "name", "why"],
+         "properties": {
+          "code": { "type": "string", "pattern": "^[0-9][0-9A-Z]{3}$" },
+          "name": { "type": "string", "minLength": 1, "maxLength": 20 },
+          "why": { "type": "string", "minLength": 1, "maxLength": 60 }
+         }
+        }
+       },
+       "breakIf": { "type": "string", "minLength": 1, "maxLength": 80 }
+      }
+     }
     }
    }
   },

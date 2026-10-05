@@ -10,6 +10,16 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const BANNED_WORDS = ['買い推奨', '売り推奨', '買うべき', '売るべき', '今が買い', '今が売り'];
 // 反省型だけに足す断定語（「いま売るべきか」に答えない。振り返りと次回の確認点だけ）
+// 市場型だけに足す断定語（§5.10 の注目候補は「推奨」ではない。上がる・下がるを言い切らない）
+export const MARKET_BANNED_WORDS = ['買い推奨', 'おすすめ銘柄', 'オススメ銘柄', 'お勧め銘柄', '推奨銘柄', '推奨します', '必ず上がる', '確実に上がる', '絶対に上がる', '必ず下がる', '確実に下がる', '絶対に下がる', '上昇確実', '値上がり確実', '買い時', '売り時', '仕込み時'];
+// 直後が打ち消し（「必ず上がるとは限らない」など注意を促す文）なら断定ではないので数えない
+const NEGATED_AFTER = /^(?:とは限ら|わけでは|わけじゃ|ものでは|とは言え|とはいえ|とは言い切れ|保証はな|保証はありませ)/;
+/** str の中に w が断定として出てくるか（打ち消しの続く出現は除く） */
+export function assertiveHit(str, w) {
+  for (let i = str.indexOf(w); i >= 0; i = str.indexOf(w, i + 1)) if (!NEGATED_AFTER.test(str.slice(i + w.length))) return true;
+  return false;
+}
+export const SECTOR_KEYS = Array.from({ length: 17 }, (_, i) => String(1617 + i));
 export const HANSEI_BANNED_WORDS = ['損切りすべき', '利確すべき', '利益確定すべき', '買い増しすべき', 'ナンピンすべき', '手放すべき', '持ち続けるべき', '保有し続けるべき', '売り時です', '買い時です'];
 
 /** 用語型のファイル名（拡張子なし）: / \ : * ? " < > | と空白を _ に置換（DESIGN.md §5.7） */
@@ -172,6 +182,28 @@ const TYPE_RULES = {
     });
     ascendingDates(errors, '$.sections.calendar', s.calendar, (c) => c?.date, '予定');
     if (isDate(a.price?.asOf) && isDate(a.date) && a.price.asOf > a.date) errors.push({ path: '$.price.asOf', message: `基準日 ${a.price.asOf} が分析日 ${a.date} より後です` });
+    // themes（§5.10。任意欄）: 追い風2件以上・向かい風1件以上、sectorKey は 1617〜1633 か null、コードの形と重複
+    if ('themes' in s && s.themes != null) {
+      const th = arrOf(s.themes);
+      const n = (d) => th.filter((x) => x?.dir === d).length;
+      if (n('tailwind') < 2) errors.push({ path: '$.sections.themes', message: `追い風（tailwind）は2件以上にしてください（実際: ${n('tailwind')}件）` });
+      if (n('headwind') < 1) errors.push({ path: '$.sections.themes', message: `向かい風（headwind）は1件以上にしてください（実際: ${n('headwind')}件）` });
+      const seen = new Map();
+      th.forEach((x, i) => {
+        const k = x?.sectorKey;
+        if (k !== null && !(typeof k === 'string' && SECTOR_KEYS.includes(k))) errors.push({ path: `$.sections.themes[${i}].sectorKey`, message: `sectorKey は TOPIX-17 業種別ETFのコード（"1617"〜"1633" の文字列）か null です（実際: ${JSON.stringify(k)}）` });
+        arrOf(x?.stocks).forEach((st, j) => {
+          const c = st?.code;
+          if (typeof c !== 'string' || !/^[0-9][0-9A-Z]{3}$/.test(c)) { errors.push({ path: `$.sections.themes[${i}].stocks[${j}].code`, message: `銘柄コードの形ではありません: ${JSON.stringify(c)}（例: 6501, 130A）` }); return; }
+          if (SECTOR_KEYS.includes(c)) errors.push({ path: `$.sections.themes[${i}].stocks[${j}].code`, message: `${c} は業種別ETFのコードです（候補には個別の企業を書く。業種は sectorKey へ）` });
+          if (seen.has(c)) errors.push({ path: `$.sections.themes[${i}].stocks[${j}].code`, message: `コード ${c} が themes の中で重複しています（${seen.get(c)} と同じ）` });
+          else seen.set(c, `themes[${i}].stocks[${j}]`);
+        });
+      });
+    }
+    for (const [path, str] of strings(a)) {
+      for (const w of MARKET_BANNED_WORDS) if (!BANNED_WORDS.includes(w) && assertiveHit(str, w)) errors.push({ path, message: `禁止語「${w}」が含まれています（市場型は注目候補を推奨として書かない・値動きを断定しない）` });
+    }
   },
   news(a, errors) {
     const s = a.sections ?? {};
