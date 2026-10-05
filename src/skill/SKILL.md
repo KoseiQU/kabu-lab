@@ -126,13 +126,13 @@ digest の「スイング高値・安値」「クロスの日付」「75日線�
 
 報告は3〜5行：判定とその理由、進捗率、会社の見通し、次の決算で見る点。
 
-## 市場型（`/kabu 市場`）
+## 市場型（`/kabu 市場`、定時タスクからは `/kabu 市場 定時`）
 
 銘柄を指定しない。相場全体の高い安い・為替・金利・地政学・今日のニュースをまとめる。
 
 1. **収集する。** `node collect/market.mjs --if-stale` → `../data/market/digest-market.md`（4KB以内）。これだけを読む。
 2. **足りない情報を調べる。** Web検索は合計5回まで：日経平均の予想PER（1回）、日本の金利と日銀・FRBの直近の姿勢（1回）、地政学リスク（1〜2回）、今日の日本株に効きそうなニュース（1〜2回）。前回の市場分析（`../data/market/` の直近の `<date>.json`）があれば先に読み、変わっていない地政学の項目は文章を流用して順位と星だけ見直す。
-3. **分析JSONを書く。** `../data/market/<digest の最終取引日>.json`。手本は `tests/fixtures/market-sample.json`、スキーマは `schemas/market.schema.json`。`code` は null、`name` は「市場」、`price` は日経平均。
+3. **分析JSONを書く。** `../data/market/<実行日>.json`（実行日は日本時間の今日。`date` も実行日）。`price` は日経平均で、`price.asOf` は digest の最終取引日。同じ日のファイルがあれば上書きする。`sections.edition` は、平日の9時より前なら `pre`（寄り付き前）、15時30分より後なら `post`（大引け後）、それ以外は `other`。手本は `tests/fixtures/market-sample.json`、スキーマは `schemas/market.schema.json`。`code` は null、`name` は「市場」。
 4. 検証（`node tools/validate.mjs`）→ `node build.mjs && open "file://$HOME/Desktop/KABU LAB.html#/market"`。会社メモは書かない。
 
 | 欄 | 書き方 |
@@ -146,6 +146,17 @@ digest の「スイング高値・安値」「クロスの日付」「75日線�
 | `calendar` | 今後2週間ほどの予定。日付を確認できたものだけ |
 
 報告は3〜5行：高い安いの判定と根拠、為替の向き、地政学の1位、今日のニュースで一番大きいもの。
+
+### 定時の実行（`/kabu 市場 定時`）
+
+平日の朝と大引け後に、利用者が見ていないところで走る。**質問をしない。ブラウザを開かない（`open` を実行しない）。** 途中で失敗しても、できたところまでを保存して終える。
+
+1. `node tools/refresh.mjs` を実行する（市場・登録銘柄の株価・見出し・build をまとめて更新。トークンを使わない）。exit 2 は一部失敗で、続行してよい。exit 1 は build の失敗なので、メッセージを報告に書いて終える。
+2. `../data/market/digest-market.md` と、`../data/market/headlines.json` の題名（新しい順に20件まで）と、前回の市場分析（`../data/market/` でいちばん新しい `<日付>.json`）を読む。
+3. **前回から変わった所だけを書き直す。** 数字の欄（`price`・`level`・`fx`・`rates`）は digest から必ず更新する。`geo`・`terms` は、見出しと検索で変化が見当たらなければ前回の文章を流用する。`outlook` は、前回の「崩れる条件」に当たる動きがあったときだけ見直す。`news` は毎回書き直す。
+4. Web検索は**3回まで**：今日のニュースの中身の確認（見出しの題名だけで書かない。1〜2回）、日経平均の予想PERか金利の確認（1回）。検索できなかった数字は前回の値を使わず `missing` に書く。
+5. 分析JSONを書く → `node tools/validate.mjs` → `node build.mjs`。`open` はしない。
+6. 報告は2〜3行：判定、前回から変わった点、取得できなかった項目。
 
 ## ニュース型（`/kabu <銘柄> ニュース <出来事>`、`/kabu ニュース 探して`）
 
