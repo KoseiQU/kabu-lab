@@ -1753,3 +1753,62 @@ a.nwho:hover,a.nwho:focus-visible{text-decoration:underline; outline:none}
   .rvh,.rvr{grid-template-columns:minmax(0,1.3fr) 88px minmax(0,.9fr) 120px minmax(0,1.4fr) minmax(0,1.1fr) 44px; gap:8px}
   .rvsp .h-sp{width:120px}
 }
+
+/* =====================================================================
+   P5a：自動更新（ヘッダの更新時刻と内訳・最新の見出し・鮮度の印・市場の版）
+   ===================================================================== */
+.meta>.upd{position:relative; padding:0 6px 0 8px}
+.updb{display:flex; align-items:center; gap:7px; height:22px; padding:0 8px; font:500 12px/1 var(--jp); color:var(--tx2); border:1px solid var(--line); white-space:nowrap}
+.updb b{font-weight:500; color:var(--tx)}
+.updb:hover,.upd.open .updb,.updb:focus-visible{color:var(--tx); border-color:var(--cyl); background:rgba(62,230,255,.06); outline:none}
+.upd.warn .updb{border-color:rgba(255,179,64,.55)}
+.updb em{font:700 12px/16px var(--jp); font-style:normal; color:#05080d; background:var(--amber); padding:0 6px}
+.upd-pop{display:none; position:absolute; top:calc(100% + 1px); right:6px; width:440px; max-width:calc(100vw - var(--railW) - 24px); z-index:45; padding:10px 12px 11px;
+  background:#08111a; border:1px solid var(--cyl); box-shadow:0 10px 30px rgba(0,0,0,.6); white-space:normal; font:400 12.5px/1.5 var(--jp); color:var(--tx)}
+.upd.warn .upd-pop{border-color:rgba(255,179,64,.55)}
+.upd:hover .upd-pop,.upd:focus-within .upd-pop,.upd.open .upd-pop{display:block}
+.upd-pop .uh{display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding-bottom:6px; margin-bottom:6px; border-bottom:1px solid var(--line)}
+.upd-pop .uh b{font:700 13px/1.3 var(--jp); color:var(--wh)}
+.upd-pop .uh span{font-size:12px; color:var(--tx2)}
+.upd-pop .uk{margin:8px 0 4px; font:700 12px/1 var(--jp); color:var(--tx2)}
+.ust{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:4px}
+.ust li{display:grid; grid-template-columns:40px 150px minmax(0,1fr); gap:2px 8px; align-items:baseline}
+.ust li>b{font:700 12px/18px var(--jp); text-align:center; border:1px solid}
+.ust li>b.ok{color:var(--cy); border-color:var(--cyl)}
+.ust li>b.ng{color:#05080d; background:var(--amber); border-color:var(--amber)}
+.ust li .nm{font-size:12.5px; color:var(--tx)}
+.ust li p{font-size:12px; color:var(--tx2); overflow-wrap:anywhere}
+.ust li.ng p{color:var(--tx)}
+.upd-pop .unote{margin-top:8px; padding-top:6px; border-top:1px solid var(--line2); font-size:12px; color:var(--tx2)}
+@media (max-width:1399px){ .meta .u-view,.brand span{display:none} }
+
+/* 鮮度の印（0日は出さない・1〜4日は控えめ・5日以上は注意色） */
+.age{display:inline-flex; align-items:baseline; gap:2px; font:500 12px/16px var(--jp); color:var(--tx2); border:1px solid rgba(157,179,194,.35); padding:0 6px; white-space:nowrap}
+.age .mono{font-weight:700; color:var(--tx)}
+.age.old{color:var(--amber); border-color:rgba(255,179,64,.6); background:rgba(255,179,64,.08)}
+.age.old .mono{color:var(--amber)}
+.age.blk{display:inline-block; max-width:100%; margin-top:5px; white-space:normal; word-break:keep-all}
+.tags .age{line-height:15px}
+.tags .ed,.tabs .rt .ed{font:700 12px/15px var(--jp); color:var(--cy2); border:1px solid var(--cyl); background:rgba(62,230,255,.07); padding:0 6px}
+.tabs .rt .ed{line-height:16px}
+
+/* 最新の見出し（自動取得・解説なし）：今日のニュースのカード（色帯つき）と区別するため、無彩色の行リスト＋破線 */
+.hl-tag{font:700 12px/16px var(--jp); color:var(--tx2); border:1px dashed rgba(157,179,194,.55); padding:0 6px}
+.hl-old{font:700 12px/16px var(--jp); color:#05080d; background:var(--amber); padding:0 6px}
+.hl-warn{margin-bottom:6px; padding:5px 9px; font-size:12.5px; color:var(--tx); border:1px solid rgba(255,179,64,.55); background:rgba(255,179,64,.07)}
+.hll{list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0 14px}
+.hl{display:flex; flex-direction:column; gap:3px; min-width:0; padding:7px 2px 8px; border-bottom:1px dashed rgba(157,179,194,.22)}
+.hlh{display:flex; align-items:center; gap:8px}
+.hls{font:500 12px/16px var(--jp); padding:0 6px; color:var(--tx2); border:1px solid rgba(157,179,194,.4); white-space:nowrap}
+.hls[data-src="1"]{border-style:dashed}
+.hls[data-src="2"]{color:var(--tx); border-color:rgba(216,231,239,.5)}
+.hl time{font-size:12px; color:var(--tx2)}
+.hlt{font-size:13px; line-height:1.5; color:var(--tx); overflow-wrap:anywhere}
+a.hlt{text-decoration:none}
+a.hlt::after{content:" ↗"; font-size:12px; color:var(--tx3)}
+a.hlt:hover,a.hlt:focus-visible{color:var(--wh); text-decoration:underline; text-decoration-color:rgba(216,231,239,.45); text-underline-offset:3px; outline:none}
+.hl-more{align-self:center; margin-top:8px; padding:4px 14px; font:500 12px/1.4 var(--jp); color:var(--tx); border:1px solid var(--cyl)}
+.hl-more:hover,.hl-more:focus-visible{background:rgba(62,230,255,.08); outline:none}
+.hl-ft{display:flex; flex-wrap:wrap; justify-content:space-between; gap:4px 16px; margin-top:8px; font-size:12px; color:var(--tx2)}
+.hl-ng{color:var(--amber)}
+@media (max-width:1399px){ .hll{grid-template-columns:repeat(2,minmax(0,1fr))} }

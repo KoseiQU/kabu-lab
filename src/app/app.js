@@ -85,6 +85,15 @@
   const jpDate = (d) => (typeof d === 'string' && d.length >= 10 ? `${+d.slice(5, 7)}月${+d.slice(8, 10)}日` : '');
   const localDate = (iso) => { const t = new Date(iso); if (isNaN(t)) return '—'; const p = (n) => String(n).padStart(2, '0'); return `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())}`; };
   const arr = (v) => (Array.isArray(v) ? v : []);
+  /* ---------- P5a：自動更新（更新時刻・見出し・鮮度の印）。時刻は日本時間で表す ---------- */
+  const jstParts = (iso) => K.jstParts(iso);
+  const JST_MS = 9 * 3600e3;
+  const todayJst = () => new Date(Date.now() + JST_MS).toISOString().slice(0, 10);
+  const STEP_NAME = { market: '市場の収集', stocks: '登録銘柄の株価', headlines: '見出しの収集', build: 'build（画面の作り直し）' };
+  const EDITION = { pre: '寄り付き前', post: '大引け後', other: '随時' };
+  const HL_FIRST = 12, HL_OLD_MS = 3 * 864e5;
+  /** 鮮度の印（分析の _age から。0・不明は出さない） */
+  const ageBadge = (a, cls) => K.ageBadge(a && a._age, cls);
   const secAbsent = (a, key) => { const s = a && a.sections; if (!s || typeof s !== 'object' || !(key in s)) return true; const v = s[key]; return v == null || (Array.isArray(v) && v.length === 0); };
   /** その枠に対応する missing の文（無ければ ''） */
   function missFor(a, sec, word) {
@@ -210,7 +219,7 @@
     const gnav = `<nav class="gnav" aria-label="画面の切替">${GNAV.map((g) => `<a class="gn${cur(nk === g.key)}" href="${g.href}" data-gnav="${g.key}"><svg aria-hidden="true"><use href="#${g.icon}"/></svg>${g.label}</a>`).join('')}${stockNav}</nav>`;
     $('#top').innerHTML = '<div class="brand"><b>KABU LAB</b><span>銘柄分析 × 学習ノート</span></div>' + gnav
       + `<div class="cmdw"><div class="cmdbox" aria-label="コマンド（表示のみ）"><span class="lbl">CMD</span><span class="pr">&gt;</span>${cmd}<kbd>ENTER</kbd></div></div>`
-      + `<div class="meta"><span>VIEW <b>${esc(info.view)}</b></span><span>DATE <b>${esc(info.date)}</b></span><span class="u-mid">MODE <b>LEARN</b></span></div>`;
+      + `<div class="meta"><span class="u-view">VIEW <b>${esc(info.view)}</b></span><span>DATE <b>${esc(info.date)}</b></span><span class="u-mid">MODE <b>LEARN</b></span>${refreshHtml()}</div>`;
     // 下部：ティッカー（市場データがある時だけ）＋ファンクションキー
     const tape = tapeHtml();
     const types = [['F3', 'kessan', '決算'], ['F4', 'chart', 'チャート'], ['F5', 'news', 'ニュース'], ['F6', 'hansei', '反省']];
@@ -244,6 +253,32 @@
       s += `<span class="it">${esc(st.code)} ${esc(st.name)} <b>${K.fmtP(q.price)}</b>${chg(null, q.pct, 0)}</span>`;
     });
     return s + '</div>';
+  }
+
+  /** ヘッダの「データ更新 10/05 07:21」（refresh が無ければ出さない）。失敗があれば注意色で「一部失敗」、押す・ホバー・フォーカスで内訳 */
+  function refreshHtml() {
+    const D = window.KABU, R = D.refresh;
+    const p = R && typeof R === 'object' ? jstParts(R.at) : null;
+    if (!p) return '';
+    const steps = arr(R.steps).filter((x) => x && typeof x.key === 'string');
+    const stocks = arr(R.stocks).filter((x) => x && typeof x.code === 'string');
+    const fail = steps.some((x) => !x.ok) || stocks.some((x) => !x.ok);
+    const f = jstParts(R.finishedAt);
+    const took = f && isFinite(Date.parse(R.finishedAt) - Date.parse(R.at)) ? Math.max(0, Math.round((Date.parse(R.finishedAt) - Date.parse(R.at)) / 1000)) : null;
+    const ok = (b) => `<b class="${b ? 'ok' : 'ng'}">${b ? 'OK' : '失敗'}</b>`;
+    const srows = steps.map((x) => `<li class="${x.ok ? 'ok' : 'ng'}" data-step="${esc(x.key)}">${ok(x.ok)}<span class="nm">${esc(STEP_NAME[x.key] || x.key)}</span><p>${richNums(x.message || '')}</p></li>`).join('');
+    const krows = stocks.map((x) => { const st = D.stocks && D.stocks[x.code]; return `<li class="${x.ok ? 'ok' : 'ng'}" data-step-stock="${esc(x.code)}">${ok(x.ok)}<span class="nm"><span class="mono">${esc(x.code)}</span> ${esc((st && st.name) || '')}</span><p>株価の最終日 <span class="mono">${esc(x.lastDate || '—')}</span>${x.message ? ' ・ ' + esc(x.message) : ''}</p></li>`; }).join('');
+    const pop = `<div class="upd-pop" id="upd-pop" role="region" aria-label="データ更新の内訳"><div class="uh"><b>データ更新の内訳</b><span>${esc(p.md)} ${esc(p.hm)} 開始${took != null ? ` ・ 所要 <span class="mono">${took}</span>秒` : ''}</span></div>`
+      + `<ol class="ust">${srows || '<li><p>手順の記録がありません</p></li>'}</ol>${krows ? `<div class="uk">登録銘柄</div><ol class="ust">${krows}</ol>` : ''}`
+      + `<p class="unote">株価・見出しは自動で更新します。分析の文章は自動ではやり直しません（各分析に「◯営業日前の分析」の印）。</p></div>`;
+    return `<span class="upd${fail ? ' warn' : ''}" data-refresh="${fail ? 'fail' : 'ok'}"><button type="button" class="updb" data-upd-toggle aria-expanded="false" aria-controls="upd-pop">データ更新 <b class="mono">${esc(p.md)} ${esc(p.hm)}</b>${fail ? '<em>一部失敗</em>' : ''}</button>${pop}</span>`;
+  }
+  function updSet(open) {
+    const u = $('#top .upd');
+    if (!u) return;
+    u.classList.toggle('open', !!open);
+    const b = $('[data-upd-toggle]', u);
+    if (b) b.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
 
   /* =====================================================================
@@ -322,7 +357,7 @@
       + `<td class="r"><span class="h-px">${K.fmtP(q.price)}<small>円</small></span></td>`
       + `<td class="r"><span class="h-ch ${isNum(q.pct) ? (up ? 'up' : 'dn') : ''}">${isNum(q.pct) ? (up ? '▲ ' : '▼ ') + fmtS(q.pct, 2) + '%' : '—'}</span></td>`
       + `<td><div class="h-bd">${warn}${types || '<span class="na">未分析</span>'}</div></td>`
-      + `<td><span class="h-dt">${latest ? mmdd(latest.date) : '—'}</span></td>`
+      + `<td><span class="h-dt">${latest ? mmdd(latest.date) : '—'}</span>${latest ? ageBadge(latest, 'blk') : ''}</td>`
       + `<td>${K.spark(rows, up)}</td></tr>`;
   }
   function termCard() {
@@ -425,7 +460,7 @@
     } else {
       right = `<span class="note">ANALYSIS <b>${R.a ? esc(R.type.toUpperCase()) : 'STANDBY'}</b>${R.a ? ' ／ ' + esc(mmdd(R.a.date)) : ''}</span>`;
     }
-    return `<nav class="tabs" aria-label="分析の型">${tabs}<div class="rt"><span class="lgd"><i style="background:var(--cy)"></i>上昇</span><span class="lgd"><i style="background:var(--mag)"></i>下落</span><span class="lgd"><i style="background:var(--amber)"></i>警告・注目</span>${right}</div></nav>`;
+    return `<nav class="tabs" aria-label="分析の型">${tabs}<div class="rt"><span class="lgd"><i style="background:var(--cy)"></i>上昇</span><span class="lgd"><i style="background:var(--mag)"></i>下落</span><span class="lgd"><i style="background:var(--amber)"></i>警告・注目</span>${R.a ? ageBadge(R.a) : ''}${right}</div></nav>`;
   }
   function emptyHtml(o) {
     return `<div class="empty"><section class="panel" data-sec="empty"><div class="pi">
@@ -1405,7 +1440,9 @@
     const usRows = usS ? usS.rows.filter((r) => r && isNum(r.c) && (!c.asOf || r.d <= c.asOf)) : [];
     const usL = lastOf(usRows, it.us10y);
     const kv = (lab, v, unit, d) => `<div class="sh-kv"><span>${lab}${v && v.d ? `<small>${esc(mmdd(v.d))}</small>` : ''}</span><b>${v ? `${fmt(v.c, 2)}<span>${unit}</span>` : '<span>未取得</span>'}</b></div>`;
-    const tags = ['日経平均・ドル円・米10年金利', a ? `分析 ${a.date}` : '指標のみ（分析は未実行）'].map((x) => `<span>${esc(x)}</span>`).join('');
+    const ed = a && EDITION[secs(a).edition];
+    const tags = ['日経平均・ドル円・米10年金利', a ? `分析 ${a.date}` : '指標のみ（分析は未実行）'].map((x) => `<span>${esc(x)}</span>`).join('')
+      + (ed ? `<span class="ed" data-edition="${esc(secs(a).edition)}">${esc(ed)}</span>` : '') + (a ? ageBadge(a, 'tg') : '');
     return `<div class="sh mk-sh">
     <div class="sh-id"><div class="ticker">MKT</div><div><h1>市場</h1><div class="tags">${tags}</div></div></div>
     <div class="sh-price"><svg class="ret" aria-hidden="true"><use href="#ret"/></svg><div>
@@ -1424,7 +1461,8 @@
         ? `<span class="dates"><span class="lb">履歴</span><select aria-label="分析日を選ぶ" data-dates>${items.map((x) => `<option value="${esc(hrefMarket(x.d))}"${x.on ? ' selected' : ''}>${esc(x.d)}</option>`).join('')}</select></span>`
         : `<span class="dates"><span class="lb">履歴</span>${items.map((x) => `<a class="${x.on ? 'on' : ''}" href="${hrefMarket(x.d)}">${esc(mmdd(x.d))}</a>`).join('')}</span>`;
     } else right = `<span class="note">ANALYSIS <b>${c.a ? 'MARKET' : 'STANDBY'}</b>${c.a ? ' ／ ' + esc(mmdd(c.a.date)) : ''}</span>`;
-    return `<nav class="tabs" aria-label="市場ページ"><a class="tab on" href="${hrefMarket(c.a && c.list.length > 1 ? c.a.date : null)}"><i>M-01</i>市場の分析<span class="dot"></span></a><div class="rt"><span class="lgd"><i style="background:var(--cy)"></i>上昇・プラス</span><span class="lgd"><i style="background:var(--mag)"></i>下落・マイナス</span><span class="lgd"><i style="background:var(--amber)"></i>警告・注目</span>${right}</div></nav>`;
+    const ed = c.a && EDITION[secs(c.a).edition];
+    return `<nav class="tabs" aria-label="市場ページ"><a class="tab on" href="${hrefMarket(c.a && c.list.length > 1 ? c.a.date : null)}"><i>M-01</i>市場の分析<span class="dot"></span></a><div class="rt"><span class="lgd"><i style="background:var(--cy)"></i>上昇・プラス</span><span class="lgd"><i style="background:var(--mag)"></i>下落・マイナス</span><span class="lgd"><i style="background:var(--amber)"></i>警告・注目</span>${ed ? `<span class="ed">${esc(ed)}の版</span>` : ''}${right}</div></nav>`;
   }
   function mkChartPanel(c) {
     const R = K.RANGES[S.mkRange] ? S.mkRange : '1y';
@@ -1534,6 +1572,29 @@
     }).join('');
     return panel('calendar', 'MKT-A7 / CALENDAR', '今後の予定', `<span class="jp">${list.length}件 ・ 分析日 ${esc(mmdd(a.date))} 起点</span>`, `<div class="pb"><ol class="cal">${rows}</ol></div>`);
   }
+  /** 最新の見出し（自動取得・解説なし）。今日のニュース（Claude の解説つき）とは別枠。題名は外部の文字列なので必ず esc、リンクは http(s) だけ */
+  function headlinesPanel() {
+    const D = window.KABU, H = D.market && D.market.headlines && typeof D.market.headlines === 'object' ? D.market.headlines : null;
+    const items = H ? arr(H.items).filter((x) => x && typeof x.title === 'string' && x.title.trim()) : [];
+    const tag = '<span class="hl-tag">自動取得・解説なし</span>';
+    if (!items.length) {
+      return panel('headlines', 'MKT-H1 / HEADLINES', '最新の見出し', tag, `<div class="pb"><div class="nodata sm" data-standby="headlines"><span class="nd">未実行</span><p class="why">${H ? '見出しを1件も取得できていません' : '見出しはまだ集めていません'}（公開RSSの題名とリンクだけを自動で集めます）</p><div class="cmdl"><em>&gt;</em>node tools/refresh.mjs<i class="cur"></i></div></div></div>`);
+    }
+    const f = jstParts(H.fetchedAt);
+    const old = !f || Date.now() - Date.parse(H.fetchedAt) >= HL_OLD_MS;
+    const lis = K.headlineItems(items, { today: todayJst(), first: HL_FIRST });
+    const failed = arr(H.sources).filter((x) => x && x.ok === false && x.name);
+    const more = items.length > HL_FIRST ? `<button type="button" class="hl-more" data-hl-more aria-expanded="false">もっと見る（残り <span class="mono">${items.length - HL_FIRST}</span>件）</button>` : '';
+    const pm = `${tag}<span>取得 ${f ? `${esc(f.md)} ${esc(f.hm)}` : '—'}</span>${old ? '<span class="hl-old" data-hl-old>古い見出し</span>' : ''}<span class="jp"><span class="mono">${items.length}</span>件</span>`;
+    const foot = `<div class="hl-ft"><span>RSS の題名をそのまま新しい順に並べています（時刻は今日なら時:分、それ以外は月/日）。Claude の解説つきは「今日のニュース」の枠です。</span>${failed.length ? `<span class="hl-ng" data-hl-failed>取得できなかった出典：${failed.map((x) => esc(x.name)).join('・')}</span>` : ''}</div>`;
+    return panel('headlines', 'MKT-H1 / HEADLINES', '最新の見出し', pm, `<div class="pb">${old ? `<p class="hl-warn" data-hl-old-note>取得から3日以上たった古い見出しです（取得 ${f ? esc(f.md) : '日時不明'}）。<span class="mono">node tools/refresh.mjs</span> で取り直せます。</p>` : ''}<ol class="hll">${lis}</ol>${more}${foot}</div>`);
+  }
+  function hlMore(open) {
+    $$('[data-hl-extra]').forEach((li) => { li.hidden = !open; });
+    const b = $('[data-hl-more]');
+    if (b) { b.setAttribute('aria-expanded', open ? 'true' : 'false'); b.innerHTML = open ? '閉じる（最初の12件だけにする）' : `もっと見る（残り <span class="mono">${$$('[data-hl-extra]').length}</span>件）`; }
+    $$('[data-chart]').forEach((h) => { if (h.dataset.wh !== `${h.clientWidth}x${h.clientHeight}`) drawHost(h); });
+  }
   function mkStandby() {
     const parts = ['相場の高い安い', '3つのシナリオ', '為替（誰にプラス・マイナスか）', '金利', '地政学ランキング', '今日のニュース', '今後の予定'];
     return `<section class="panel" data-sec="standby"><div class="pi"><div class="ph"><span class="code">MKT-A0 / STANDBY</span><h2>市場の分析</h2><div class="pm"><span>STATUS: <span class="jp">未実行</span></span></div></div>
@@ -1548,13 +1609,14 @@
     const a = c.a;
     let body;
     if (!a) {
-      body = `<div id="mview" class="mv"><div class="mv-r1">${mkChartPanel(c)}<div class="mv-rc">${mkIndPanel(c)}${mkStandby()}</div></div></div>`;
+      body = `<div id="mview" class="mv"><div class="mv-r1">${mkChartPanel(c)}<div class="mv-rc">${mkIndPanel(c)}${mkStandby()}</div></div>${headlinesPanel()}</div>`;
     } else {
       body = `<div id="mview" class="mv">
     <div class="mv-r1">${mkChartPanel(c)}<div class="mv-rc">${levelPanelM(c)}${mkIndPanel(c)}</div></div>
     <div class="mv-r2">${outlookPanelM(c)}${fxPanel(c)}</div>
     <div class="mv-r3">${geoPanelM(c)}<div class="mv-rc">${ratesPanel(c)}${calendarPanel(c)}</div></div>
     ${newsPanelM(c)}
+    ${headlinesPanel()}
     ${notesPanel(a)}
   </div>`;
     }
@@ -2032,6 +2094,9 @@
     if (!t || !t.closest) return;
     const tr = t.closest('tr[data-href]');
     if (tr) { location.hash = tr.dataset.href; return; }
+    if (t.closest('[data-upd-toggle]')) { const u = t.closest('.upd'); updSet(!(u && u.classList.contains('open'))); return; }
+    if (!t.closest('.upd-pop')) updSet(false);
+    if (t.closest('[data-hl-more]')) { hlMore(t.closest('[data-hl-more]').getAttribute('aria-expanded') !== 'true'); return; }
     if (t.closest('[data-seg-toggle]')) { segSet(!segIsOpen() || $('#seg-pop').classList.contains('closing')); return; }
     if (t.closest('[data-seg-close]')) { segSet(false); return; }
     if (segIsOpen() && !t.closest('#seg-pop')) segSet(false, { focus: false });
@@ -2074,6 +2139,7 @@
     if (tr && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); location.hash = tr.dataset.href; return; }
     if (!dataOk()) return;
     if (e.key === 'Escape' && segIsOpen()) { e.preventDefault(); segSet(false); return; }
+    if (e.key === 'Escape' && $('#top .upd.open')) { e.preventDefault(); updSet(false); const b = $('[data-upd-toggle]'); if (b) b.focus(); return; }
     const ck = e.target.closest && e.target.closest('.ckg .ck');
     if (ck && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
       const cells = $$('.ckg .ck'), i = cells.indexOf(ck), cols = ck.closest('.ck10') ? 10 : 5;
@@ -2110,7 +2176,7 @@
     render, redraw: drawAll, current: () => S.route, segSet, segIsOpen, ckSelect, ckState: () => ({ sel: S.ckSel, items: S.ckItems }),
     lvSelect, lvState: () => S.lvPin, rulesOf, PLAN_AXIS, PLAN_GAP,
     setTesting: (b) => { S.testing = !!b; if (b) { clearTimeout(S.animTimer); document.body.classList.remove('anim'); } },
-    mkSetRange, mkState: () => S.mkRange,
+    mkSetRange, mkState: () => S.mkRange, updSet, hlMore, jstParts, HL_FIRST, EDITION,
     glSet, glPress, glState: () => ({ ...S.gl }), ntSet, ntState: () => ({ ...S.nt }), GL_CATS, reviewOf,
     snapshot: () => ({ recent: S.recent, seen: { ...S.seen }, mkRange: S.mkRange, gl: { ...S.gl }, nt: { ...S.nt } }),
     restore: (s) => { if (!s) return; S.recent = s.recent; S.seen = { ...s.seen }; S.mkRange = s.mkRange || '1y'; S.gl = { ...GL0(), ...(s.gl || {}) }; S.nt = { ...NT0(), ...(s.nt || {}) }; try { if (s.recent) window.localStorage.setItem('kabu.recent', s.recent); else window.localStorage.removeItem('kabu.recent'); } catch (e) { /* 無視 */ } },

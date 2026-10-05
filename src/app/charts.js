@@ -1760,6 +1760,37 @@
       + `<p class="ssn">${esc(sw.note || '')}<small>逆向きも同じ：${esc(sw.left)}が下がると、${esc(sw.right)}に上向きの力</small></p>`;
   }
 
+  /* ---------- P5a：自動更新（見出しの行・鮮度の印）。外部から来た文字列は必ず esc、リンクは http(s) だけ ---------- */
+  const JST_MS = 9 * 3600e3;
+  /** ISO 時刻 → 日本時間の {day:'YYYY-MM-DD', md:'MM/DD', hm:'HH:MM'}（読めなければ null） */
+  function jstParts(iso) {
+    const t = typeof iso === 'string' ? Date.parse(iso) : NaN;
+    if (!isFinite(t)) return null;
+    const x = new Date(t + JST_MS).toISOString();
+    return { day: x.slice(0, 10), md: x.slice(5, 7) + '/' + x.slice(8, 10), hm: x.slice(11, 16) };
+  }
+  /** 外部リンクにしてよい URL（http(s) だけ。それ以外は null） */
+  const safeHref = (u) => (typeof u === 'string' && /^https?:\/\//i.test(u.trim()) ? u.trim() : null);
+  /**
+   * 最新の見出しの行（<li> の並び）。時刻は今日（today = 日本時間の YYYY-MM-DD）なら時:分、それ以外は月/日。
+   * first 件目より後は hidden（「もっと見る」で開く）。題名・出典名はエスケープし、http(s) 以外の URL はリンクにしない
+   */
+  function headlineItems(items, { today = '', first = 12 } = {}) {
+    const list = (Array.isArray(items) ? items : []).filter((x) => x && typeof x.title === 'string' && x.title.trim());
+    const srcs = [...new Set(list.map((x) => String(x.source || '')))];
+    return list.map((x, i) => {
+      const p = jstParts(x.publishedAt), when = p ? (p.day === today ? p.hm : p.md) : '—';
+      const href = safeHref(x.url), t = esc(x.title);
+      return `<li class="hl" data-hl="${i}"${i >= first ? ' data-hl-extra hidden' : ''}><div class="hlh"><span class="hls" data-src="${Math.max(0, srcs.indexOf(String(x.source || '')))}">${esc(x.source || '出典不明')}</span><time class="mono"${p ? ` datetime="${esc(x.publishedAt)}" title="${esc(p.day)} ${esc(p.hm)}"` : ''}>${esc(when)}</time></div>`
+        + (href ? `<a class="hlt" href="${esc(href)}" target="_blank" rel="noopener">${t}</a>` : `<span class="hlt">${t}</span>`) + '</li>';
+    }).join('');
+  }
+  /** 鮮度の印「◯営業日前の分析」。0・不明は ''。1〜4 は控えめ、5以上は注意色（class old） */
+  function ageBadge(n, cls) {
+    if (!isNum(n) || n <= 0) return '';
+    return `<span class="age${n >= 5 ? ' old' : ''}${cls ? ' ' + cls : ''}" data-age="${n}" title="分析の基準日より後に${n}営業日ぶんの株価があります（分析の文章は自動ではやり直しません）"><span class="mono">${n}</span>営業日前<wbr>の分析</span>`;
+  }
+
   const api = {
     C, SEG_COLORS, isNum, clamp, esc, fmt, fmtP, fmtS, fmtVol, yenParts, jpAmountParts, decOf, priceDec, textW,
     niceStep, niceCeil, niceTicks, sma, deviation, spread, mmdd, md, segModel, segListHtml, ckReasons, noteSign,
@@ -1768,6 +1799,7 @@
     prevFromYoy, pairBars3d, ringGeom, ring, paceBar, yoyBar, cmpPair, changeOf, bulletModel, bullet, returnsPeriods, returns3d, marginLine,
     pinLayer, RANGES, seriesWindow, marketChart, refGaugeModel, refGauge, DURATION, durationBar, caseScale, monthBar,
     RV_KIND, reviewModel, reviewChart, FLOW_DIR, flowHtml, seesawHtml,
+    jstParts, safeHref, headlineItems, ageBadge,
   };
   G.KABU_CHARTS = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);
