@@ -14,6 +14,7 @@ node tools/fetch-doc.mjs 6501 <PDFのURL> --name 2027-1Q-tanshin   # PDF → raw
 node tools/doc-slice.mjs <txt> --pages 1-2,8 | --grep 調整後営業利益  # 必要なページ・行だけ（20KBまで）
 node tools/validate.mjs ../data/stocks/6501/analyses/<file>.json          # type（quick/chart/kessan/news/hansei/market/yougo）でスキーマを選び、意味検証（禁止語・順序など）と置き場所・ファイル名の検査。NG は exit 1
 node build.mjs [--no-viewer]               # ../data → app/data.js と ~/Desktop/KABU LAB.html（単体ビューア。config.json の viewerPath）。分析ファイル名の型と中身の type が違えば exit 1
+node tools/refresh.mjs [--no-viewer]       # 自動更新の第1層（トークン0）: 市場 → 登録銘柄（分析が1件以上。--if-stale・間2秒）→ 見出し → build。結果は data/refresh.json。exit 0=全部成功・2=一部失敗・1=build 失敗（知らない引数も1）
 python3 tools/pdf2text.py <pdf> <out.txt>  # PDF → ページ区切り付きテキスト（fetch-doc が内部で使う）
 npm test                                   # = node --test tests/
 ```
