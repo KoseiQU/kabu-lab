@@ -271,7 +271,7 @@ test('置き場所の検査: analyses の型・market のファイル名・gloss
   assert.match(msgs(placementErrors('/x/data/stocks/6501/analyses/2026-10-02-quick.json', n)), /ファイル名の型「quick」と中身の type「news」/);
   const m = load('market-sample.json');
   assert.deepEqual(placementErrors('/x/data/market/2026-10-02.json', m), []);
-  assert.match(msgs(placementErrors('/x/data/market/2026-10-02-market.json', m)), /<最終取引日>\.json/);
+  assert.match(msgs(placementErrors('/x/data/market/2026-10-02-market.json', m)), /<日付>\.json（実行日）/);
   assert.match(msgs(placementErrors('/x/data/stocks/6501/analyses/2026-10-02-market.json', m)), /analyses\/ ではなく data\/market/);
   const y = load('yougo-sample.json');
   assert.deepEqual(placementErrors('/x/data/glossary/金利と株価.json', y), []);

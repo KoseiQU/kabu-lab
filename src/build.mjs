@@ -29,10 +29,20 @@ function readJson(path) {
   }
 }
 const readIf = (p) => (existsSync(p) ? readJson(p) : null);
+/** 機械が書く補助ファイル（refresh.json・headlines.json）は壊れていても build を止めない（警告して null） */
+function readSoft(path, warn) {
+  if (!existsSync(path)) return null;
+  try {
+    return JSON.parse(readFileSync(path, 'utf8'));
+  } catch (e) {
+    warn(`読めないので省きます: ${path} (${e.message})`);
+    return null;
+  }
+}
 const isDir = (p) => existsSync(p) && statSync(p).isDirectory();
 const jsonFiles = (dir) => (isDir(dir) ? readdirSync(dir).filter((f) => f.endsWith('.json')).sort() : []);
 
-export function buildData({ dataDir = DATA_DIR, schemasDir = join(ROOT, 'schemas'), now = new Date() } = {}) {
+export function buildData({ dataDir = DATA_DIR, schemasDir = join(ROOT, 'schemas'), now = new Date(), warn = (m) => console.warn(`警告: ${m}`) } = {}) {
   const stocks = {};
   const allAnalyses = [];
   const pricesByCode = new Map(); // 答え合わせ用の全日足（prices.rows は直近250本に切り詰めるため）
@@ -55,6 +65,7 @@ export function buildData({ dataDir = DATA_DIR, schemasDir = join(ROOT, 'schemas
       return a;
     });
     analyses.sort((a, b) => (a.date === b.date ? (a._file < b._file ? 1 : -1) : a.date < b.date ? 1 : -1)); // 日付降順
+    for (const a of analyses) a._age = analysisAge(a, pricesFull?.rows); // 鮮度（基準日より後の取引日数）
     allAnalyses.push(...analyses);
     const indicators = pricesFull?.rows?.length ? buildIndicators(pricesFull.rows, prices.rows.length) : null;
     const finance = readIf(join(dir, 'finance.json'));
@@ -76,11 +87,13 @@ export function buildData({ dataDir = DATA_DIR, schemasDir = join(ROOT, 'schemas
     })
     .sort((a, b) => (a.date === b.date ? (a._file < b._file ? 1 : -1) : a.date < b.date ? 1 : -1));
   const series = readIf(join(mdir, 'series.json'));
+  for (const a of marketAnalyses) a._age = analysisAge(a, series?.series?.['^N225']?.rows); // 市場は日経平均の日足で数える
   const market = {
     raw: rawF ? readJson(join(mdir, rawF)) : null,
     analysis: marketAnalyses[0] ?? null,
     analyses: marketAnalyses,
     series,
+    headlines: sanitizeHeadlines(readSoft(join(mdir, 'headlines.json'), warn)),
   };
   // 用語・気づき・答え合わせは銘柄と市場の分析の全件から
   const everyAnalysis = [...allAnalyses, ...marketAnalyses];
@@ -136,6 +149,7 @@ export function buildData({ dataDir = DATA_DIR, schemasDir = join(ROOT, 'schemas
 
   return {
     generatedAt: now.toISOString(),
+    refresh: sanitizeRefresh(readSoft(join(dataDir, 'refresh.json'), warn)),
     stocks,
     market,
     glossary: [...glossary.values()].sort((a, b) => a.term.localeCompare(b.term, 'ja')),
@@ -147,6 +161,39 @@ export function buildData({ dataDir = DATA_DIR, schemasDir = join(ROOT, 'schemas
 
 const isNum = (x) => typeof x === 'number' && Number.isFinite(x);
 const round2 = (x) => Math.round(x * 100) / 100;
+const isDate = (d) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
+
+/**
+ * 鮮度（DESIGN.md §5.9）: 分析の基準日（price.asOf。無ければ date）より後の取引日数。
+ * rows は日付昇順の日足 [{d, ...}]（銘柄は prices.json の全期間、市場は series の日経平均）。数えられなければ null
+ */
+export function analysisAge(a, rows) {
+  const base = isDate(a?.price?.asOf) ? a.price.asOf : isDate(a?.date) ? a.date : null;
+  if (!base || !Array.isArray(rows) || !rows.length) return null;
+  return rows.filter((r) => r && typeof r.d === 'string' && r.d > base).length;
+}
+
+const isHttp = (u) => typeof u === 'string' && /^https?:\/\//i.test(u.trim());
+const str = (v, n) => (typeof v === 'string' ? v.slice(0, n) : '');
+/** headlines.json → 画面に渡す形（題名は文字列だけ・URL は http(s) だけ。画面でも必ずエスケープする） */
+export function sanitizeHeadlines(h) {
+  if (!h || typeof h !== 'object') return null;
+  const items = (Array.isArray(h.items) ? h.items : [])
+    .filter((x) => x && typeof x.title === 'string' && x.title.trim() && isHttp(x.url))
+    .map((x) => ({ title: str(x.title, 200), url: x.url.trim(), source: str(x.source, 40), publishedAt: typeof x.publishedAt === 'string' ? x.publishedAt : null }));
+  const sources = (Array.isArray(h.sources) ? h.sources : []).filter((x) => x && typeof x === 'object')
+    .map((x) => ({ name: str(x.name, 40), url: isHttp(x.url) ? x.url.trim() : null, ok: x.ok === true, count: isNum(x.count) ? x.count : 0, message: str(x.message, 200) }));
+  return { fetchedAt: typeof h.fetchedAt === 'string' ? h.fetchedAt : null, sources, items };
+}
+/** refresh.json → 画面に渡す形（キーと型だけ揃える） */
+export function sanitizeRefresh(r) {
+  if (!r || typeof r !== 'object' || typeof r.at !== 'string') return null;
+  const steps = (Array.isArray(r.steps) ? r.steps : []).filter((s) => s && typeof s.key === 'string')
+    .map((s) => ({ key: s.key, ok: s.ok === true, message: str(s.message, 200), ...(isNum(s.sec) ? { sec: s.sec } : {}) }));
+  const stocks = (Array.isArray(r.stocks) ? r.stocks : []).filter((s) => s && typeof s.code === 'string')
+    .map((s) => ({ code: s.code, ok: s.ok === true, lastDate: isDate(s.lastDate) ? s.lastDate : null, message: str(s.message, 200) }));
+  return { at: r.at, finishedAt: typeof r.finishedAt === 'string' ? r.finishedAt : null, steps, stocks };
+}
 export const REVIEW_YOUNG_DAYS = 5;
 
 /**

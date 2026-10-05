@@ -2,7 +2,7 @@
  "$schema": "http://json-schema.org/draft-07/schema#",
  "$id": "kabu-lab/market.schema.json",
  "title": "KABU LAB 分析JSON（market: 市場）",
- "description": "DESIGN.md §5 の共通骨格（code は null・name は「市場」・price は日経平均）＋ §5.4 の sections。保存先は data/market/<最終取引日>.json。意味検証（outlook の順序・geo の影響順・gauges の範囲）は tools/validate.mjs が追加で行う。",
+ "description": "DESIGN.md §5 の共通骨格（code は null・name は「市場」・price は日経平均）＋ §5.4 の sections。保存先は data/market/<実行日>.json（§5.9。2026-10-05 以前は最終取引日）。意味検証（outlook の順序・geo の影響順・gauges の範囲）は tools/validate.mjs が追加で行う。",
  "type": "object",
  "required": ["schema", "type", "code", "name", "date", "price", "summary", "sections", "terms", "insight", "sources", "missing"],
  "properties": {
@@ -170,6 +170,10 @@
        "label": { "type": "string", "minLength": 1, "maxLength": 30 }
       }
      }
+    },
+    "edition": {
+     "type": "string", "enum": ["pre", "post", "other"],
+     "description": "任意（§5.9）。pre＝寄り付き前の版・post＝大引け後の版・other＝それ以外。画面は分析日の横に表示する"
     }
    }
   },

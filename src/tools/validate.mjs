@@ -295,7 +295,7 @@ export function resolveInput(file) {
 /**
  * 保存場所とファイル名の検査（data/ 配下の置き場所だけ。フィクスチャ等は対象外）
  * - analyses/<日付>-<型>.json: 型が中身の type と一致
- * - market/<日付>.json: 市場型の分析
+ * - market/<日付>.json: 市場型の分析（日付は実行日。§5.9）
  * - glossary/<用語>.json: ファイル名が termFileName(term)
  */
 export function placementErrors(path, a) {
@@ -307,7 +307,7 @@ export function placementErrors(path, a) {
     else if (m[2] !== a?.type) errors.push({ path: '$.type', message: `ファイル名の型「${m[2]}」と中身の type「${a?.type}」が食い違っています` });
     if (a?.type === 'market' || a?.type === 'yougo') errors.push({ path: '$.type', message: `${a.type} 型は analyses/ ではなく ${a.type === 'market' ? 'data/market/<日付>.json' : 'data/glossary/<用語>.json'} に置きます` });
   } else if (dir === 'market' && a?.type === 'market') {
-    if (!/^\d{4}-\d{2}-\d{2}\.json$/.test(f)) errors.push({ path: '$', message: `市場型のファイル名は <最終取引日>.json にしてください: ${f}` });
+    if (!/^\d{4}-\d{2}-\d{2}\.json$/.test(f)) errors.push({ path: '$', message: `市場型のファイル名は <日付>.json（実行日）にしてください: ${f}` });
   } else if (dir === 'glossary' && a?.type === 'yougo') {
     const want = `${termFileName(a.term)}.json`;
     if (f !== want) errors.push({ path: '$', message: `用語のファイル名は ${want} にしてください（実際: ${f}）` });

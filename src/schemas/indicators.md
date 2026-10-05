@@ -101,3 +101,40 @@ quick の `scenarios` と market の `outlook` ごとに1件。日付降順の�
 | `insight` | 全分析（市場も含む。市場は `code` が null）の `insight` | なし |
 | `lesson` | chart・hansei の `sections.lesson` | `lesson.title` |
 | `nextCheck` | hansei の `sections.nextChecks[]`（1項目=1件） | `label`（`text` は `how`） |
+
+# P5a で window.KABU に足したキー（自動更新。DESIGN.md §5.9）
+
+既存のキーの形は変えていない。下の3つは無ければ `null`（`_age` は数えられなければ `null`）。
+
+## refresh（`data/refresh.json`。`node tools/refresh.mjs` が書く）
+
+```
+refresh = { at, finishedAt, steps: [{key, ok, message, sec?}], stocks: [{code, ok, lastDate, message}] } | null
+```
+
+| キー | 形 |
+|---|---|
+| `at` | 更新を始めた時刻（ISO、UTC）。画面の「データ更新 10/05 07:21」はこれを日本時間で表示する |
+| `finishedAt` | 終えた時刻（ISO）。無ければ null |
+| `steps` | 4件・この順: `key` = `market` / `stocks` / `headlines` / `build`。`ok` は真偽、`message` は1行の説明、`sec` は所要秒（任意） |
+| `stocks` | 登録銘柄（分析が1件以上ある銘柄）ごとの結果。`lastDate` は prices.json の最終日（無ければ null） |
+
+build は refresh.json を data.js に入れる前に作るため、data.js の `steps` の build は「成功した前提」の行（build が失敗したときは data.js 自体が作り直されない）。
+
+## market.headlines（`data/market/headlines.json`。`collect/headlines.mjs` が書く）
+
+```
+market.headlines = { fetchedAt, sources: [{name, url, ok, count, message}], items: [{title, url, source, publishedAt}] } | null
+```
+
+- `items` は新しい順に最大30件。同じ題名は1つ。`publishedAt` は ISO（読めなければ null）。題名とリンクだけ（本文・要約は持たない）。
+- build は `url` が http(s) でない項目・題名が文字列でない項目を落としてから渡す。題名は外部の文字列なので、画面は必ずエスケープして描く。
+
+## analyses[]._age（鮮度）
+
+各分析（`stocks[code].analyses[]`・`market.analyses[]`）に `_age` を足す。分析の基準日（`price.asOf`。無ければ `date`）より**後**の取引日数。
+銘柄は `prices.json` の全期間（`prices.rows` の250本ではない）、市場は `series.json` の日経平均で数える。日足が無い・基準日が読めないときは `null`。画面は再計算しない。
+
+## 市場型の sections.edition（任意）
+
+`pre`（寄り付き前の版）／`post`（大引け後の版）／`other`。スキーマは `schemas/market.schema.json`。
