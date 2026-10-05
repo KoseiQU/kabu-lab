@@ -54,11 +54,15 @@ test('build: market の分析を全件・日付降順で analyses に、最新�
   }
 });
 
-test('build: market が無くても形は同じ（analyses は空配列、series・headlines は null。refresh も null）', () => {
+test('build: market が無くても形は同じ（analyses は空配列、series・headlines・sectors・movers は null、picks は空。refresh も null）', () => {
   const dir = mkdtempSync(join(tmpdir(), 'kabu-build3-'));
   try {
     const k = buildData({ dataDir: join(dir, 'data') });
-    assert.deepEqual(k.market, { raw: null, analysis: null, analyses: [], series: null, headlines: null });
+    assert.deepEqual(k.market, {
+      raw: null, analysis: null, analyses: [], series: null, headlines: null,
+      // P6a（§5.10）
+      sectors: null, movers: null, picks: [], picksSummary: { all: 0, tailwind: { above: 0, total: 0 }, headwind: { below: 0, total: 0 }, young: 0, noPrice: 0 },
+    });
     assert.equal(k.refresh, null);
     assert.deepEqual(k.review, []);
   } finally {
