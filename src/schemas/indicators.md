@@ -138,3 +138,47 @@ market.headlines = { fetchedAt, sources: [{name, url, ok, count, message}], item
 ## 市場型の sections.edition（任意）
 
 `pre`（寄り付き前の版）／`post`（大引け後の版）／`other`。スキーマは `schemas/market.schema.json`。
+
+## P6a（§5.10）業種の動き・値上がり／値下がりの上位・注目候補の答え合わせ
+
+### market.sectors（`data/market/sectors.json`。`collect/market.mjs` が書く）
+
+```
+market.sectors = { asOf, generatedAt, note, source:{title, url}, items: [{key, code, name, close, d1, w1, m1, asOf}], missing: [文字列] } | null
+```
+
+- `items` は 17件（TOPIX-17 業種別ETF 1617〜1633。業種コード順）。`d1`・`w1`・`m1` は 1日・1週（5営業日前）・1か月（21営業日前）の終値との騰落率（%・小数2桁）。データ不足は `null`。
+- 指数そのものではなくETFで代用（画面に注記する）。市場型の分析の `themes[].sectorKey` はこの `code`（文字列）。
+- 収集が昼に走ると `d1` は取引中の値（大引け後の実行で確定値に置き換わる）。
+
+### market.movers（`data/market/movers.json`）
+
+```
+market.movers = { asOf, time, generatedAt, source:{title, url}, up: [{code, name, pct, close}], down: [...] } | null
+```
+
+- 株探のランキング（値上がり率 `mode=2_1`・値下がり率 `mode=2_2`、`market=1`＝プライム）から、市場の欄が「東Ｐ」の株式だけを各最大10件。ETF・REIT・優先株などは名前でも除く。
+- `asOf`・`time` は株探の表示（`2026-10-05`・`11:53`）。社名は株探の略称（全角英数は NFKC で半角に）。外部の文字列なので画面は必ずエスケープ。
+- build はコードの形が違う行・`pct` が数値でない行を落とす。両方0件なら null（画面は「未取得」）。
+
+### market.picks・market.picksSummary（注目候補の答え合わせ）
+
+```
+market.picks = [{ date, asOf, file, theme, dir: tailwind|headwind, horizon: short|mid, sectorKey, code, name, why,
+                  base, baseDate, latest, latestDate, pct, nikkeiPct, diff, days, young, priceFrom: stock|picks|null }]
+market.picksSummary = { all, tailwind:{above, total}, headwind:{below, total}, young, noPrice }
+```
+
+- 市場型の分析（全期間）の `sections.themes[].stocks[]` 1件ごとに1行。新しい分析から。
+- 終値は登録済み銘柄の `prices.json` を優先し、無ければ `picks-prices.json`（直近60日の分析の候補を Yahoo で取ったもの）。登録済みでも `prices.json` の最終日が `picks-prices.json` より前なら新しいほうを使う（`priceFrom` で分かる）。
+- `base` は分析の `price.asOf` の日の終値（無ければその直前の取引日。`baseDate`）。`latest` は手元の最新の終値。`pct` は騰落率（%）、`nikkeiPct` は `baseDate`〜`latestDate` の日経平均の騰落率（同じく直前の取引日に寄せる）、`diff`＝`pct`−`nikkeiPct`、`days` は `baseDate` より後の営業日数（その銘柄の日足で数える）、`young` は5営業日未満。
+- 株価が無い（基準日以前の株価が無いものも含む）候補は `base`〜`days` を null にして残す（`young` は false）。
+- `picksSummary` は young と数値の欠けた候補を除いて、追い風の候補のうち `pct > nikkeiPct` の数／対象数、向かい風の候補のうち `pct < nikkeiPct` の数／対象数。同じ値はどちらにも数えない。評価語は付けない（機械的な比較）。画面は再計算しない。
+
+### data/market/picks-prices.json
+
+```
+{ generatedAt, range: "3mo", source, codes: [...], prices: { "<code>": { rows: [{d, c}] } }, missing: [{code, reason}] }
+```
+
+- 応答に無いコード（コードの誤り・上場廃止）と、1回の上限（20銘柄×2リクエスト）を超えたコードは `missing` に残す。候補が0件なら書かない。

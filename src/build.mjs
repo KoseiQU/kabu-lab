@@ -94,7 +94,17 @@ export function buildData({ dataDir = DATA_DIR, schemasDir = join(ROOT, 'schemas
     analyses: marketAnalyses,
     series,
     headlines: sanitizeHeadlines(readSoft(join(mdir, 'headlines.json'), warn)),
+    // P6a（§5.10）: 業種の動き・値上がり／値下がりの上位・注目候補の追跡（機械が書くファイルは壊れていても止めない）
+    sectors: sanitizeSectors(readSoft(join(mdir, 'sectors.json'), warn)),
+    movers: sanitizeMovers(readSoft(join(mdir, 'movers.json'), warn)),
+    picks: [],
+    picksSummary: null,
   };
+  {
+    const pk = buildPicks(marketAnalyses, { pricesByCode, picksPrices: readSoft(join(mdir, 'picks-prices.json'), warn), nikkei: series?.series?.['^N225']?.rows ?? null });
+    market.picks = pk.items;
+    market.picksSummary = pk.summary;
+  }
   // 用語・気づき・答え合わせは銘柄と市場の分析の全件から
   const everyAnalysis = [...allAnalyses, ...marketAnalyses];
 
@@ -195,6 +205,101 @@ export function sanitizeRefresh(r) {
   return { at: r.at, finishedAt: typeof r.finishedAt === 'string' ? r.finishedAt : null, steps, stocks };
 }
 export const REVIEW_YOUNG_DAYS = 5;
+
+/* ---------- P6a（§5.10）: 業種の動き・値上がり／値下がりの上位・注目候補の答え合わせ ---------- */
+const numOrNull = (x) => (isNum(x) ? x : null);
+const CODE_RE = /^[0-9][0-9A-Z]{3}$/;
+/** sectors.json → 画面に渡す形（17業種の行。数値でないものは null） */
+export function sanitizeSectors(x) {
+  if (!x || typeof x !== 'object' || !Array.isArray(x.items)) return null;
+  const items = x.items.filter((i) => i && typeof i.code === 'string' && /^16\d\d$/.test(i.code))
+    .map((i) => ({ key: str(i.key, 24), code: i.code, name: str(i.name, 24), close: numOrNull(i.close), d1: numOrNull(i.d1), w1: numOrNull(i.w1), m1: numOrNull(i.m1), asOf: isDate(i.asOf) ? i.asOf : null }));
+  if (!items.length) return null;
+  return { asOf: isDate(x.asOf) ? x.asOf : null, generatedAt: typeof x.generatedAt === 'string' ? x.generatedAt : null, note: str(x.note, 200), source: x.source && isHttp(x.source.url) ? { title: str(x.source.title, 120), url: x.source.url.trim() } : null, items, missing: (Array.isArray(x.missing) ? x.missing : []).filter((m) => typeof m === 'string').map((m) => m.slice(0, 60)) };
+}
+/** movers.json → 画面に渡す形（東証プライムの値上がり・値下がりの上位。社名は外部の文字列なので画面でも必ずエスケープ） */
+export function sanitizeMovers(x) {
+  if (!x || typeof x !== 'object') return null;
+  const rows = (l) => (Array.isArray(l) ? l : []).filter((r) => r && typeof r.code === 'string' && CODE_RE.test(r.code) && isNum(r.pct)).slice(0, 10)
+    .map((r) => ({ code: r.code, name: str(r.name, 40), pct: r.pct, close: numOrNull(r.close) }));
+  const up = rows(x.up), down = rows(x.down);
+  if (!up.length && !down.length) return null;
+  return { asOf: isDate(x.asOf) ? x.asOf : null, time: typeof x.time === 'string' && /^\d{2}:\d{2}$/.test(x.time) ? x.time : null, generatedAt: typeof x.generatedAt === 'string' ? x.generatedAt : null, source: x.source && isHttp(x.source.url) ? { title: str(x.source.title, 120), url: x.source.url.trim() } : null, up, down };
+}
+/** 日付昇順の rows のうち、date 以前で最後の行（無ければ null） */
+export function closeOnOrBefore(rows, date) {
+  let hit = null;
+  for (const r of Array.isArray(rows) ? rows : []) {
+    if (!r || typeof r.d !== 'string' || !isNum(r.c)) continue;
+    if (r.d <= date) hit = r;
+    else break;
+  }
+  return hit;
+}
+const cleanRows = (rows) => (Array.isArray(rows) ? rows : []).filter((r) => r && isDate(r.d) && isNum(r.c)).map((r) => ({ d: r.d, c: r.c })).sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0));
+/**
+ * 候補1銘柄の終値列: 登録済み銘柄（prices.json）を優先し、無ければ picks-prices.json。
+ * 登録済みでも prices.json が picks-prices より古い（最終日が前）なら新しいほうを使う（再収集されていない登録銘柄への配慮）
+ */
+export function pickRows(code, { pricesByCode, picksPrices }) {
+  const reg = cleanRows(pricesByCode?.get?.(code));
+  const pp = cleanRows(picksPrices?.prices?.[code]?.rows);
+  if (reg.length && (!pp.length || reg.at(-1).d >= pp.at(-1).d)) return { rows: reg, from: 'stock' };
+  if (pp.length) return { rows: pp, from: 'picks' };
+  return { rows: [], from: null };
+}
+/**
+ * 注目候補の答え合わせ（§5.10）。市場型の分析の themes[].stocks[] を1件ずつ追う。
+ * base＝分析の price.asOf の日の終値（無ければその直前の取引日）、latest＝手元の最新の終値、pct＝騰落率、
+ * nikkeiPct＝同じ期間（base の日〜latest の日）の日経平均の騰落率、diff＝pct−nikkeiPct、days＝base より後の営業日数、
+ * young＝5営業日未満。株価が無い候補は数値を null にして残す。
+ * summary: 追い風の候補のうち日経平均を上回った数／対象数、向かい風の候補のうち下回った数／対象数（young と null は除く）
+ */
+export function buildPicks(analyses, { pricesByCode = new Map(), picksPrices = null, nikkei = null } = {}) {
+  const items = [];
+  const nk = cleanRows(nikkei);
+  const list = [...(Array.isArray(analyses) ? analyses : [])].filter((a) => a && a.type === 'market' && isDate(a.date))
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  for (const a of list) {
+    const asOf = isDate(a.price?.asOf) ? a.price.asOf : a.date;
+    for (const th of Array.isArray(a.sections?.themes) ? a.sections.themes : []) {
+      if (!th || typeof th !== 'object') continue;
+      for (const st of Array.isArray(th.stocks) ? th.stocks : []) {
+        if (!st || typeof st.code !== 'string' || !CODE_RE.test(st.code)) continue;
+        const { rows, from } = pickRows(st.code, { pricesByCode, picksPrices });
+        const b = closeOnOrBefore(rows, asOf);
+        const l = rows.at(-1) ?? null;
+        const ok = b && l && l.d >= b.d && b.c > 0;
+        const pct = ok ? round2(((l.c - b.c) / b.c) * 100) : null;
+        const days = ok ? rows.filter((r) => r.d > b.d && r.d <= l.d).length : null;
+        const nb = ok ? closeOnOrBefore(nk, b.d) : null, nl = ok ? closeOnOrBefore(nk, l.d) : null;
+        const nikkeiPct = nb && nl && nb.c > 0 ? round2(((nl.c - nb.c) / nb.c) * 100) : null;
+        items.push({
+          date: a.date, asOf, file: a._file ?? null,
+          theme: typeof th.name === 'string' ? th.name : '', dir: th.dir === 'headwind' ? 'headwind' : 'tailwind', horizon: th.horizon === 'mid' ? 'mid' : 'short', sectorKey: typeof th.sectorKey === 'string' ? th.sectorKey : null,
+          code: st.code, name: typeof st.name === 'string' ? st.name : st.code, why: typeof st.why === 'string' ? st.why : '',
+          base: ok ? b.c : null, baseDate: ok ? b.d : null, latest: ok ? l.c : null, latestDate: ok ? l.d : null,
+          pct, nikkeiPct, diff: isNum(pct) && isNum(nikkeiPct) ? round2(pct - nikkeiPct) : null,
+          days, young: isNum(days) ? days < REVIEW_YOUNG_DAYS : false, priceFrom: ok ? from : null,
+        });
+      }
+    }
+  }
+  return { items, summary: picksSummary(items) };
+}
+/** 集計（young と数値の欠けた候補は除く。同じ値は「上回った／下回った」に数えない） */
+export function picksSummary(items) {
+  const L = Array.isArray(items) ? items : [];
+  const usable = L.filter((x) => !x.young && isNum(x.pct) && isNum(x.nikkeiPct));
+  const tw = usable.filter((x) => x.dir === 'tailwind'), hw = usable.filter((x) => x.dir === 'headwind');
+  return {
+    all: L.length,
+    tailwind: { above: tw.filter((x) => x.pct > x.nikkeiPct).length, total: tw.length },
+    headwind: { below: hw.filter((x) => x.pct < x.nikkeiPct).length, total: hw.length },
+    young: L.filter((x) => x.young).length,
+    noPrice: L.filter((x) => !isNum(x.pct) || !isNum(x.nikkeiPct)).length,
+  };
+}
 
 /**
  * 答え合わせ1件: 基準（price.close・price.asOf）、3つの目安、基準日より後の終値列、経過営業日数、
