@@ -5,13 +5,13 @@
 (function () {
   'use strict';
   const BAD = /NaN|undefined|Infinity/;
-  const BANNED = ['買い推奨', '売り推奨', '買うべき', '売るべき', '今が買い', '今が売り'];
+  const BANNED = ['買い推奨', '売り推奨', '買うべき', '売るべき', '今が買い', '今が売り', 'おすすめ銘柄', '推奨銘柄', '必ず上がる', '確実に上がる'];
   const SVG_ATTRS = ['d', 'points', 'x', 'y', 'x1', 'x2', 'y1', 'y2', 'cx', 'cy', 'r', 'rx', 'ry', 'width', 'height', 'transform', 'viewBox', 'style'];
   const QUICK_SECS = ['price', 'diagnosis', 'valuation', 'performance', 'segments', 'scenarios', 'margin', 'checklist', 'review', 'notes'];
   const ABSENT_SECS = ['diagnosis', 'performance', 'valuation', 'segments', 'scenarios', 'margin', 'checklist'];
   const CHART_SECS = ['timeframes', 'lvchart', 'levels', 'heat', 'checklist', 'plans', 'lesson', 'notes'];
-  const MARKET_SECS = ['mkchart', 'level', 'mkind', 'outlook', 'fx', 'rates', 'geo', 'calendar', 'news', 'headlines', 'notes'];
-  const MARKET_RAW_SECS = ['mkchart', 'mkind', 'standby', 'headlines'];
+  const MARKET_SECS = ['mkchart', 'level', 'mkind', 'sectors', 'movers', 'outlook', 'fx', 'themes', 'rates', 'geo', 'calendar', 'news', 'headlines', 'picks', 'notes'];
+  const MARKET_RAW_SECS = ['mkchart', 'mkind', 'standby', 'sectors', 'movers', 'headlines', 'picks'];
   const NEWS_SECS = ['event', 'impact', 'nchart', 'reaction', 'factors', 'cases', 'related', 'takeaway', 'notes'];
   const HANSEI_SECS = ['hchart', 'result', 'position', 'at', 'goodimprove', 'alt', 'nextChecks', 'lesson', 'notes'];
   /** 市場ページで表示している分析（日付指定が無ければ最新） */
@@ -316,7 +316,7 @@
       if (over) add('① 見出しがはみ出している', (ph.querySelector('h2') || {}).textContent || '');
     });
     // 文字の切れ（はみ出しを隠す枠の中で内容が収まっていない）
-    main.querySelectorAll('.ck, .sc, .vg, .term, .dg, .insight, .srow, .mi, .h-mr .cg, .h-mr .vl, .tf, .lvr, .hc, .cr, .plh, .plc, .lsn, .lsx, .kpt, .krc, .kdr, .kpmc, .kfr, .kir, .kicc, .kyc, .kvc, .kbr, .knx li, .kpd, .kvl, .kft td, .krt td, .nwc, .gk, .rtc, .mg, .fxe, .csr, .rli, .ncc, .alc, .hrc, .pll, .du, .mki, .cal li, .gi, .gtx, .fb, .ni, .nks, .nbr, .rvk, .rvr, .rvbr, .gcat').forEach((el) => {
+    main.querySelectorAll('.ck, .sc, .vg, .term, .dg, .insight, .srow, .mi, .h-mr .cg, .h-mr .vl, .tf, .lvr, .hc, .cr, .plh, .plc, .lsn, .lsx, .kpt, .krc, .kdr, .kpmc, .kfr, .kir, .kicc, .kyc, .kvc, .kbr, .knx li, .kpd, .kvl, .kft td, .krt td, .nwc, .gk, .rtc, .mg, .fxe, .csr, .rli, .ncc, .alc, .hrc, .pll, .du, .mki, .cal li, .gi, .gtx, .fb, .ni, .nks, .nbr, .rvk, .rvr, .rvbr, .gcat, .sr, .mvr, .tst, .thc, .pkr, .pks, .h-sec').forEach((el) => {
       const tol = getComputedStyle(el).overflowY === 'visible' ? 4 : 1; /* 見える枠は字形のはみ出し（行高1）を許す */
       if (el.scrollHeight > el.clientHeight + tol || el.scrollWidth > el.clientWidth + 1) add('① 文字が切れている', el.textContent.trim().slice(0, 24));
     });
@@ -390,6 +390,7 @@
     // 他のページと同じフッター（出典・注意書き）
     if (!main.querySelector('.foot-b [data-sources]') || !/学習用の分析であり、売買の推奨ではありません/.test((main.querySelector('.foot-b') || {}).textContent || '')) add('① フッター（出典・注意書き）が無い', route.view);
     if (a && ['market', 'news', 'hansei'].includes(a.type)) checkP3(a, route, add);
+    if (route.view === 'home' || route.view === 'market') checkP6a(route, add);
     // missing の文はどの型でも画面（フッターの未取得一覧）に出す
     if (a && a.type !== 'quick') {
       const list = main.querySelector('[data-missing-list]');
@@ -927,7 +928,7 @@
   function checkInteractions(route, add) {
     const A = app(), main = document.getElementById('main');
     const D = window.KABU, st = D.stocks[route.code];
-    if (route.view === 'market') { checkMarketRange(add); return; }
+    if (route.view === 'market') { checkMarketRange(add); checkP6aUI(add); return; }
     const a = st && (st.analyses || []).find((x) => x.type === (route.type || 'quick') && (!route.date || x.date === route.date));
     if (!a || !['quick', 'chart', 'kessan'].includes(route.type || 'quick')) return;
     if (a.type !== 'quick') checkInteractionsP2(route, a, add);
@@ -1184,6 +1185,283 @@
       });
     });
   }
+  /* ---------- P6a：業種の動き・値上がり／値下がりの上位・追い風／向かい風と注目候補・注目候補の答え合わせ ---------- */
+  const EVAL_WORDS = /的中|外れ|当たり|成功|失敗|正解|勝ち|負け/;
+  const pctS = (v) => window.KABU_CHARTS.fmtS(v, 2) + '%';
+  const sectorItems = (D) => { const s = D.market && D.market.sectors; return s && Array.isArray(s.items) ? s.items.filter((x) => x && typeof x.code === 'string') : []; };
+  const sortSec = (items, span) => { const v = (x) => (isN(x[span]) ? x[span] : -Infinity); return items.slice().sort((a, b) => (v(b) === v(a) ? String(a.code).localeCompare(String(b.code)) : v(b) > v(a) ? 1 : -1)); };
+  /** その画面の業種の並び（data-sector の順）が期間 span の騰落率順か */
+  function checkSectorRows(sp, items, span, add, what) {
+    const got = [...sp.querySelectorAll('[data-sector]')].map((r) => r.dataset.sector);
+    const want = sortSec(items, span).map((x) => x.code);
+    if (got.join() !== want.join()) add(`業種：${what}の並びが騰落率順でない`, `${span} ${got.slice(0, 4).join(',')} ≠ ${want.slice(0, 4).join(',')}`);
+    sp.querySelectorAll('[data-sector]').forEach((r) => {
+      const it = items.find((x) => x.code === r.dataset.sector), v = it && it[span];
+      const u = r.querySelector('.sb u');
+      if (isN(v) && v !== 0 && !u) add('業種：棒が無い', r.dataset.sector);
+      if (u && (u.classList.contains('neg') !== (v < 0))) add('業種：上げ下げの色（向き）が違う', `${r.dataset.sector} ${v}`);
+      const t = r.querySelector('.sv').textContent;
+      if (t !== (isN(v) ? pctS(v) : '—')) add('業種：騰落率の表示が違う', `${r.dataset.sector} ${t} ≠ ${isN(v) ? pctS(v) : '—'}`);
+      if (u) { const w = parseFloat(u.style.width); if (!(w >= 0 && w <= 50.01)) add('業種：棒の長さが中心から片側の幅を超える', `${r.dataset.sector} ${w}`); }
+    });
+  }
+  /** 銘柄の行：登録済みはリンク、未登録はコピーのボタン */
+  function checkStockAct(el, code, add, what) {
+    const D = window.KABU, act = el && (el.matches('.sact') ? el : el.querySelector('.sact'));
+    if (!act) { add(`${what}：押せる銘柄になっていない`, code); return; }
+    if (D.stocks[code]) { if (act.tagName !== 'A' || act.getAttribute('href') !== `#/stock/${encodeURIComponent(code)}`) add(`${what}：登録済みなのに銘柄ページへのリンクでない`, code); }
+    else if (act.tagName !== 'BUTTON' || act.getAttribute('data-copy') !== `/kabu ${code}`) add(`${what}：未登録なのに /kabu のコピーでない`, code);
+  }
+  function checkP6a(route, add) {
+    const D = window.KABU, A = app(), main = document.getElementById('main');
+    const items = sectorItems(D);
+    if (route.view === 'home') {
+      const hs = main.querySelector('[data-home-sectors]');
+      const num = items.filter((x) => isN(x.d1));
+      if (!!hs !== !!num.length) add('ホーム：業種の1行の有無が違う', String(num.length));
+      if (hs) {
+        if (!visible(hs)) add('ホーム：業種の1行が見えない', '');
+        const ups = sortSec(num, 'd1').filter((x) => x.d1 > 0).slice(0, 3).map((x) => x.code), dns = sortSec(num, 'd1').filter((x) => x.d1 < 0).slice(-2).reverse().map((x) => x.code);
+        const got = (c) => [...hs.querySelectorAll(`.${c}[data-hs]`)].map((e) => e.dataset.hs).join();
+        if (got('up') !== ups.join() || got('dn') !== dns.join()) add('ホーム：上昇・下落業種の選び方が違う', `${got('up')} / ${got('dn')}`);
+        const pnl = main.querySelector('[data-sec="market"] > .pi'); if (pnl && pnl.scrollHeight > pnl.clientHeight + 1) add('ホーム：業種の1行で市場パネルが切れる', '');
+      }
+      return;
+    }
+    if (route.view !== 'market') return;
+    const a = marketAnalysis(D, route), s = (a && a.sections) || {};
+    // 業種の動き
+    const sp = main.querySelector('[data-sec="sectors"]');
+    if (!sp) add('業種：枠が無い', '');
+    else if (!items.length) { if (!sp.querySelector('[data-nodata="sectors"]')) add('業種：無いのに未取得の表示が無い', ''); }
+    else {
+      if (sp.querySelectorAll('[data-sector]').length !== items.length) add('業種：行数が違う', `${sp.querySelectorAll('[data-sector]').length} ≠ ${items.length}`);
+      checkSectorRows(sp, items, A.secState(), add, '初期表示');
+      if (!/業種別ETF/.test(sp.textContent)) add('業種：ETFで代用の注記が無い', '');
+      const note = sp.querySelector('[data-sector-note]');
+      if (!!note !== !!(a && typeof s.sectorNote === 'string' && s.sectorNote)) add('業種：sectorNote の有無が違う', '');
+      if (note && !note.textContent.includes(s.sectorNote)) add('業種：sectorNote の文が違う', '');
+      if (sp.querySelectorAll('[data-sec-span]').length !== 3) add('業種：期間の切替が3つでない', '');
+    }
+    // 値上がり・値下がりの上位
+    const mp = main.querySelector('[data-sec="movers"]'), M = D.market && D.market.movers;
+    const mlist = (k) => ((M && M[k]) || []).filter((x) => x && isN(x.pct));
+    if (!mp) add('上位：枠が無い', '');
+    else if (!mlist('up').length && !mlist('down').length) { if (!mp.querySelector('[data-nodata="movers"]')) add('上位：無いのに未取得の表示が無い', ''); }
+    else {
+      [['up', 'up'], ['down', 'dn']].forEach(([k, dir]) => {
+        const want = mlist(k), rows = [...mp.querySelectorAll(`[data-movers="${dir}"] [data-mover]`)];
+        if (rows.length !== want.length) add('上位：行数が違う', `${k} ${rows.length} ≠ ${want.length}`);
+        rows.forEach((r, i) => {
+          const x = want[i]; if (!x) return;
+          if (r.querySelector('.mcd').textContent !== x.code || r.querySelector('.mnm').textContent !== (x.name || x.code)) add('上位：コード・社名がそのまま表示されない', `${k}:${i}`);
+          if (r.querySelector('.mp').textContent !== pctS(x.pct)) add('上位：騰落率の表示が違う', `${k}:${i}`);
+          checkStockAct(r, x.code, add, '上位');
+        });
+      });
+      if (mp.querySelector('img, script, iframe, [onerror], [onload]') || window.__KABU_XSS) add('上位：XSS（社名から要素が作られた）', '');
+    }
+    // 追い風・向かい風と注目候補
+    if (a) {
+      const tp = main.querySelector('[data-sec="themes"]');
+      const th = (s.themes || []).filter((t) => t && typeof t === 'object' && (t.name || (t.stocks || []).length));
+      if (!tp) add('テーマ：枠が無い', '');
+      else {
+        const note = tp.querySelector('[data-picks-note]');
+        if (!note || !visible(note) || note.textContent.replace(/^!/, '') !== A.PICKS_NOTE) add('テーマ：「売買の推奨ではありません」の注記が無い', '');
+        if (note && tp.querySelector('.ph') && note.getBoundingClientRect().top - tp.querySelector('.ph').getBoundingClientRect().bottom > 40) add('テーマ：注記が見出しから遠い', '');
+        if (!th.length) { if (!tp.querySelector('[data-standby="themes"]')) add('テーマ：無いのに未実行の表示が無い', ''); }
+        else {
+          const cards = [...tp.querySelectorAll('[data-theme]')];
+          if (cards.length !== th.length) add('テーマ：カードの数が違う', `${cards.length} ≠ ${th.length}`);
+          cards.forEach((c) => {
+            const t = th[+c.dataset.theme]; if (!t) return;
+            const zone = c.closest('[data-zone]');
+            if (!zone || zone.dataset.zone !== (t.dir === 'headwind' ? 'headwind' : 'tailwind')) add('テーマ：追い風と向かい風の区画が違う', t.name);
+            if (!c.classList.contains(t.dir === 'headwind' ? 'hw' : 'tw')) add('テーマ：色（向き）が違う', t.name);
+            const sts = (t.stocks || []).filter((x) => x && x.code);
+            const rows = [...c.querySelectorAll('[data-theme-stock]')];
+            if (rows.length !== sts.length) add('テーマ：候補の数が違う', t.name);
+            rows.forEach((r, j) => { checkStockAct(r, sts[j].code, add, 'テーマの候補'); if (!r.textContent.includes(sts[j].name || sts[j].code)) add('テーマ：候補の社名が無い', sts[j].code); });
+            if (!sts.length && !c.querySelector('[data-theme-nostock]')) add('テーマ：候補なしの表示が無い', t.name);
+            const sec = c.querySelector('[data-theme-sector]'), it = items.find((x) => x.code === t.sectorKey);
+            if (!sec) add('テーマ：業種の騰落率の欄が無い', t.name);
+            else if (it) ['d1', 'w1', 'm1'].forEach((k) => { if (!sec.textContent.includes(isN(it[k]) ? pctS(it[k]) : '—')) add('テーマ：業種の騰落率が sectors と違う', `${t.name} ${k}`); });
+            if (t.breakIf && !c.querySelector('.thb').textContent.includes(t.breakIf.slice(0, 10))) add('テーマ：崩れる条件が無い', t.name);
+            if (c.querySelectorAll('.thb > span').length !== 1 || c.querySelectorAll('.thb span').length !== 1) add('テーマ：崩れる条件の文に札の書式が混ざる', t.name);
+            if (t.reason && !c.querySelector('.thr')) add('テーマ：理由が無い', t.name);
+          });
+          const tw = tp.querySelector('[data-zone="tailwind"]'), hw = tp.querySelector('[data-zone="headwind"]');
+          if (tw && hw && getComputedStyle(tw.querySelector('.thzl')).borderLeftColor === getComputedStyle(hw.querySelector('.thzl')).borderLeftColor) add('テーマ：追い風と向かい風が同じ色', '');
+        }
+      }
+    }
+    // 注目候補の答え合わせ
+    const pp = main.querySelector('[data-sec="picks"]'), P = ((D.market && D.market.picks) || []).filter((x) => x && typeof x.code === 'string');
+    if (!pp) { add('答え合わせ（候補）：枠が無い', ''); return; }
+    if (!P.length) { const st = pp.querySelector('[data-standby="picks"]'); if (!st || !/まだ候補がありません/.test(st.textContent)) add('答え合わせ（候補）：0件の表示が違う', ''); return; }
+    const rows = [...pp.querySelectorAll('[data-pick]')];
+    if (rows.length !== P.length) add('答え合わせ（候補）：行数が違う', `${rows.length} ≠ ${P.length}`);
+    if (rows.filter((r) => visible(r)).length !== Math.min(A.PK_FIRST, P.length)) add('答え合わせ（候補）：最初に見える件数が違う', String(rows.filter((r) => visible(r)).length));
+    if (pp.querySelectorAll('[data-young]').length !== P.filter((x) => x.young).length) add('答え合わせ（候補）：「まだ日が浅い」の数が違う', '');
+    if (pp.querySelectorAll('[data-pk-noprice]').length !== P.filter((x) => !isN(x.pct)).length) add('答え合わせ（候補）：「株価未取得」の数が違う', '');
+    rows.forEach((r, i) => {
+      const x = P[i]; if (!x) return;
+      if (isN(x.pct) && !r.querySelector('.pkpc').textContent.includes(pctS(x.pct))) add('答え合わせ（候補）：騰落率の表示が違う', `${i}`);
+      if (isN(x.diff) && !r.querySelector('.pkdf').textContent.includes(window.KABU_CHARTS.fmtS(x.diff, 2))) add('答え合わせ（候補）：日経平均との差の表示が違う', `${i}`);
+      if (isN(x.nikkeiPct) && !r.querySelector('.pkdf').textContent.includes(pctS(x.nikkeiPct))) add('答え合わせ（候補）：日経平均の騰落率が無い', `${i}`);
+      if (r.dataset.pkDir !== x.dir) add('答え合わせ（候補）：向きが違う', `${i}`);
+      checkStockAct(r, x.code, add, '答え合わせ（候補）');
+    });
+    const sm = D.market.picksSummary || {};
+    const num = (sel) => { const e = pp.querySelector(sel); return e ? Number(e.textContent) : NaN; };
+    if (num('[data-pk-sum="tailwind"] [data-pk-hit]') !== ((sm.tailwind || {}).above || 0) || num('[data-pk-sum="tailwind"] [data-pk-total]') !== ((sm.tailwind || {}).total || 0)) add('答え合わせ（候補）：追い風の集計が違う', JSON.stringify(sm.tailwind));
+    if (num('[data-pk-sum="headwind"] [data-pk-hit]') !== ((sm.headwind || {}).below || 0) || num('[data-pk-sum="headwind"] [data-pk-total]') !== ((sm.headwind || {}).total || 0)) add('答え合わせ（候補）：向かい風の集計が違う', JSON.stringify(sm.headwind));
+    if (EVAL_WORDS.test(pp.textContent)) add('答え合わせ（候補）：評価語がある', (pp.textContent.match(EVAL_WORDS) || [''])[0]);
+    if (!pp.querySelector('[data-pk-note]') || !pp.querySelector('[data-pk-note]').textContent.includes(A.PK_NOTE)) add('答え合わせ（候補）：「機械的な比較」の注記が無い', '');
+    if (!!pp.querySelector('[data-pk-more]') !== P.length > A.PK_FIRST) add('答え合わせ（候補）：「もっと見る」の有無が違う', String(P.length));
+  }
+  /** 操作：期間の切替（並べ替え）・もっと見る・コピー。最後は初期状態に戻す */
+  function checkP6aUI(add) {
+    const A = app(), D = window.KABU, main = document.getElementById('main');
+    const items = sectorItems(D), sp = main.querySelector('[data-sec="sectors"]');
+    const init = A.secState();
+    if (sp && items.length) {
+      const h0 = sp.getBoundingClientRect().height;
+      [...sp.querySelectorAll('[data-sec-span]')].forEach((b) => {
+        b.click();
+        if (A.secState() !== b.dataset.secSpan || b.getAttribute('aria-pressed') !== 'true' || sp.querySelectorAll('[data-sec-span][aria-pressed="true"]').length !== 1) add('業種：期間の切替が反映されない', b.dataset.secSpan);
+        checkSectorRows(sp, items, b.dataset.secSpan, add, `${b.textContent}の`);
+        if (document.documentElement.scrollWidth > window.innerWidth) add('業種：切替で横スクロール', b.dataset.secSpan);
+      });
+      A.secSpanSet(init);
+      if (A.secState() !== init || sp.querySelector('[data-sector-list]').dataset.span !== init) add('業種：期間が初期状態に戻らない', A.secState());
+      if (Math.abs(sp.getBoundingClientRect().height - h0) > 1) add('業種：切替の後に高さが戻らない', '');
+    }
+    const pp = main.querySelector('[data-sec="picks"]'), more = pp && pp.querySelector('[data-pk-more]');
+    if (more) {
+      const rows = () => [...pp.querySelectorAll('[data-pick]')].filter((r) => visible(r)).length, all = pp.querySelectorAll('[data-pick]').length;
+      more.click();
+      if (rows() !== all || more.getAttribute('aria-expanded') !== 'true') add('答え合わせ（候補）：もっと見るで全件が見えない', String(rows()));
+      const pi = pp.querySelector('.pi'); if (pi.scrollHeight > pi.clientHeight + 1) add('答え合わせ（候補）：全件表示で枠が切れる', '');
+      if (document.documentElement.scrollWidth > window.innerWidth) add('答え合わせ（候補）：全件表示で横スクロール', '');
+      more.click();
+      if (rows() !== A.PK_FIRST || more.getAttribute('aria-expanded') !== 'false') add('答え合わせ（候補）：閉じても初期状態に戻らない', String(rows()));
+    }
+    // コピー（クリップボードには触れない dry で、コピーできた表示と選択の代替の両方）
+    const btn = main.querySelector('button[data-copy]');
+    if (btn) {
+      const cmd = btn.getAttribute('data-copy'), t = document.getElementById('cptoast');
+      if (!t || visible(t)) add('コピー：案内が無い／最初から見えている', '');
+      ['copied', 'selected'].forEach((mode) => {
+        A.copyCmd(btn, { dry: mode });
+        if (!t || !visible(t) || t.dataset.copyResult !== mode || !t.textContent.includes(cmd)) add('コピー：結果の表示が出ない', mode);
+        if (mode === 'copied' && !btn.classList.contains('copied')) add('コピー：押した行に印が付かない', '');
+        if (mode === 'selected' && String(window.getSelection()).trim() !== cmd) add('コピー：使えない環境で文字が選択されない', String(window.getSelection()));
+        if (t) minFont(t, add, 'コピーの案内');
+      });
+      A.copyReset();
+      window.getSelection().removeAllRanges();
+      if ((t && visible(t)) || main.querySelector('.sact.copied') || A.copyState()) add('コピー：初期状態に戻らない', '');
+    }
+  }
+  /* P6a の組み合わせ（業種・上位・テーマ・候補のあり・なし・極端値）を合成して描く */
+  const SEC_NAMES = ['食品', 'エネルギー資源', '建設・資材', '素材・化学', '医薬品', '自動車・輸送機', '鉄鋼・非鉄', '機械', '電機・精密', '情報通信・サービスその他', '電力・ガス', '運輸・物流', '商社・卸売', '小売', '銀行', '金融（除く銀行）', '不動産'];
+  const N20 = '二十文字の長い社名の検査用ホールディングス'.slice(0, 20);
+  function p6aSectors(kind) {
+    if (!kind) return null;
+    const items = SEC_NAMES.map((name, i) => {
+      const code = String(1617 + i);
+      if (kind === 'extreme') return { key: 'k' + i, code, name, close: 12345.6, d1: (i % 2 ? -1 : 1) * (20 - i * 0.7), w1: i === 3 ? null : (i % 3 - 1) * 19.9, m1: i === 5 ? null : -20 + i * 2.4, asOf: '2026-10-05' };
+      return { key: 'k' + i, code, name, close: 1000 + i, d1: Math.round(((i * 37) % 11 - 5) * 43) / 100, w1: Math.round(((i * 13) % 9 - 4) * 81) / 100, m1: i === 16 ? null : Math.round(((i * 7) % 13 - 6) * 97) / 100, asOf: '2026-10-05' };
+    });
+    return { asOf: '2026-10-05', generatedAt: '2026-10-05T06:30:00Z', note: '検査用', source: null, items, missing: kind === 'extreme' ? ['検査用の値の無い業種'] : [] };
+  }
+  function p6aMovers(kind, D) {
+    if (!kind) return null;
+    const reg = Object.keys(D.stocks || {});
+    const mk = (sgn) => Array.from({ length: 10 }, (_, i) => ({ code: i === 1 && reg[0] ? reg[0] : String(6000 + i * 37 + (sgn < 0 ? 5 : 0)), name: kind === 'extreme' ? (i === 2 ? '<img src=x onerror="window.__KABU_XSS=1">社名' : N20) : `検査${i}`, pct: sgn * (kind === 'extreme' ? 22.73 - i * 0.9 : 8 - i * 0.5), close: kind === 'extreme' ? 123456.7 : 1000 + i }));
+    return { asOf: '2026-10-05', time: '15:30', generatedAt: '2026-10-05T06:30:00Z', source: { title: '株探', url: 'https://kabutan.jp/warning/?mode=2_1&market=1' }, up: mk(1), down: mk(-1) };
+  }
+  function p6aThemes(kind, D) {
+    if (!kind) return null;
+    const reg = Object.keys(D.stocks || {});
+    const R = (s, n) => s.repeat(Math.ceil(n / s.length)).slice(0, n);
+    const n = kind === 'extreme' ? 6 : 3, k = kind === 'extreme' ? 3 : 2;
+    let c = 0;
+    return Array.from({ length: n }, (_, i) => ({
+      name: kind === 'extreme' ? R('長いジャンル名の検査', 16) : `検査のジャンル${i + 1}`,
+      dir: kind === 'extreme' ? (i % 3 === 2 ? 'headwind' : 'tailwind') : i < 2 ? 'tailwind' : 'headwind',
+      horizon: i % 2 ? 'mid' : 'short',
+      sectorKey: [String(1625), null, '1633', '1617', '1999', '1630'][i],
+      reason: kind === 'extreme' ? R('理由の文字数の上限を確かめる文章。12,345円 +3.5%。', 120) : '検査用の理由。',
+      stocks: Array.from({ length: i === n - 1 && kind !== 'extreme' ? 0 : k }, (_, j) => ({ code: c++ === 1 && reg[0] ? reg[0] : String(7100 + c), name: kind === 'extreme' ? N20 : `検査の会社${c}`, why: kind === 'extreme' ? R('一言の理由の上限。1,234円。', 60) : '検査用' })),
+      breakIf: kind === 'extreme' ? R('崩れる条件の上限を確かめる文章。金利 1.5% を超えたとき。', 80) : '検査用の崩れる条件',
+    }));
+  }
+  function p6aPicks(kind, D) {
+    const reg = Object.keys(D.stocks || {});
+    const P = (o) => ({ date: '2026-09-18', asOf: '2026-09-18', file: null, theme: '検査のジャンル', dir: 'tailwind', horizon: 'short', sectorKey: null, code: '7200', name: '検査の会社', why: '', base: 1000, baseDate: '2026-09-18', latest: 1100, latestDate: '2026-10-05', pct: 10, nikkeiPct: 5, diff: 5, days: 11, young: false, priceFrom: 'picks', ...o });
+    if (kind === 'none') return [];
+    if (kind === 'young') return [0, 1, 2, 3].map((i) => P({ date: '2026-10-05', code: String(7300 + i), days: i, young: true, pct: i - 1, nikkeiPct: 0.5, diff: i - 1.5, dir: i % 2 ? 'headwind' : 'tailwind' }));
+    if (kind === 'mixed') return [
+      P({ date: '2026-10-05', code: '7301', days: 0, young: true, pct: 0, nikkeiPct: 0, diff: 0 }),
+      P({ code: '7302', pct: 10, nikkeiPct: 5, diff: 5 }),
+      P({ code: reg[0] || '7303', name: '登録済みの会社', pct: -2, nikkeiPct: 5, diff: -7, priceFrom: 'stock' }),
+      P({ code: '7304', dir: 'headwind', pct: -8, nikkeiPct: 5, diff: -13 }),
+      P({ code: '7305', dir: 'headwind', pct: 9, nikkeiPct: 5, diff: 4 }),
+      P({ code: '7306', dir: 'headwind', pct: 5, nikkeiPct: 5, diff: 0 }),
+      P({ code: '9999', name: '株価の無い会社', base: null, baseDate: null, latest: null, latestDate: null, pct: null, nikkeiPct: null, diff: null, days: null, young: false, priceFrom: null }),
+    ];
+    return Array.from({ length: 25 }, (_, i) => P({ date: `2026-0${9 - (i % 2)}-${String(28 - i).padStart(2, '0')}`, code: String(7400 + i), name: N20, theme: '長いジャンル名の検査長いジャンル名', dir: i % 3 ? 'tailwind' : 'headwind', pct: i === 4 ? null : (i % 2 ? 1 : -1) * (19.87 - i * 0.3), nikkeiPct: i === 4 ? null : -18.5 + i, diff: i === 4 ? null : (i % 2 ? 1 : -1) * 38.37, base: i === 4 ? null : 123456.7, latest: i === 4 ? null : 98765.4, days: i === 4 ? null : i, young: i !== 4 && i < 5 }));
+  }
+  function summaryOf(items) {
+    const u = items.filter((x) => !x.young && isN(x.pct) && isN(x.nikkeiPct));
+    const tw = u.filter((x) => x.dir === 'tailwind'), hw = u.filter((x) => x.dir === 'headwind');
+    return { all: items.length, tailwind: { above: tw.filter((x) => x.pct > x.nikkeiPct).length, total: tw.length }, headwind: { below: hw.filter((x) => x.pct < x.nikkeiPct).length, total: hw.length }, young: items.filter((x) => x.young).length, noPrice: items.filter((x) => !isN(x.pct) || !isN(x.nikkeiPct)).length };
+  }
+  const P6A_VARIANTS = [
+    { name: '業種・上位・テーマ・候補（混在）', sectors: 'normal', movers: 'normal', themes: 'normal', picks: 'mixed', note: true },
+    { name: '業種・上位なし・テーマなし・候補0件', sectors: null, movers: null, themes: null, picks: 'none' },
+    { name: '候補はまだ日が浅いものだけ', sectors: 'normal', movers: 'normal', themes: 'normal', picks: 'young' },
+    { name: '極端値（±20%・20字の社名・テーマ6×3・候補25件・株価なし）', sectors: 'extreme', movers: 'extreme', themes: 'extreme', picks: 'extreme', note: true },
+    { name: '市場の分析なし（raw だけ）・業種と上位あり・候補あり', sectors: 'normal', movers: 'normal', themes: null, picks: 'mixed', noMarketAnalysis: true },
+  ];
+  function runP6a(base, failures, counters) {
+    const A = app();
+    P6A_VARIANTS.forEach((v) => {
+      const D = clone(base);
+      D.market = D.market && typeof D.market === 'object' ? D.market : { raw: null, analysis: null, analyses: [], series: null };
+      D.market.sectors = p6aSectors(v.sectors);
+      D.market.movers = p6aMovers(v.movers, D);
+      D.market.picks = p6aPicks(v.picks, D);
+      D.market.picksSummary = summaryOf(D.market.picks);
+      if (v.noMarketAnalysis) { D.market.analyses = []; D.market.analysis = null; }
+      const a0 = (D.market.analyses || []).find((x) => x && x.type === 'market');
+      if (a0) {
+        a0.sections = a0.sections || {};
+        const th = p6aThemes(v.themes, D);
+        if (th) a0.sections.themes = th; else delete a0.sections.themes;
+        if (v.note) a0.sections.sectorNote = v.sectors === 'extreme' ? '業種の動きの理由の上限を確かめる長い文章。'.repeat(8).slice(0, 160) : '検査用の業種の理由。'; else delete a0.sections.sectorNote;
+      }
+      window.KABU = D;
+      window.__KABU_XSS = undefined;
+      [{ view: 'home' }, { view: 'market', date: null }].forEach((route) => {
+        const label = `[P6a ${v.name}] ${routeLabel(route)}`;
+        let n = 0;
+        const addF = (check, detail) => { n++; failures.push({ route: label, check, detail }); };
+        try {
+          A.render(route);
+          counters.pages++;
+          checkPage(route, addF);
+          if (route.view === 'market') checkP6aUI(addF);
+        } catch (e) {
+          addF('描画で例外', String(e && e.stack ? e.stack : e).slice(0, 300));
+        }
+        if (!n) counters.pass++;
+      });
+    });
+  }
   /** 検査対象の画面一覧（ホーム、各銘柄の全分析、分析の無い型タブ、存在しない銘柄） */
   function routesOf(D) {
     const A = app();
@@ -1240,8 +1518,11 @@
       });
       // P5a：見出し・refresh・鮮度の組み合わせ（フィクスチャ kabu-p5a-fixture@1 を渡したとき）
       if (p5aFx) { const cnt = { pass: 0, pages: 0 }; runP5a(p5aFx, window.KABU, failures, cnt); pass += cnt.pass; pages += cnt.pages; }
+      // P6a：業種・上位・テーマ・候補のあり・なし・極端値（合成。opts.p6a === false で省く）
+      if (opts.p6a !== false) { const cnt = { pass: 0, pages: 0 }; runP6a(window.KABU, failures, cnt); pass += cnt.pass; pages += cnt.pages; }
     } finally {
       window.KABU = saved.kabu;
+      window.__KABU_XSS = undefined;
       A.restore(saved.snap);
       A.render(A.parseHash(saved.hash));
       A.restore(saved.snap);

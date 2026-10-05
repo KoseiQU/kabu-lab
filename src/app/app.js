@@ -1733,7 +1733,7 @@
     return `<article class="thc ${d[1]}" data-theme="${i}" data-dir="${esc(t.dir)}"><div class="thh"><span class="thd ${d[1]}">${d[2]} ${d[0]}</span><b>${esc(t.name || '')}</b><span class="thz" data-horizon="${esc(t.horizon || '')}">${esc(HORIZON[t.horizon] || '期間の記載なし')}</span></div>`
       + `${t.reason ? `<p class="thr">${richNums(t.reason)}</p>` : ''}${themeSectorHtml(t.sectorKey)}`
       + `<div class="thk"><span class="code">候補の銘柄</span>${list}</div>`
-      + `${t.breakIf ? `<div class="inv thb"><span>崩れる条件</span>${richNums(t.breakIf)}</div>` : '<div class="inv thb"><span>崩れる条件</span><span class="cwn">記載なし</span></div>'}</article>`;
+      + `<div class="inv thb"><span>崩れる条件</span><p>${t.breakIf ? esc(t.breakIf) : '記載なし'}</p></div></article>`;
   }
   function themesPanel(c) {
     const a = c.a, list = themesOf(a);
