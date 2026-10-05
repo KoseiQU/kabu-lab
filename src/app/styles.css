@@ -1812,3 +1812,147 @@ a.hlt:hover,a.hlt:focus-visible{color:var(--wh); text-decoration:underline; text
 .hl-ft{display:flex; flex-wrap:wrap; justify-content:space-between; gap:4px 16px; margin-top:8px; font-size:12px; color:var(--tx2)}
 .hl-ng{color:var(--amber)}
 @media (max-width:1399px){ .hll{grid-template-columns:repeat(2,minmax(0,1fr))} }
+
+/* =====================================================================
+   P6a：業種の動き・値上がり／値下がりの上位・追い風／向かい風と注目候補・注目候補の答え合わせ（§5.10）
+   上昇＝シアン・下落＝マゼンタ（既存の色）。追い風＝シアンの区画、向かい風＝マゼンタの区画
+   ===================================================================== */
+.mv-r4{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.25fr); gap:var(--g); align-items:stretch}
+.sfoot{display:flex; flex-wrap:wrap; justify-content:space-between; gap:4px 16px; margin-top:8px; font-size:12px; color:var(--tx2)}
+.secn{margin-bottom:6px; font-size:12.5px; line-height:1.6; color:var(--tx)}
+/* 業種の横棒（0 を中心に左右） */
+.srs{display:flex; flex-direction:column}
+.sr,.srx{display:grid; grid-template-columns:minmax(118px,.9fr) minmax(0,1.5fr) 68px 64px; align-items:center; column-gap:10px}
+.srx{padding:0 0 3px; border-bottom:1px solid var(--line)}
+.sax{position:relative; display:flex; justify-content:space-between; font:500 12px/1 var(--mono); color:var(--tx3)}
+.sax i{font-style:normal}
+.sr{padding:3px 0; border-bottom:1px solid var(--line2)}
+.sr:last-child{border-bottom:0}
+.sn{display:flex; align-items:baseline; gap:6px; min-width:0}
+.sn b{font-weight:500; font-size:12.5px; color:var(--tx); line-height:1.35}
+.sn i{flex:none; font-style:normal; font-size:12px; color:var(--tx3)}
+.sb{position:relative; height:12px; background:linear-gradient(90deg,transparent calc(50% - .5px),rgba(157,179,194,.45) calc(50% - .5px),rgba(157,179,194,.45) calc(50% + .5px),transparent calc(50% + .5px)),rgba(62,230,255,.035)}
+.sb u{position:absolute; top:1px; bottom:1px; min-width:2px; background:var(--cy); text-decoration:none}
+.sb u.neg{background:var(--mag)}
+.sv{text-align:right; font-weight:700; font-size:13px}
+.sv.zr,.sv.na{color:var(--tx2)}
+.st{display:flex; gap:3px; justify-content:flex-end}
+.stg{font:700 12px/16px var(--jp); padding:0 4px; border:1px solid; white-space:nowrap}
+.stg.tw{color:var(--cy); border-color:var(--cyl)}
+.stg.hw{color:#ff8cc0; border-color:rgba(255,92,163,.5)}
+.sv.dn,.mp.dn,.tsv em.dn,.pkdf em.dn,.h-sec .dn{color:#ff8cc0}
+.sv.up,.mp.up,.tsv em.up{color:var(--cy)}
+/* 値上がり・値下がりの上位 */
+.mvg{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px}
+.mvh{display:flex; align-items:baseline; justify-content:space-between; padding:0 2px 4px; border-bottom:1px solid var(--line)}
+.mvc.up .mvh b{color:var(--cy)} .mvc.dn .mvh b{color:#ff8cc0}
+.mvh b{font:700 12.5px/1.4 var(--jp)}
+.mvh .jp{font-size:12px; color:var(--tx2)}
+.mvl{list-style:none; margin:0; padding:0}
+.mvl li{border-bottom:1px solid var(--line2)}
+.mvr{width:100%; display:grid; grid-template-columns:18px 40px minmax(0,1fr) 44px 64px 48px; align-items:center; column-gap:6px; padding:4px 2px; color:var(--tx); text-decoration:none}
+.mr{font-size:12px; color:var(--tx3); text-align:right}
+.mcd{font-size:12.5px; color:var(--cy2)}
+.mnm{font-size:12.5px; line-height:1.35; overflow-wrap:anywhere}
+.mb{position:relative; height:8px; background:rgba(62,230,255,.05)}
+.mb u{position:absolute; left:0; top:0; bottom:0; text-decoration:none; background:var(--cy)}
+.mvc.dn .mb u{background:var(--mag)}
+.mp{text-align:right; font-weight:700; font-size:13px}
+/* 押せる銘柄（登録済み＝開く、未登録＝コピー） */
+.sact{cursor:pointer}
+.sact:hover,.sact:focus-visible{background:rgba(62,230,255,.07); outline:none}
+.sact:focus-visible{box-shadow:inset 0 0 0 1px var(--cy)}
+.sgo{justify-self:end; font:500 12px/16px var(--jp); color:var(--cy2); white-space:nowrap}
+.sgo.cp{color:var(--tx2); border:1px dashed rgba(157,179,194,.5); padding:0 4px}
+.sact.copied .sgo.cp{color:#05080d; background:var(--cy); border:1px solid var(--cy)}
+.sact.copied .sgo.cp::before{content:"✓ "}
+.cptoast{position:fixed; left:50%; bottom:calc(var(--botH) + 14px); transform:translateX(-50%); z-index:50; display:flex; align-items:center; gap:10px; max-width:min(760px, calc(100vw - var(--railW) - 40px));
+  padding:8px 14px; background:#08111a; border:1px solid var(--cy); box-shadow:0 10px 30px rgba(0,0,0,.6); font-size:12.5px; color:var(--tx)}
+.cptoast[data-copy-result="selected"]{border-color:var(--amber)}
+.cptoast b{flex:none; color:var(--cy)} .cptoast[data-copy-result="selected"] b{color:var(--amber)}
+.cptoast code{flex:none; font:700 13px/1.4 var(--mono); color:var(--wh); padding:1px 6px; border:1px solid var(--cyl); user-select:all}
+.cptoast span{color:var(--tx2)}
+/* 追い風・向かい風と注目候補 */
+.pknote{display:flex; align-items:center; gap:8px; margin-bottom:8px; padding:6px 10px; font-size:13px; font-weight:700; color:var(--tx); border:1px solid rgba(255,179,64,.55); background:rgba(255,179,64,.07)}
+.pknote b{flex:none; display:inline-grid; place-items:center; width:16px; height:15px; padding-top:3px; font:700 12px/1 var(--mono); color:#05080d; background:var(--amber); clip-path:polygon(50% 0,100% 100%,0 100%)}
+.thzone{display:grid; grid-template-columns:112px minmax(0,1fr); gap:10px; padding:8px 0; border-top:1px solid var(--line2)}
+.thzl{display:flex; flex-direction:column; gap:4px; padding:6px 8px; border-left:3px solid}
+.thzl b{font:700 14px/1.3 var(--jp)}
+.thzl span{font-size:12px; color:var(--tx2); line-height:1.4}
+.thzl em{font:700 18px/1 var(--mono); font-style:normal}
+.thz-tw .thzl{border-color:var(--cy); background:linear-gradient(90deg,rgba(62,230,255,.12),transparent)} .thz-tw .thzl b,.thz-tw .thzl em{color:var(--cy)}
+.thz-hw .thzl{border-color:var(--mag); background:linear-gradient(90deg,rgba(255,92,163,.12),transparent)} .thz-hw .thzl b,.thz-hw .thzl em{color:#ff8cc0}
+.thg{display:grid; grid-template-columns:repeat(auto-fill,minmax(330px,1fr)); gap:8px}
+.thc{display:flex; flex-direction:column; gap:6px; min-width:0; padding:8px 10px 9px; border:1px solid var(--line); border-top:2px solid; background:rgba(5,12,19,.55)}
+.thc.tw{border-top-color:var(--cy)} .thc.hw{border-top-color:var(--mag)}
+.thh{display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px}
+.thh b{font:700 14px/1.35 var(--jp); color:var(--wh)}
+.thd{flex:none; font:700 12px/18px var(--jp); padding:0 6px; border:1px solid; white-space:nowrap}
+.thd.tw{color:var(--cy); border-color:var(--cyl); background:rgba(62,230,255,.08)}
+.thd.hw{color:#ff8cc0; border-color:rgba(255,92,163,.5); background:rgba(255,92,163,.08)}
+.thz{margin-left:auto; font:500 12px/18px var(--jp); color:var(--tx2); border:1px dashed rgba(157,179,194,.5); padding:0 6px; white-space:nowrap}
+.thr{font-size:12.5px; line-height:1.6; color:var(--tx)}
+.tsec{display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 10px; padding:4px 8px; font-size:12px; color:var(--tx2); background:rgba(62,230,255,.04); border:1px solid var(--line2)}
+.tsec .tl{margin:0}
+.tsec b{font-weight:500; color:var(--tx)}
+.tsec .tk{color:var(--tx3)}
+.tsv{display:inline-flex; gap:4px; align-items:baseline}
+.tsv em{font-style:normal; font-weight:700; font-size:12.5px}
+.tsec.na{color:var(--tx3)}
+.thk>.code{display:block; margin-bottom:3px; font-size:12px}
+.tsl{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:3px}
+.tst{width:100%; display:grid; grid-template-columns:44px minmax(0,1fr) auto; align-items:start; column-gap:8px; padding:4px 6px; border:1px solid var(--line2); color:var(--tx); text-decoration:none}
+.tsc{font-size:13px; font-weight:700; color:var(--cy2); line-height:1.5}
+.tsb{display:flex; flex-direction:column; min-width:0}
+.tsb b{font:700 12.5px/1.5 var(--jp); color:var(--wh); overflow-wrap:anywhere}
+.tsb span{font-size:12px; line-height:1.5; color:var(--tx2)}
+.tst .sgo{align-self:center}
+.thb{margin-top:auto; padding-top:4px; border-top:1px dashed var(--line)}
+/* 注目候補の答え合わせ */
+.pksum{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; gap:10px; margin-bottom:8px}
+.pks{display:flex; flex-direction:column; gap:4px; padding:7px 10px; border:1px solid var(--line); border-left:3px solid}
+.pks.tw{border-left-color:var(--cy)} .pks.hw{border-left-color:var(--mag)}
+.pks .lb{font-size:12.5px; color:var(--tx2)}
+.pks>b{font:700 22px/1.1 var(--mono); color:var(--wh)} .pks>b small{font:500 12px var(--jp); color:var(--tx2); margin:0 3px}
+.pkbx{display:flex; flex-wrap:wrap; gap:3px}
+.pkbx i{width:12px; height:12px; border:1px solid rgba(157,179,194,.45)}
+.pks.tw .pkbx i.on{background:var(--cy); border-color:var(--cy)} .pks.hw .pkbx i.on{background:var(--mag); border-color:var(--mag)}
+.pkbr{position:relative; height:10px; border:1px solid rgba(157,179,194,.4)} .pkbr u{position:absolute; left:0; top:0; bottom:0; background:var(--cy); text-decoration:none}
+.pks.hw .pkbr u{background:var(--mag)}
+.pkx{display:flex; flex-direction:column; justify-content:center; gap:3px; padding:7px 12px; font-size:12px; color:var(--tx2); border:1px dashed rgba(157,179,194,.4)}
+.pkx b{font-weight:500; color:var(--tx)}
+.pkh,.pkr{display:grid; grid-template-columns:92px minmax(0,1fr) 84px minmax(0,1.3fr) minmax(0,1.15fr) 76px minmax(0,1.25fr) 104px; align-items:center; column-gap:10px}
+.pkh{padding:0 6px 4px; font-size:12px; color:var(--tx3); border-bottom:1px solid var(--line2)}
+.pkr{padding:5px 6px; border-bottom:1px solid var(--line2)}
+.pkdt{font-size:12.5px; color:var(--cy2); text-decoration:none}
+.pkdt:hover,.pkdt:focus-visible{color:var(--wh); text-decoration:underline; outline:none}
+.pkth{font-size:12.5px; line-height:1.4; color:var(--tx)}
+.pkr .thd{justify-self:start}
+.pkso{display:grid; grid-template-columns:40px minmax(0,1fr) auto; align-items:center; column-gap:6px; width:100%; padding:2px 4px; color:var(--tx); text-decoration:none}
+.pkso .mono{font-size:12.5px; color:var(--cy2)}
+.pkso b{font-weight:500; font-size:12.5px; line-height:1.4; overflow-wrap:anywhere}
+.pkmv{display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 5px; font-size:12.5px}
+.pkmv i{font-style:normal; color:var(--tx3)}
+.pkmv small{font-size:12px; color:var(--tx3)}
+.pkpc{text-align:right}
+.pkdf{display:flex; flex-direction:column; gap:1px}
+.pkd{display:grid; grid-template-columns:minmax(40px,1fr) auto; align-items:center; gap:6px}
+.pkd .zt{height:8px}
+.pkd em{font-style:normal; font-weight:700; font-size:13px; text-align:right}
+.pkd em small{font-size:12px; font-weight:500; margin-left:1px}
+.pkd em.up{color:var(--cy)}
+.pkn{font-size:12px; color:var(--tx2)}
+.pkdy{display:flex; flex-wrap:wrap; align-items:center; gap:3px 6px; font-size:12.5px}
+/* ホームの市場パネル：業種の1行 */
+.h-sec{flex:none; display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 10px; padding:4px 12px 6px; border-top:1px solid var(--line2); font-size:12px; color:var(--tx2); text-decoration:none}
+.h-sec:hover,.h-sec:focus-visible{background:rgba(62,230,255,.05); outline:none}
+.h-sec .lb{color:var(--tx3)}
+.h-sec .hsl{display:inline-flex; flex-wrap:wrap; gap:2px 10px}
+.h-sec .up,.h-sec .dn{white-space:nowrap}
+@media (max-width:1399px){
+  .mv-r4{grid-template-columns:minmax(0,1fr) minmax(0,1.2fr)}
+  .sr,.srx{grid-template-columns:minmax(108px,.9fr) minmax(0,1.2fr) 64px 58px; column-gap:8px}
+  .mvr{grid-template-columns:16px 38px minmax(0,1fr) 30px 60px 46px; column-gap:5px}
+  .pkh,.pkr{grid-template-columns:86px minmax(0,1fr) 80px minmax(0,1.3fr) minmax(0,1.2fr) 70px minmax(0,1.3fr) 96px; column-gap:8px}
+  .thg{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+}

@@ -328,7 +328,7 @@
       const title = it.note ? ` title="${esc(it.note)}"` : '';
       return `<div class="h-mr"${title}><span class="nm">${esc(m.name)}<i class="${m.subAlt ? 'alt' : ''}">${esc(m.sub)}</i></span><span class="vl">${fmt(v, m.dec)}${m.unit ? `<small>${esc(m.unit)}</small>` : ''}</span><span class="cg ${cls}">${cg}</span><div>${viz}</div></div>`;
     }).join('');
-    return `<section class="panel" data-sec="market"><div class="pi">${head}<div class="h-mk">${rows}</div></div></section>`;
+    return `<section class="panel" data-sec="market"><div class="pi">${head}<div class="h-mk">${rows}</div>${homeSectorsHtml()}</div></section>`;
   }
   function geoPanel() {
     const D = window.KABU, an = D.market && D.market.analysis;
@@ -1596,8 +1596,206 @@
     if (b) { b.setAttribute('aria-expanded', open ? 'true' : 'false'); b.innerHTML = open ? '閉じる（最初の12件だけにする）' : `もっと見る（残り <span class="mono">${$$('[data-hl-extra]').length}</span>件）`; }
     $$('[data-chart]').forEach((h) => { if (h.dataset.wh !== `${h.clientWidth}x${h.clientHeight}`) drawHost(h); });
   }
+  /* =====================================================================
+     P6a：業種の動き・値上がり／値下がりの上位・追い風／向かい風と注目候補・注目候補の答え合わせ（§5.10）
+     build の sectors・movers・picks・picksSummary をそのまま使う（画面は並べ替えと棒の長さだけ。騰落率は再計算しない）
+     外部由来の文字（社名など）は必ず esc
+     ===================================================================== */
+  const SPANS = [['d1', '1日'], ['w1', '1週'], ['m1', '1か月']];
+  const spanOk = (k) => SPANS.some((x) => x[0] === k);
+  const THDIR = { tailwind: ['追い風', 'tw', '▲'], headwind: ['向かい風', 'hw', '▼'] };
+  const HORIZON = { short: '数日〜数週', mid: '数か月' };
+  const PK_FIRST = 20;
+  const PICKS_NOTE = '注目候補は売買の推奨ではありません。理由と崩れる条件を読んで、個別の分析で確かめます';
+  const PK_NOTE = '機械的な比較であり、評価ではありません';
+  S.secSpan = 'd1'; S.cp = null; S.cpTimer = 0;
+  const sectorsOf = () => { const M = window.KABU.market; const s = M && M.sectors; return s && typeof s === 'object' && Array.isArray(s.items) && s.items.some((x) => x && typeof x.code === 'string') ? s : null; };
+  const sectorByCode = (code) => { const s = sectorsOf(); return s && typeof code === 'string' ? s.items.find((x) => x && x.code === code) || null : null; };
+  const moversOf = () => { const M = window.KABU.market; const m = M && M.movers; return m && typeof m === 'object' && (arr(m.up).length || arr(m.down).length) ? m : null; };
+  const themesOf = (a) => arr(secs(a).themes).filter((t) => t && typeof t === 'object' && (t.name || arr(t.stocks).length));
+  const picksOf = () => { const M = window.KABU.market; return arr(M && M.picks).filter((x) => x && typeof x === 'object' && typeof x.code === 'string'); };
+  const pctTxt = (v, d = 2) => (isNum(v) ? fmtS(v, d) + '%' : '—');
+  const pcls = (v) => (isNum(v) ? (v > 0 ? 'up' : v < 0 ? 'dn' : 'zr') : 'na');
+  /** 1日の騰落率順（数値の無い業種は末尾。同じ値はコード順） */
+  function sortedSectors(span) {
+    const s = sectorsOf();
+    if (!s) return [];
+    const val = (x) => (isNum(x[span]) ? x[span] : -Infinity);
+    return s.items.filter((x) => x && typeof x.code === 'string').slice().sort((a, b) => (val(b) === val(a) ? String(a.code).localeCompare(String(b.code)) : val(b) > val(a) ? 1 : -1));
+  }
+  /** 銘柄の行の操作：登録済み（data に銘柄がある）は銘柄ページへのリンク、未登録は「/kabu <コード>」のコピー */
+  function stockAct(code, name, inner, cls, extra = '') {
+    const D = window.KABU, c = String(code == null ? '' : code), nm = esc(name || c);
+    if (D.stocks && D.stocks[c]) return `<a class="${cls} sact" href="${hrefStock(c)}" data-stock-go="${esc(c)}" aria-label="${esc(c)} ${nm} の銘柄ページを開く"${extra}>${inner}<span class="sgo">開く ›</span></a>`;
+    return `<button type="button" class="${cls} sact" data-copy="/kabu ${esc(c)}" aria-label="${esc(c)} ${nm}：コマンド /kabu ${esc(c)} をコピー"${extra}>${inner}<span class="sgo cp">コピー</span></button>`;
+  }
+  /** /kabu <コード> をコピー。クリップボードが使えなければ文字を選択状態にして案内する。opt.dry（検査用）はクリップボードに触れず結果だけ見せる */
+  function copyCmd(btn, opt = {}) {
+    if (!btn) return;
+    const cmd = btn.getAttribute('data-copy') || '';
+    copyReset();
+    const show = (ok) => {
+      const t = $('#cptoast');
+      btn.classList.add('copied');
+      S.cp = { cmd, ok };
+      if (t) {
+        t.hidden = false;
+        t.dataset.copyResult = ok ? 'copied' : 'selected';
+        t.innerHTML = ok
+          ? `<b>コピーしました</b><code>${esc(cmd)}</code><span>Claude Code に貼り付けて実行すると、この銘柄の個別の分析ができます</span>`
+          : `<b>選択しました</b><code data-copy-sel>${esc(cmd)}</code><span>この環境ではクリップボードに書けないため、文字を選択しました。⌘C（Ctrl+C）でコピーできます</span>`;
+        if (!ok) { try { const r = document.createRange(); r.selectNodeContents(t.querySelector('[data-copy-sel]')); const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); } catch (e) { /* 選択できなくても文字は見える */ } }
+      }
+      S.cpTimer = setTimeout(copyReset, ok ? 5000 : 12000);
+    };
+    if (opt.dry) { show(opt.dry === 'copied'); return; }
+    const legacy = () => {
+      let ok = false;
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = cmd; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+        document.body.appendChild(ta); ta.select(); ok = !!document.execCommand('copy'); ta.remove();
+        if (btn.isConnected) btn.focus();
+      } catch (e) { ok = false; }
+      show(ok);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext !== false) navigator.clipboard.writeText(cmd).then(() => show(true), legacy);
+    else legacy();
+  }
+  function copyReset() {
+    clearTimeout(S.cpTimer);
+    S.cp = null;
+    $$('.sact.copied').forEach((e) => e.classList.remove('copied'));
+    const t = $('#cptoast');
+    if (t) { t.hidden = true; t.innerHTML = ''; delete t.dataset.copyResult; }
+  }
+  const cpToast = () => '<div class="cptoast" id="cptoast" role="status" aria-live="polite" hidden></div>';
+
+  /* ---------- 業種の動き ---------- */
+  function sectorRowsHtml(span, a) {
+    const list = sortedSectors(span);
+    const mx = K.niceCeil(Math.max(1, ...list.map((x) => (isNum(x[span]) ? Math.abs(x[span]) : 0))));
+    const tdir = {};
+    themesOf(a).forEach((t) => { if (typeof t.sectorKey === 'string' && THDIR[t.dir]) (tdir[t.sectorKey] = tdir[t.sectorKey] || new Set()).add(t.dir); });
+    const head = `<div class="srx" aria-hidden="true"><span></span><span class="sax"><i>${esc('−' + fmt(mx, K.decOf(mx, 1)))}%</i><i>0</i><i>+${esc(fmt(mx, K.decOf(mx, 1)))}%</i></span><span></span><span></span></div>`;
+    return head + list.map((x, i) => {
+      const v = x[span], w = isNum(v) ? Math.min(50, Math.abs(v) / mx * 50) : 0;
+      const bar = isNum(v) && v !== 0 ? `<u class="${v < 0 ? 'neg' : ''}" style="${v < 0 ? 'right' : 'left'}:50%;width:${w.toFixed(2)}%"></u>` : '';
+      const tg = tdir[x.code] ? [...tdir[x.code]].map((d) => `<span class="stg ${THDIR[d][1]}">${THDIR[d][0]}</span>`).join('') : '';
+      return `<div class="sr" data-sector="${esc(x.code)}" data-rank="${i}" data-v="${isNum(v) ? v : ''}"><span class="sn"><b>${esc(x.name || x.code)}</b><i class="mono">${esc(x.code)}</i></span><span class="sb${isNum(v) ? '' : ' na'}">${bar}</span><span class="sv mono ${pcls(v)}">${isNum(v) ? pctTxt(v) : '—'}</span><span class="st">${tg}</span></div>`;
+    }).join('');
+  }
+  function sectorsPanel(c) {
+    const s = sectorsOf(), a = c && c.a;
+    const span = spanOk(S.secSpan) ? S.secSpan : 'd1';
+    const btns = SPANS.map(([k, l]) => `<button type="button" class="rg${k === span ? ' on' : ''}" data-sec-span="${k}" aria-pressed="${k === span}">${l}</button>`).join('');
+    const pm = `<span class="rgs" role="group" aria-label="騰落率の期間">${btns}</span>`;
+    if (!s) return panel('sectors', 'MKT-S1 / SECTORS', '業種の動き', '', `<div class="pb"><div class="nodata sm" data-nodata="sectors"><span class="nd">未取得</span><p class="why">業種の騰落率（TOPIX-17 業種別ETF）をまだ取得していません。自動更新（node tools/refresh.mjs）で取得します</p></div></div>`);
+    const note = a && typeof secs(a).sectorNote === 'string' && secs(a).sectorNote ? `<p class="secn" data-sector-note><span class="tl">理由</span>${richNums(secs(a).sectorNote)}</p>` : '';
+    const miss = arr(s.missing).filter((x) => typeof x === 'string');
+    const foot = `<div class="sfoot"><span>業種別の指数は取れないため、TOPIX-17 の業種別ETF（1617〜1633）の終値で代用 ・ 1週＝5営業日前・1か月＝21営業日前と比較 ・ 終値 <span class="mono">${esc(mmdd(s.asOf))}</span></span>${miss.length ? `<span class="hl-ng" data-sector-missing>値の無い業種：${miss.map(esc).join('・')}</span>` : ''}</div>`;
+    return panel('sectors', 'MKT-S1 / SECTORS', '業種の動き', `${pm}<span class="jp">騰落率順</span>`, `<div class="pb">${note}<div class="srs" data-sector-list data-span="${span}">${sectorRowsHtml(span, a)}</div>${foot}</div>`);
+  }
+  /** 期間（1日・1週・1か月）を切り替えて、その期間の騰落率順に並べ直す */
+  function secSpanSet(k) {
+    if (!spanOk(k)) return;
+    S.secSpan = k;
+    $$('[data-sec-span]').forEach((b) => { const on = b.dataset.secSpan === k; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+    const box = $('[data-sector-list]');
+    if (box) { box.dataset.span = k; box.innerHTML = sectorRowsHtml(k, S.ctx && S.ctx.a); }
+  }
+
+  /* ---------- 値上がり・値下がりの上位 ---------- */
+  function moversPanel() {
+    const mv = moversOf();
+    if (!mv) return panel('movers', 'MKT-S2 / MOVERS', '値上がり・値下がりの上位', '', `<div class="pb"><div class="nodata sm" data-nodata="movers"><span class="nd">未取得</span><p class="why">東証プライムの値上がり率・値下がり率の上位（株探のランキング）をまだ取得していません。自動更新（node tools/refresh.mjs）で取得します</p></div></div>`);
+    const up = arr(mv.up).filter((x) => x && isNum(x.pct)), dn = arr(mv.down).filter((x) => x && isNum(x.pct));
+    const mx = K.niceCeil(Math.max(1, ...[...up, ...dn].map((x) => Math.abs(x.pct))));
+    const col = (list, dir, lab) => `<div class="mvc ${dir}" data-movers="${dir}"><div class="mvh"><b>${lab}</b><span class="jp"><span class="mono">${list.length}</span>銘柄</span></div><ol class="mvl">${list.map((x, i) => `<li>${stockAct(x.code, x.name, `<span class="mr mono">${i + 1}</span><span class="mcd mono">${esc(x.code)}</span><span class="mnm">${esc(x.name || x.code)}</span><span class="mb"><u style="width:${Math.min(100, Math.abs(x.pct) / mx * 100).toFixed(1)}%"></u></span><span class="mp mono ${pcls(x.pct)}">${pctTxt(x.pct)}</span>`, 'mvr', ` data-mover="${dir}:${i}"`)}</li>`).join('') || '<li class="cwn">該当なし</li>'}</ol></div>`;
+    const src = mv.source && /^https?:\/\//.test(mv.source.url || '') ? srcLink(mv.source.url, '株探') : '株探';
+    const pm = `<span class="jp">東証プライム ・ <span class="mono">${esc(mmdd(mv.asOf))}${mv.time ? ' ' + esc(mv.time) : ''}</span>時点</span>`;
+    return panel('movers', 'MKT-S2 / MOVERS', '値上がり・値下がりの上位', pm, `<div class="pb"><div class="mvg">${col(up, 'up', '▲ 値上がり率')}${col(dn, 'dn', '▼ 値下がり率')}</div><div class="sfoot"><span>出典 ${src}（ランキングの上位から東証プライムの株式だけ。棒の長さ ±${esc(fmt(mx, K.decOf(mx, 1)))}%）</span><span>押すと、登録済みの銘柄は銘柄ページへ、未登録は <span class="mono">/kabu &lt;コード&gt;</span> をコピー</span></div></div>`);
+  }
+
+  /* ---------- 追い風・向かい風と注目候補 ---------- */
+  function themeSectorHtml(key) {
+    if (typeof key !== 'string' || !key) return '<div class="tsec na" data-theme-sector="">対応する業種なし（業種をまたぐジャンル）</div>';
+    const s = sectorByCode(key);
+    if (!s) return `<div class="tsec na" data-theme-sector="${esc(key)}"><span class="tl">業種</span><span class="mono">${esc(key)}</span><span>騰落率は未取得</span></div>`;
+    return `<div class="tsec" data-theme-sector="${esc(key)}"><span class="tl">業種</span><b>${esc(s.name || key)}</b><span class="mono tk">${esc(key)}</span>${SPANS.map(([k, l]) => `<span class="tsv">${l}<em class="mono ${pcls(s[k])}">${pctTxt(s[k])}</em></span>`).join('')}</div>`;
+  }
+  function themeCard(t, i) {
+    const d = THDIR[t.dir] || THDIR.tailwind;
+    const sts = arr(t.stocks).filter((x) => x && x.code);
+    const list = sts.length
+      ? `<ul class="tsl">${sts.map((x, j) => `<li>${stockAct(x.code, x.name, `<span class="tsc mono">${esc(x.code)}</span><span class="tsb"><b>${esc(x.name || x.code)}</b>${x.why ? `<span>${richNums(x.why)}</span>` : ''}</span>`, 'tst', ` data-theme-stock="${i}:${j}"`)}</li>`).join('')}</ul>`
+      : '<p class="cwn" data-theme-nostock>候補の銘柄なし（ジャンルだけを挙げています）</p>';
+    return `<article class="thc ${d[1]}" data-theme="${i}" data-dir="${esc(t.dir)}"><div class="thh"><span class="thd ${d[1]}">${d[2]} ${d[0]}</span><b>${esc(t.name || '')}</b><span class="thz" data-horizon="${esc(t.horizon || '')}">${esc(HORIZON[t.horizon] || '期間の記載なし')}</span></div>`
+      + `${t.reason ? `<p class="thr">${richNums(t.reason)}</p>` : ''}${themeSectorHtml(t.sectorKey)}`
+      + `<div class="thk"><span class="code">候補の銘柄</span>${list}</div>`
+      + `${t.breakIf ? `<div class="inv thb"><span>崩れる条件</span>${richNums(t.breakIf)}</div>` : '<div class="inv thb"><span>崩れる条件</span><span class="cwn">記載なし</span></div>'}</article>`;
+  }
+  function themesPanel(c) {
+    const a = c.a, list = themesOf(a);
+    const note = `<p class="pknote" data-picks-note><b>!</b>${PICKS_NOTE}</p>`;
+    const n = (k) => list.filter((t) => t.dir === k).length;
+    if (!list.length) {
+      return panel('themes', 'MKT-T1 / THEMES', '追い風・向かい風と注目候補', '', `<div class="pb">${note}<div class="nodata sm" data-standby="themes"><span class="nd">未実行</span><p class="why">この市場の分析には、追い風・向かい風のジャンルと注目候補がまだありません。次の市場の分析で作られます</p><div class="cmdl"><em>&gt;</em>/kabu 市場<i class="cur"></i></div></div></div>`);
+    }
+    const zone = (dir) => {
+      const xs = list.map((t, i) => [t, i]).filter(([t]) => (dir === 'tailwind' ? t.dir !== 'headwind' : t.dir === 'headwind'));
+      const d = THDIR[dir];
+      return `<div class="thz-${d[1]} thzone" data-zone="${dir}"><div class="thzl"><b>${d[2]} ${d[0]}</b><span>${dir === 'tailwind' ? '追い風を受けそうなジャンル' : '向かい風を受けそうなジャンル'}</span><em class="mono">${xs.length}</em></div><div class="thg">${xs.map(([t, i]) => themeCard(t, i)).join('') || '<p class="cwn">該当なし</p>'}</div></div>`;
+    };
+    const pm = `<span class="jp"><span class="up">▲ 追い風 ${n('tailwind')}</span> ・ <span class="dn">▼ 向かい風 ${n('headwind')}</span></span><span class="jp">期間＝見立ての長さ</span>`;
+    return panel('themes', 'MKT-T1 / THEMES', '追い風・向かい風と注目候補', pm, `<div class="pb">${note}${zone('tailwind')}${zone('headwind')}<p class="sfoot"><span>候補の銘柄を押すと、登録済みは銘柄ページへ、未登録は <span class="mono">/kabu &lt;コード&gt;</span> をコピー（市場 → 候補 → 個別の分析の順で確かめる）。業種の騰落率は「業種の動き」と同じ値です</span></p></div>`);
+  }
+
+  /* ---------- 注目候補の答え合わせ ---------- */
+  function pkSumHtml(key, lab, hit, total) {
+    const boxes = total > 0 && total <= 30
+      ? `<span class="pkbx" aria-hidden="true">${Array.from({ length: total }, (_, i) => `<i class="${i < hit ? 'on' : ''}"></i>`).join('')}</span>`
+      : total > 30 ? `<span class="pkbr" aria-hidden="true"><u style="width:${(hit / total * 100).toFixed(1)}%"></u></span>` : '';
+    return `<div class="pks ${key === 'tailwind' ? 'tw' : 'hw'}" data-pk-sum="${key}"><span class="lb">${lab}</span><b><span class="mono" data-pk-hit>${hit}</span><small>／</small><span class="mono" data-pk-total>${total}</span><small>件</small></b>${total ? boxes : '<span class="cwn">対象なし（まだ日が浅い・株価未取得の候補は数えません）</span>'}</div>`;
+  }
+  function picksPanel() {
+    const items = picksOf();
+    if (!items.length) return panel('picks', 'MKT-P1 / PICKS', '注目候補の答え合わせ', '', `<div class="pb"><div class="nodata sm" data-standby="picks"><span class="nd0">まだ候補がありません</span><p class="why">市場の分析で挙げた注目候補（追い風・向かい風のジャンルの銘柄）が、その後に日経平均と比べてどう動いたかをここに並べます</p></div></div>`);
+    const M = window.KABU.market, sm = M.picksSummary && typeof M.picksSummary === 'object' ? M.picksSummary : null;
+    const g = (o, k) => (o && isNum(o[k]) ? o[k] : 0);
+    const sum = `<div class="pksum">${pkSumHtml('tailwind', '追い風の候補のうち、日経平均を上回った', g(sm && sm.tailwind, 'above'), g(sm && sm.tailwind, 'total'))}${pkSumHtml('headwind', '向かい風の候補のうち、日経平均を下回った', g(sm && sm.headwind, 'below'), g(sm && sm.headwind, 'total'))}`
+      + `<div class="pkx" data-pk-excluded><span>集計から除いた候補</span><b>まだ日が浅い <span class="mono">${g(sm, 'young')}</span>件</b><b>株価未取得 <span class="mono">${g(sm, 'noPrice')}</span>件</b></div></div>`;
+    const dmx = 10;
+    const rows = items.map((x, i) => {
+      const d = THDIR[x.dir] || THDIR.tailwind, has = isNum(x.pct);
+      const move = has ? `<span class="mono">${K.fmtP(x.base)}</span><i>→</i><span class="mono">${K.fmtP(x.latest)}</span><small class="mono">${esc(mmdd(x.latestDate))}</small>` : '<span class="nd0" data-pk-noprice>株価未取得</span>';
+      const diff = isNum(x.diff) ? `<span class="pkd"><span class="zt"><u class="${x.diff < 0 ? 'neg' : ''}" style="${x.diff < 0 ? 'right' : 'left'}:50%;width:${(Math.min(dmx, Math.abs(x.diff)) / dmx * 50).toFixed(2)}%"></u></span><em class="mono ${pcls(x.diff)}">${fmtS(x.diff, 2)}<small>pt</small></em></span><small class="pkn">日経平均 <span class="mono">${pctTxt(x.nikkeiPct)}</span></small>` : '<span class="rvna">—</span>';
+      const days = isNum(x.days) ? `<span><span class="mono">${fmt(x.days)}</span>営業日</span>${x.young ? '<em class="rv-young" data-young>まだ日が浅い</em>' : ''}` : '<span class="rvna">—</span>';
+      return `<div class="pkr" data-pick="${i}" data-pk-dir="${esc(x.dir)}"${x.young ? ' data-pk-young' : ''}${i >= PK_FIRST ? ' data-pk-extra hidden' : ''}>`
+        + `<a class="pkdt mono" href="${hrefMarket(x.date)}" aria-label="${esc(x.date)} の市場の分析を開く">${esc(x.date || '')}</a>`
+        + `<span class="pkth">${esc(x.theme || '')}</span><span class="thd ${d[1]}">${d[2]} ${d[0]}</span>`
+        + `<span class="pkst">${stockAct(x.code, x.name, `<span class="mono">${esc(x.code)}</span><b>${esc(x.name || x.code)}</b>`, 'pkso')}</span>`
+        + `<span class="pkmv">${move}</span><span class="pkpc">${has ? `<em class="rvpc ${pcls(x.pct)}">${pctTxt(x.pct)}</em>` : '<span class="rvna">—</span>'}</span><span class="pkdf">${diff}</span><span class="pkdy">${days}</span></div>`;
+    }).join('');
+    const more = items.length > PK_FIRST ? `<button type="button" class="hl-more" data-pk-more aria-expanded="false">もっと見る（残り <span class="mono">${items.length - PK_FIRST}</span>件）</button>` : '';
+    const pm = `<span class="jp"><span class="mono">${items.length}</span>件 ・ 新しい順</span><span class="jp">${PK_NOTE}</span>`;
+    return panel('picks', 'MKT-P1 / PICKS', '注目候補の答え合わせ', pm, `<div class="pb">${sum}<div class="pkh" aria-hidden="true"><span>挙げた日</span><span>ジャンル</span><span>向き</span><span>銘柄</span><span>基準 → 直近</span><span>騰落率</span><span>日経平均との差</span><span>経過</span></div><div class="pkl" data-pk-list>${rows}</div>${more}<p class="rv-note" data-pk-note>※ ${PK_NOTE}。基準＝分析の基準日の終値（休場日は直前の取引日）、日経平均との差＝候補の騰落率 − 同じ期間の日経平均の騰落率（ポイント）。5営業日未満は「まだ日が浅い」として集計に入れません</p></div>`);
+  }
+  function pkMore(open) {
+    $$('[data-pk-extra]').forEach((r) => { r.hidden = !open; });
+    const b = $('[data-pk-more]');
+    if (b) { b.setAttribute('aria-expanded', open ? 'true' : 'false'); b.innerHTML = open ? `閉じる（最初の${PK_FIRST}件だけにする）` : `もっと見る（残り <span class="mono">${$$('[data-pk-extra]').length}</span>件）`; }
+  }
+  /** ホームの市場パネルの1行：今日の上昇業種の上位3つと下落業種の下位2つ */
+  function homeSectorsHtml() {
+    const list = sortedSectors('d1').filter((x) => isNum(x.d1));
+    if (!list.length) return '';
+    const ups = list.filter((x) => x.d1 > 0).slice(0, 3), dns = list.filter((x) => x.d1 < 0).slice(-2).reverse();
+    const it = (x, c) => `<span class="${c}" data-hs="${esc(x.code)}">${c === 'up' ? '▲' : '▼'} ${esc(x.name || x.code)} <span class="mono">${pctTxt(x.d1)}</span></span>`;
+    return `<a class="h-sec" href="#/market" data-home-sectors aria-label="業種の動き（市場ページ）"><span class="lb">業種 <span class="mono">${esc(mmdd(sectorsOf().asOf))}</span></span><span class="hsl">${ups.map((x) => it(x, 'up')).join('') || '<span class="cwn">上昇業種なし</span>'}</span><span class="hsl">${dns.map((x) => it(x, 'dn')).join('') || '<span class="cwn">下落業種なし</span>'}</span></a>`;
+  }
   function mkStandby() {
-    const parts = ['相場の高い安い', '3つのシナリオ', '為替（誰にプラス・マイナスか）', '金利', '地政学ランキング', '今日のニュース', '今後の予定'];
+    const parts = ['相場の高い安い', '3つのシナリオ', '追い風・向かい風と注目候補', '為替（誰にプラス・マイナスか）', '金利', '地政学ランキング', '今日のニュース', '今後の予定'];
     return `<section class="panel" data-sec="standby"><div class="pi"><div class="ph"><span class="code">MKT-A0 / STANDBY</span><h2>市場の分析</h2><div class="pm"><span>STATUS: <span class="jp">未実行</span></span></div></div>
       <div class="mkst">${RADAR.replace(/<text[^]*?<\/text>/, '')}<div><span class="code">MODULE STANDBY</span><h3>市場の分析は未実行です</h3><p>いまは指標の直近値と日経平均・ドル円の折れ線だけを表示しています。分析を実行すると、次の枠がここに並びます。</p>
       <div class="mkps">${parts.map((x) => `<span>${esc(x)}</span>`).join('')}</div><div class="cmdl"><em>&gt;</em>/kabu 市場<i class="cur"></i></div></div></div></div></section>`;
@@ -1607,18 +1805,23 @@
     const c = marketCtx(route);
     S.ctx = c;
     S.ckSel = null; S.ckItems = []; S.lvPin = null;
+    clearTimeout(S.cpTimer); S.cp = null;
     const a = c.a;
     let body;
     if (!a) {
-      body = `<div id="mview" class="mv"><div class="mv-r1">${mkChartPanel(c)}<div class="mv-rc">${mkIndPanel(c)}${mkStandby()}</div></div>${headlinesPanel()}</div>`;
+      body = `<div id="mview" class="mv"><div class="mv-r1">${mkChartPanel(c)}<div class="mv-rc">${mkIndPanel(c)}${mkStandby()}</div></div><div class="mv-r4">${sectorsPanel(c)}${moversPanel()}</div>${headlinesPanel()}${picksPanel()}${cpToast()}</div>`;
     } else {
       body = `<div id="mview" class="mv">
     <div class="mv-r1">${mkChartPanel(c)}<div class="mv-rc">${levelPanelM(c)}${mkIndPanel(c)}</div></div>
+    <div class="mv-r4">${sectorsPanel(c)}${moversPanel()}</div>
     <div class="mv-r2">${outlookPanelM(c)}${fxPanel(c)}</div>
+    ${themesPanel(c)}
     <div class="mv-r3">${geoPanelM(c)}<div class="mv-rc">${ratesPanel(c)}${calendarPanel(c)}</div></div>
     ${newsPanelM(c)}
     ${headlinesPanel()}
+    ${picksPanel()}
     ${notesPanel(a)}
+    ${cpToast()}
   </div>`;
     }
     const notice = c.badDate ? `<div class="foot-b" style="margin:0 0 6px;border:0;padding:0 4px"><span class="warn">指定の日付 ${esc(c.badDate)} の市場の分析は無いため、最新の分析を表示しています</span></div>` : '';
@@ -2098,6 +2301,11 @@
     if (t.closest('[data-upd-toggle]')) { const u = t.closest('.upd'); updSet(!(u && u.classList.contains('open'))); return; }
     if (!t.closest('.upd-pop')) updSet(false);
     if (t.closest('[data-hl-more]')) { hlMore(t.closest('[data-hl-more]').getAttribute('aria-expanded') !== 'true'); return; }
+    if (t.closest('[data-pk-more]')) { pkMore(t.closest('[data-pk-more]').getAttribute('aria-expanded') !== 'true'); return; }
+    const cpb = t.closest('[data-copy]');
+    if (cpb) { copyCmd(cpb); return; }
+    const sp = t.closest('[data-sec-span]');
+    if (sp) { secSpanSet(sp.dataset.secSpan); return; }
     if (t.closest('[data-seg-toggle]')) { segSet(!segIsOpen() || $('#seg-pop').classList.contains('closing')); return; }
     if (t.closest('[data-seg-close]')) { segSet(false); return; }
     if (segIsOpen() && !t.closest('#seg-pop')) segSet(false, { focus: false });
@@ -2178,9 +2386,10 @@
     lvSelect, lvState: () => S.lvPin, rulesOf, PLAN_AXIS, PLAN_GAP,
     setTesting: (b) => { S.testing = !!b; if (b) { clearTimeout(S.animTimer); document.body.classList.remove('anim'); } },
     mkSetRange, mkState: () => S.mkRange, updSet, hlMore, jstParts, HL_FIRST, EDITION,
+    secSpanSet, secState: () => S.secSpan, pkMore, PK_FIRST, copyCmd, copyReset, copyState: () => S.cp, SPANS, PICKS_NOTE, PK_NOTE,
     glSet, glPress, glState: () => ({ ...S.gl }), ntSet, ntState: () => ({ ...S.nt }), GL_CATS, reviewOf,
-    snapshot: () => ({ recent: S.recent, seen: { ...S.seen }, mkRange: S.mkRange, gl: { ...S.gl }, nt: { ...S.nt } }),
-    restore: (s) => { if (!s) return; S.recent = s.recent; S.seen = { ...s.seen }; S.mkRange = s.mkRange || '1y'; S.gl = { ...GL0(), ...(s.gl || {}) }; S.nt = { ...NT0(), ...(s.nt || {}) }; try { if (s.recent) window.localStorage.setItem('kabu.recent', s.recent); else window.localStorage.removeItem('kabu.recent'); } catch (e) { /* 無視 */ } },
+    snapshot: () => ({ recent: S.recent, seen: { ...S.seen }, mkRange: S.mkRange, secSpan: S.secSpan, gl: { ...S.gl }, nt: { ...S.nt } }),
+    restore: (s) => { if (!s) return; S.recent = s.recent; S.seen = { ...s.seen }; S.mkRange = s.mkRange || '1y'; S.secSpan = spanOk(s.secSpan) ? s.secSpan : 'd1'; copyReset(); S.gl = { ...GL0(), ...(s.gl || {}) }; S.nt = { ...NT0(), ...(s.nt || {}) }; try { if (s.recent) window.localStorage.setItem('kabu.recent', s.recent); else window.localStorage.removeItem('kabu.recent'); } catch (e) { /* 無視 */ } },
   };
 
   render(parseHash(location.hash));
