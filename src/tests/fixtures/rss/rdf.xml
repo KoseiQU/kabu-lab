@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns="http://purl.org/rss/1.0/" xmlns:dc="http://purl.org/dc/elements/1.1/">
+<channel rdf:about="https://www.boj.or.jp/">
+<title>日本銀行 新着情報（検査用）</title>
+<link>https://www.boj.or.jp/</link>
+<items><rdf:Seq><rdf:li rdf:resource="https://www.boj.or.jp/a.htm"/></rdf:Seq></items>
+</channel>
+<item rdf:about="https://www.boj.or.jp/statistics/a.htm">
+<title>企業物価指数（2026年9月速報）</title>
+<link>https://www.boj.or.jp/statistics/a.htm</link>
+<dc:date>2026-10-05T08:50:00+09:00</dc:date>
+</item>
+<item rdf:about="https://www.boj.or.jp/b.htm">
+<title>同じ題名の検査</title>
+<link>https://www.boj.or.jp/b.htm</link>
+<dc:date>2026-10-05T10:00:00+09:00</dc:date>
+</item>
+</rdf:RDF>

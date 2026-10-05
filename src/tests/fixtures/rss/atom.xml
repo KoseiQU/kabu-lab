@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+<title>Atom の検査</title>
+<link rel="self" href="https://example.com/feed.xml"/>
+<entry>
+<title type="html">決算発表 &amp; 業績修正</title>
+<link rel="self" href="https://example.com/self/1"/>
+<link rel="alternate" href="https://example.com/news/1?x=1&amp;y=2"/>
+<updated>2026-10-04T23:30:00Z</updated>
+</entry>
+<entry>
+<title>rel の無いリンク</title>
+<link href="https://example.com/news/2"/>
+<published>2026-10-03T01:00:00Z</published>
+<updated>2026-10-04T01:00:00Z</updated>
+</entry>
+</feed>
