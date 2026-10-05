@@ -1584,9 +1584,10 @@
     const old = !f || Date.now() - Date.parse(H.fetchedAt) >= HL_OLD_MS;
     const lis = K.headlineItems(items, { today: todayJst(), first: HL_FIRST });
     const failed = arr(H.sources).filter((x) => x && x.ok === false && x.name);
+    const stale = arr(H.sources).filter((x) => x && x.ok === true && x.name && typeof x.stale === 'string');
     const more = items.length > HL_FIRST ? `<button type="button" class="hl-more" data-hl-more aria-expanded="false">もっと見る（残り <span class="mono">${items.length - HL_FIRST}</span>件）</button>` : '';
     const pm = `${tag}<span>取得 ${f ? `${esc(f.md)} ${esc(f.hm)}` : '—'}</span>${old ? '<span class="hl-old" data-hl-old>古い見出し</span>' : ''}<span class="jp"><span class="mono">${items.length}</span>件</span>`;
-    const foot = `<div class="hl-ft"><span>RSS の題名をそのまま新しい順に並べています（時刻は今日なら時:分、それ以外は月/日）。Claude の解説つきは「今日のニュース」の枠です。</span>${failed.length ? `<span class="hl-ng" data-hl-failed>取得できなかった出典：${failed.map((x) => esc(x.name)).join('・')}</span>` : ''}</div>`;
+    const foot = `<div class="hl-ft"><span>RSS の題名をそのまま新しい順に並べています（時刻は今日なら時:分、それ以外は月/日）。Claude の解説つきは「今日のニュース」の枠です。</span>${failed.length ? `<span class="hl-ng" data-hl-failed>取得できなかった出典：${failed.map((x) => esc(x.name)).join('・')}</span>` : ''}${stale.length ? `<span class="hl-ng" data-hl-stale>更新が止まっているかもしれない出典：${stale.map((x) => `${esc(x.name)}（最新 ${esc(mmdd(x.stale))}）`).join('・')}</span>` : ''}</div>`;
     return panel('headlines', 'MKT-H1 / HEADLINES', '最新の見出し', pm, `<div class="pb">${old ? `<p class="hl-warn" data-hl-old-note>取得から3日以上たった古い見出しです（取得 ${f ? esc(f.md) : '日時不明'}）。<span class="mono">node tools/refresh.mjs</span> で取り直せます。</p>` : ''}<ol class="hll">${lis}</ol>${more}${foot}</div>`);
   }
   function hlMore(open) {

@@ -9,7 +9,8 @@
     "url": "https://www3.nhk.or.jp/rss/news/cat5.xml",
     "ok": true,
     "count": 14,
-    "message": ""
+    "message": "最新の項目が 2026-08-08（RSS の更新が止まっている可能性）",
+    "stale": "2026-08-08"
    },
    {
     "name": "Yahoo!ニュース 経済",

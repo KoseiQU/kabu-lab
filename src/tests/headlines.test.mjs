@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseFeed, decodeEntities, textOf, safeUrl, parseDate, decodeXml, mergeHeadlines, collectHeadlines, runHeadlines, FEEDS, headlinesPath } from '../collect/headlines.mjs';
+import { parseFeed, decodeEntities, textOf, safeUrl, parseDate, decodeXml, mergeHeadlines, collectHeadlines, runHeadlines, FEEDS, headlinesPath, staleSince } from '../collect/headlines.mjs';
 
 const fx = (f) => readFileSync(new URL(`./fixtures/rss/${f}`, import.meta.url));
 const str = (f) => fx(f).toString('utf8');
@@ -138,6 +138,25 @@ test('runHeadlines: 全部失敗なら既存の headlines.json を消さずに�
     assert.equal(r2.ok, false);
     assert.equal(existsSync(headlinesPath(dir2)), false);
     rmSync(dir2, { recursive: true, force: true });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('更新の止まった RSS: 最新の項目が7日より古ければ stale（取得は成功扱い）と記録し、メッセージに出す', async () => {
+  const now = new Date('2026-10-05T02:00:00Z');
+  assert.equal(staleSince([{ publishedAt: '2026-08-08T06:10:11Z' }, { publishedAt: null }], now), '2026-08-08');
+  assert.equal(staleSince([{ publishedAt: '2026-10-01T00:00:00Z' }], now), null);
+  assert.equal(staleSince([{ publishedAt: null }], now), null);
+  const f = fakeFetcher({ [FEEDS[0].url]: fx('rss2.xml'), [FEEDS[1].url]: fx('atom.xml'), [FEEDS[2].url]: fx('rdf.xml') });
+  const dir = mkdtempSync(join(tmpdir(), 'kabu-hl-'));
+  try {
+    const r = await runHeadlines({ dataDir: dir, fetcher: f, wait: async () => {}, now: () => new Date('2026-10-20T00:00:00Z') });
+    assert.equal(r.ok, true);
+    assert.ok(r.data.sources.every((s) => s.ok && s.stale), JSON.stringify(r.data.sources));
+    assert.equal(r.data.sources[0].stale, '2026-10-05');
+    assert.match(r.data.sources[0].message, /更新が止まっている可能性/);
+    assert.match(r.message, /更新が止まっている可能性: NHK 経済 最新 2026-10-05/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

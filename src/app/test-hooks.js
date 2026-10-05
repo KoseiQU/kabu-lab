@@ -1133,6 +1133,7 @@
         const old = Date.now() - Date.parse(H.fetchedAt) >= 3 * 864e5;
         if (old !== !!pn.querySelector('[data-hl-old]')) add('見出し：古い見出しの表示が違う', String(old));
         if ((H.sources || []).some((x) => x && x.ok === false) !== !!pn.querySelector('[data-hl-failed]')) add('見出し：取得できなかった出典の表示が違う', '');
+        if ((H.sources || []).some((x) => x && x.ok === true && typeof x.stale === 'string') !== !!pn.querySelector('[data-hl-stale]')) add('見出し：更新の止まった出典の表示が違う', '');
         // 今日のニュース（解説つき）とは別枠
         if (pn.closest('[data-sec="news"]') || pn.querySelector('.nwc')) add('見出し：今日のニュースと混ざっている', '');
         const more = pn.querySelector('[data-hl-more]');

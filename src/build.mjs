@@ -182,7 +182,7 @@ export function sanitizeHeadlines(h) {
     .filter((x) => x && typeof x.title === 'string' && x.title.trim() && isHttp(x.url))
     .map((x) => ({ title: str(x.title, 200), url: x.url.trim(), source: str(x.source, 40), publishedAt: typeof x.publishedAt === 'string' ? x.publishedAt : null }));
   const sources = (Array.isArray(h.sources) ? h.sources : []).filter((x) => x && typeof x === 'object')
-    .map((x) => ({ name: str(x.name, 40), url: isHttp(x.url) ? x.url.trim() : null, ok: x.ok === true, count: isNum(x.count) ? x.count : 0, message: str(x.message, 200) }));
+    .map((x) => ({ name: str(x.name, 40), url: isHttp(x.url) ? x.url.trim() : null, ok: x.ok === true, count: isNum(x.count) ? x.count : 0, message: str(x.message, 200), ...(isDate(x.stale) ? { stale: x.stale } : {}) }));
   return { fetchedAt: typeof h.fetchedAt === 'string' ? h.fetchedAt : null, sources, items };
 }
 /** refresh.json → 画面に渡す形（キーと型だけ揃える） */

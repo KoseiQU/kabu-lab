@@ -17,6 +17,16 @@ export const FEEDS = [
 export const MAX_ITEMS = 30;
 export const TITLE_MAX = 200;
 export const FEED_MAX_BYTES = 2 * 1024 * 1024;
+/** RSS の最新の項目がこれより古ければ「更新が止まっている可能性」と記録する（取得は成功扱いのまま） */
+export const STALE_DAYS = 7;
+
+/** 最新の項目の日付が STALE_DAYS より古ければその日付（YYYY-MM-DD、日本時間）、そうでなければ null（純粋関数） */
+export function staleSince(items, now = new Date()) {
+  const ts = (items ?? []).map((x) => Date.parse(x?.publishedAt ?? '')).filter(Number.isFinite);
+  if (!ts.length) return null;
+  const newest = Math.max(...ts);
+  return now.getTime() - newest > STALE_DAYS * 864e5 ? new Date(newest + 9 * 3600e3).toISOString().slice(0, 10) : null;
+}
 export const headlinesPath = (dataDir = DATA_DIR) => join(dataDir, 'market', 'headlines.json');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -161,7 +171,8 @@ export async function collectHeadlines({ fetcher = createFetcher(), feeds = FEED
       const items = parseFeed(decodeXml(res.buffer, res.contentType));
       if (!items.length) throw new Error('見出しが1件も読めませんでした（形式の変化の可能性）');
       results.push({ name: f.name, items });
-      sources.push({ name: f.name, url: f.url, ok: true, count: items.length, message: '' });
+      const stale = staleSince(items, now());
+      sources.push({ name: f.name, url: f.url, ok: true, count: items.length, message: stale ? `最新の項目が ${stale}（RSS の更新が止まっている可能性）` : '', ...(stale ? { stale } : {}) });
     } catch (e) {
       sources.push({ name: f.name, url: f.url, ok: false, count: 0, message: String(e?.message ?? e).slice(0, 200) });
     }
@@ -175,11 +186,12 @@ export async function runHeadlines({ dataDir = DATA_DIR, ...opt } = {}) {
   const path = headlinesPath(dataDir);
   const { data, okCount } = await collectHeadlines(opt);
   const failed = data.sources.filter((s) => !s.ok);
+  const stale = data.sources.filter((s) => s.stale);
   if (!okCount) {
     return { ok: false, count: 0, path, data, message: `全RSSの取得に失敗（${existsSync(path) ? '前回の headlines.json を残しました' : 'headlines.json はまだありません'}）: ${failed.map((s) => `${s.name}: ${s.message}`).join(' ／ ')}` };
   }
   writeJson(path, data);
-  return { ok: true, count: data.items.length, path, data, message: `${data.items.length}件${failed.length ? `（失敗: ${failed.map((s) => s.name).join('・')}）` : ''}` };
+  return { ok: true, count: data.items.length, path, data, message: `${data.items.length}件${failed.length ? `（失敗: ${failed.map((s) => s.name).join('・')}）` : ''}${stale.length ? `（更新が止まっている可能性: ${stale.map((s) => `${s.name} 最新 ${s.stale}`).join('・')}）` : ''}` };
 }
 
 if (isMain(import.meta.url)) {
