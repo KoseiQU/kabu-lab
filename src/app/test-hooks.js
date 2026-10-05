@@ -10,8 +10,8 @@
   const QUICK_SECS = ['price', 'diagnosis', 'valuation', 'performance', 'segments', 'scenarios', 'margin', 'checklist', 'review', 'notes'];
   const ABSENT_SECS = ['diagnosis', 'performance', 'valuation', 'segments', 'scenarios', 'margin', 'checklist'];
   const CHART_SECS = ['timeframes', 'lvchart', 'levels', 'heat', 'checklist', 'plans', 'lesson', 'notes'];
-  const MARKET_SECS = ['mkchart', 'level', 'mkind', 'outlook', 'fx', 'rates', 'geo', 'calendar', 'news', 'notes'];
-  const MARKET_RAW_SECS = ['mkchart', 'mkind', 'standby'];
+  const MARKET_SECS = ['mkchart', 'level', 'mkind', 'outlook', 'fx', 'rates', 'geo', 'calendar', 'news', 'headlines', 'notes'];
+  const MARKET_RAW_SECS = ['mkchart', 'mkind', 'standby', 'headlines'];
   const NEWS_SECS = ['event', 'impact', 'nchart', 'reaction', 'factors', 'cases', 'related', 'takeaway', 'notes'];
   const HANSEI_SECS = ['hchart', 'result', 'position', 'at', 'goodimprove', 'alt', 'nextChecks', 'lesson', 'notes'];
   /** 市場ページで表示している分析（日付指定が無ければ最新） */
@@ -241,8 +241,18 @@
     return fx.cases.map((c) => c.code);
   }
   /** フィクスチャを window.KABU に注入（restore() で元に戻す） */
-  function inject(fx) {
+  function inject(fx, variant) {
     if (!backup) backup = clone(window.KABU);
+    if (isP5a(fx)) { // 画面確認用：見出し・refresh だけを差し込む（variant: {hl, rf}。鮮度は ages を渡したときだけ）
+      const v = { hl: 'fresh', rf: 'fail', ...(variant || {}) };
+      const d = p5aData(fx, v);
+      window.KABU.refresh = d.refresh;
+      window.KABU.market = window.KABU.market || { raw: null, analysis: null, analyses: [], series: null };
+      window.KABU.market.headlines = d.headlines;
+      if (v.ages) setAges(window.KABU, v.ages);
+      app().render(app().parseHash(location.hash));
+      return ['#/', '#/market'];
+    }
     const routes = addAll(window.KABU, Array.isArray(fx) ? fx : [fx], false);
     app().render(app().parseHash(location.hash));
     return routes.map(routeLabel);
@@ -1012,6 +1022,167 @@
     if (A.mkState() !== init || host.dataset.range !== init) add('市場：期間が初期状態に戻らない', String(A.mkState()));
   }
 
+
+  /* ---------- P5a：自動更新の表示（更新時刻と内訳・最新の見出し・鮮度の印・市場の版） ---------- */
+  const isP5a = (fx) => fx && typeof fx === 'object' && fx.schema === 'kabu-p5a-fixture@1';
+  const agoIso = (min, now) => (typeof min === 'number' ? new Date(now - min * 60e3).toISOString() : null);
+  /** フィクスチャ → {refresh, headlines}。hl: fresh / old / none、rf: ok / fail / none */
+  function p5aData(fx, v, now = Date.now()) {
+    const shift = v.hl === 'old' ? 4 * 1440 : 0; // 古い見出し：4日前に取得
+    const headlines = v.hl === 'none' ? null : { fetchedAt: agoIso(fx.headlines.agoMin + shift, now), sources: clone(fx.headlines.sources), items: fx.headlines.items.map((x) => ({ title: x.title, url: x.url, source: x.source, publishedAt: agoIso(x.agoMin == null ? null : x.agoMin + shift, now) })) };
+    const r = v.rf === 'ok' ? fx.refreshOk : v.rf === 'fail' ? fx.refreshFail : null;
+    const refresh = r ? { at: agoIso(r.agoMin, now), finishedAt: agoIso(r.agoMin - r.took / 60, now), steps: clone(r.steps), stocks: clone(r.stocks) } : null;
+    return { refresh, headlines };
+  }
+  /** 鮮度の印の検査用に、全分析へ _age を順に割り当てる（list の値を巡回） */
+  function setAges(D, list) {
+    let i = 0;
+    Object.values(D.stocks || {}).forEach((st) => (st.analyses || []).forEach((a) => { if (a && typeof a === 'object') a._age = list[i++ % list.length]; }));
+    ((D.market && D.market.analyses) || []).forEach((a) => { if (a && typeof a === 'object') a._age = list[i++ % list.length]; });
+    if (D.market && D.market.analyses) D.market.analysis = D.market.analyses[0] || null;
+  }
+  const P5A_VARIANTS = [
+    { name: '見出しあり・一部失敗・鮮度 3/12/0/null', hl: 'fresh', rf: 'fail', ages: [3, 12, 0, null], ed: 'pre' },
+    { name: '古い見出し・全部成功・鮮度 0', hl: 'old', rf: 'ok', ages: [0], ed: 'post' },
+    { name: '見出しなし・refresh なし・鮮度 null', hl: 'none', rf: 'none', ages: [null], ed: null },
+    { name: '市場の分析なし（raw だけ）・見出しあり', hl: 'fresh', rf: 'ok', ages: [5, 1], ed: null, noMarketAnalysis: true },
+  ];
+  const fontPx = (el) => parseFloat(getComputedStyle(el).fontSize);
+  /** 文字を持つ要素の最小文字（12px 未満を積む） */
+  function minFont(root, add, label) {
+    root.querySelectorAll('*').forEach((el) => { if ([...el.childNodes].some((n) => n.nodeType === 3 && n.nodeValue.trim()) && fontPx(el) < 11.95) add(`${label}：最小文字12px未満`, `${fontPx(el)}px ${el.textContent.trim().slice(0, 12)}`); });
+  }
+  function checkP5a(route, v, fx, add) {
+    const A = app(), D = window.KABU, main = document.getElementById('main');
+    // ヘッダのデータ更新
+    const u = document.querySelector('#top .upd');
+    if (!D.refresh) { if (u) add('更新時刻：refresh が無いのに出ている', ''); }
+    else {
+      const p = A.jstParts(D.refresh.at);
+      if (!u || !visible(u.querySelector('.updb'))) add('更新時刻：表示されない', v.name);
+      else {
+        const txt = u.querySelector('.updb').textContent;
+        if (!txt.includes(`データ更新 ${p.md} ${p.hm}`)) add('更新時刻：時刻の表示が違う', txt);
+        const fail = D.refresh.steps.some((s) => !s.ok) || D.refresh.stocks.some((s) => !s.ok);
+        if (fail !== txt.includes('一部失敗')) add('更新時刻：一部失敗の表示が違う', `${fail} / ${txt}`);
+        if (fail !== (u.dataset.refresh === 'fail')) add('更新時刻：data-refresh が違う', u.dataset.refresh);
+        if (fail && getComputedStyle(u.querySelector('.updb em')).backgroundColor !== 'rgb(255, 179, 64)') add('更新時刻：一部失敗が注意色でない', '');
+        const pop = u.querySelector('.upd-pop');
+        if (visible(pop)) add('更新時刻：内訳が最初から開いている', '');
+        A.updSet(true);
+        if (!visible(pop)) add('更新時刻：押しても内訳が開かない', '');
+        else {
+          const r = pop.getBoundingClientRect();
+          if (r.right > window.innerWidth + 1 || r.left < 0 || r.bottom > window.innerHeight + 1) add('更新時刻：内訳が画面からはみ出す', `${Math.round(r.left)}-${Math.round(r.right)} / ${Math.round(r.bottom)}`);
+          D.refresh.steps.forEach((s) => { const li = pop.querySelector(`[data-step="${s.key}"]`); if (!li || li.classList.contains('ng') === s.ok) add('更新時刻：手順の成否が内訳と違う', s.key); });
+          D.refresh.stocks.forEach((s) => { const li = pop.querySelector(`[data-step-stock="${s.code}"]`); if (!li || li.classList.contains('ng') === s.ok || (!s.ok && !li.textContent.includes(s.message.slice(0, 20)))) add('更新時刻：銘柄の成否・理由が内訳に無い', s.code); });
+          minFont(pop, add, '更新時刻の内訳');
+          if (document.documentElement.scrollWidth > window.innerWidth) add('更新時刻：内訳を開くと横スクロール', '');
+        }
+        A.updSet(false);
+        if (visible(pop) && !u.matches(':hover') && !u.matches(':focus-within')) add('更新時刻：内訳が閉じない', '');
+        if (u.querySelector('[aria-expanded="true"]')) add('更新時刻：閉じても aria-expanded が true', '');
+      }
+    }
+    // 鮮度の印
+    const badge = (a) => (a && typeof a._age === 'number' && a._age > 0 ? (a._age >= 5 ? 'old' : 'soft') : '');
+    const badgeOk = (el, a, where) => {
+      const want = badge(a), got = el ? (el.classList.contains('old') ? 'old' : 'soft') : '';
+      if (want !== got) add('鮮度の印：表示が違う', `${where} 期待=${want || 'なし'} 実際=${got || 'なし'}`);
+      if (el && want && !el.textContent.includes(`${a._age}営業日前の分析`)) add('鮮度の印：文言が違う', el.textContent);
+      if (el && !visible(el)) add('鮮度の印：見えない', where);
+    };
+    if (route.view === 'home') {
+      main.querySelectorAll('[data-sec="library"] tr[data-href]').forEach((tr) => {
+        const code = decodeURIComponent(tr.dataset.href.split('/')[2] || ''), st = D.stocks[code];
+        badgeOk(tr.querySelector('.age'), st && (st.analyses || [])[0], `ホーム ${code}`);
+      });
+    }
+    if (route.view === 'stock') {
+      const st = D.stocks[route.code], a = st && (st.analyses || []).find((x) => x.type === (route.type || 'quick') && (!route.date || x.date === route.date));
+      badgeOk(main.querySelector('.tabs .age'), a, `銘柄 ${route.code}`);
+    }
+    if (route.view === 'market') {
+      const a = marketAnalysis(D, route);
+      badgeOk(main.querySelector('.mk-sh .age'), a, '市場');
+      const ed = a && a.sections && A.EDITION[a.sections.edition];
+      const edEl = main.querySelector('.mk-sh [data-edition]');
+      if (!!ed !== !!edEl || (edEl && edEl.textContent !== ed)) add('市場：版（寄り付き前・大引け後）の表示が違う', `${ed || 'なし'} / ${edEl ? edEl.textContent : 'なし'}`);
+      // 最新の見出し
+      const pn = main.querySelector('[data-sec="headlines"]'), H = D.market && D.market.headlines;
+      const items = H ? (H.items || []).filter((x) => x && typeof x.title === 'string' && x.title.trim()) : [];
+      if (!visible(pn)) add('見出し：枠が見えない', v.name);
+      else if (!items.length) { if (!pn.querySelector('[data-standby="headlines"]') || !/node tools\/refresh\.mjs/.test(pn.textContent)) add('見出し：未実行の案内が無い', ''); }
+      else {
+        const lis = [...pn.querySelectorAll('li.hl')];
+        if (lis.length !== items.length) add('見出し：件数が違う', `${lis.length} ≠ ${items.length}`);
+        const shown = () => lis.filter((li) => visible(li)).length;
+        if (shown() !== Math.min(A.HL_FIRST, items.length)) add('見出し：最初に見える件数が違う', String(shown()));
+        // XSS：題名のタグは要素にならず、javascript: はリンクにならない
+        if (pn.querySelector('img, script, iframe, [onerror], [onload]') || document.querySelector('#main [onerror]') || window.__KABU_XSS) add('見出し：XSS（題名から要素が作られた）', '');
+        lis.forEach((li, i) => {
+          const it = items[i], a2 = li.querySelector('a');
+          const http = /^https?:\/\//i.test(String(it.url || '').trim());
+          if (http !== !!a2) add('見出し：リンクの有無が URL と合わない', it.url);
+          if (a2 && (!/^https?:\/\//.test(a2.getAttribute('href')) || a2.target !== '_blank' || a2.rel !== 'noopener')) add('見出し：外部リンクの属性が違う', a2.getAttribute('href'));
+          if (li.querySelector('.hlt').textContent !== it.title) add('見出し：題名がそのまま表示されない', it.title.slice(0, 20));
+          if (!li.querySelector('.hls') || li.querySelector('.hls').textContent !== (it.source || '出典不明')) add('見出し：出典名が無い', String(i));
+          const p = A.jstParts(it.publishedAt), want = p ? (p.day === new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10) ? p.hm : p.md) : '—';
+          if (li.querySelector('time').textContent !== want) add('見出し：時刻の表示が違う', `${li.querySelector('time').textContent} ≠ ${want}`);
+        });
+        const old = Date.now() - Date.parse(H.fetchedAt) >= 3 * 864e5;
+        if (old !== !!pn.querySelector('[data-hl-old]')) add('見出し：古い見出しの表示が違う', String(old));
+        if ((H.sources || []).some((x) => x && x.ok === false) !== !!pn.querySelector('[data-hl-failed]')) add('見出し：取得できなかった出典の表示が違う', '');
+        // 今日のニュース（解説つき）とは別枠
+        if (pn.closest('[data-sec="news"]') || pn.querySelector('.nwc')) add('見出し：今日のニュースと混ざっている', '');
+        const more = pn.querySelector('[data-hl-more]');
+        if (items.length > A.HL_FIRST) {
+          if (!more) add('見出し：「もっと見る」が無い', '');
+          else {
+            more.click();
+            if (shown() !== items.length) add('見出し：もっと見るで全件が見えない', String(shown()));
+            if (document.documentElement.scrollWidth > window.innerWidth) add('見出し：全件表示で横スクロール', '');
+            const pi = pn.querySelector('.pi');
+            if (pi.scrollHeight > pi.clientHeight + 1) add('見出し：全件表示で枠が切れる', `${pi.scrollHeight}>${pi.clientHeight}`);
+            more.click();
+            if (shown() !== A.HL_FIRST || more.getAttribute('aria-expanded') !== 'false') add('見出し：閉じても初期状態に戻らない', String(shown()));
+          }
+        } else if (more) add('見出し：12件以下なのに「もっと見る」がある', '');
+        minFont(pn, add, '見出し');
+      }
+    }
+  }
+  /** P5a の表示の組み合わせ（見出し・refresh・鮮度）でホーム・市場・各銘柄の最新の分析を描いて検査する */
+  function runP5a(fx, base, failures, counters) {
+    const A = app();
+    P5A_VARIANTS.forEach((v) => {
+      const D = clone(base);
+      const d = p5aData(fx, v);
+      D.refresh = d.refresh;
+      D.market = D.market && typeof D.market === 'object' ? D.market : { raw: null, analysis: null, analyses: [], series: null };
+      D.market.headlines = d.headlines;
+      if (v.noMarketAnalysis) { D.market.analyses = []; D.market.analysis = null; }
+      setAges(D, v.ages);
+      (D.market.analyses || []).forEach((a, i) => { if (a && a.sections) { if (v.ed && i === 0) a.sections.edition = v.ed; else delete a.sections.edition; } });
+      window.KABU = D;
+      const routes = [{ view: 'home' }, { view: 'market', date: null }];
+      Object.keys(D.stocks).forEach((code) => { const a = (D.stocks[code].analyses || [])[0]; if (a) routes.push({ view: 'stock', code, type: a.type, date: a.date }); });
+      routes.forEach((route) => {
+        const label = `[P5a ${v.name}] ${routeLabel(route)}`;
+        let n = 0;
+        const addF = (check, detail) => { n++; failures.push({ route: label, check, detail }); };
+        try {
+          A.render(route);
+          counters.pages++;
+          checkPage(route, addF);
+          checkP5a(route, v, fx, addF);
+        } catch (e) {
+          addF('描画で例外', String(e && e.stack ? e.stack : e).slice(0, 300));
+        }
+        if (!n) counters.pass++;
+      });
+    });
+  }
   /** 検査対象の画面一覧（ホーム、各銘柄の全分析、分析の無い型タブ、存在しない銘柄） */
   function routesOf(D) {
     const A = app();
@@ -1042,7 +1213,9 @@
     const failures = [];
     let pass = 0, pages = 0;
     try {
-      if (opts.fixture) { window.KABU = clone(saved.kabu); addAll(window.KABU, Array.isArray(opts.fixture) ? opts.fixture : [opts.fixture], opts.bare !== false); }
+      const fxList = opts.fixture ? (Array.isArray(opts.fixture) ? opts.fixture : [opts.fixture]) : [];
+      const p5aFx = opts.p5a || fxList.find(isP5a) || null;
+      if (fxList.length) { window.KABU = clone(saved.kabu); addAll(window.KABU, fxList.filter((x) => !isP5a(x)), opts.bare !== false); }
       // empty: 用語・ノート・答え合わせが0件のときの「未実行」表示の検査
       if (opts.empty) { window.KABU = { ...clone(window.KABU), glossary: [], notes: [], review: [] }; }
       A.setTesting(true);
@@ -1064,6 +1237,8 @@
         }
         if (!n) pass++;
       });
+      // P5a：見出し・refresh・鮮度の組み合わせ（フィクスチャ kabu-p5a-fixture@1 を渡したとき）
+      if (p5aFx) { const cnt = { pass: 0, pages: 0 }; runP5a(p5aFx, window.KABU, failures, cnt); pass += cnt.pass; pages += cnt.pages; }
     } finally {
       window.KABU = saved.kabu;
       A.restore(saved.snap);

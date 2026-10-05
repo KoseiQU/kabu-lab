@@ -1,0 +1,312 @@
+{
+ "schema": "kabu-p5a-fixture@1",
+ "note": "P5a の画面検査用（test-hooks.js の runAll({p5a}) が使う）。agoMin は「今から何分前」。時刻は実行時に計算する",
+ "headlines": {
+  "agoMin": 35,
+  "sources": [
+   {
+    "name": "NHK 経済",
+    "url": "https://www3.nhk.or.jp/rss/news/cat5.xml",
+    "ok": true,
+    "count": 14,
+    "message": ""
+   },
+   {
+    "name": "Yahoo!ニュース 経済",
+    "url": "https://news.yahoo.co.jp/rss/topics/business.xml",
+    "ok": true,
+    "count": 10,
+    "message": ""
+   },
+   {
+    "name": "日本銀行 新着",
+    "url": "https://www.boj.or.jp/rss/whatsnew.xml",
+    "ok": false,
+    "count": 0,
+    "message": "通信失敗: https://www.boj.or.jp/rss/whatsnew.xml (タイムアウト(15000ms))"
+   }
+  ],
+  "items": [
+   {
+    "title": "日経平均株価 午前の終値 前週末比で値上がり（検査用）",
+    "url": "https://example.com/kabu-test/0",
+    "source": "NHK 経済",
+    "agoMin": 20
+   },
+   {
+    "title": "円相場 1ドル＝150円台前半で推移（検査用）",
+    "url": "https://example.com/kabu-test/1",
+    "source": "Yahoo!ニュース 経済",
+    "agoMin": 45
+   },
+   {
+    "title": "企業物価指数（2026年9月速報）（検査用）",
+    "url": "https://example.com/kabu-test/2",
+    "source": "日本銀行 新着",
+    "agoMin": 70
+   },
+   {
+    "title": "<img src=x onerror=\"window.__KABU_XSS=1\">題名にタグを含む見出し（XSSの検査）",
+    "url": "https://example.com/kabu-test/3",
+    "source": "NHK 経済",
+    "agoMin": 90
+   },
+   {
+    "title": "javascript: のリンクを持つ見出し（リンクにしない検査）",
+    "url": "javascript:window.__KABU_XSS=2",
+    "source": "Yahoo!ニュース 経済",
+    "agoMin": 100
+   },
+   {
+    "title": "長い題名の検査：大手商社各社の中間決算の発表を前に資源価格の動向と円相場の影響をめぐり市場関係者の見方が分かれている（検査用の長い題名）",
+    "url": "https://example.com/kabu-test/5",
+    "source": "NHK 経済",
+    "agoMin": 130
+   },
+   {
+    "title": "短観（2026年9月調査）の公表予定（検査用）",
+    "url": "https://example.com/kabu-test/6",
+    "source": "日本銀行 新着",
+    "agoMin": 200
+   },
+   {
+    "title": "半導体関連株に買い戻し（検査用）",
+    "url": "https://example.com/kabu-test/7",
+    "source": "Yahoo!ニュース 経済",
+    "agoMin": 260
+   },
+   {
+    "title": "米長期金利 上昇一服（検査用）",
+    "url": "https://example.com/kabu-test/8",
+    "source": "NHK 経済",
+    "agoMin": 300
+   },
+   {
+    "title": "新NISA 口座数の推移（検査用）",
+    "url": "https://example.com/kabu-test/9",
+    "source": "Yahoo!ニュース 経済",
+    "agoMin": 400
+   },
+   {
+    "title": "原油先物 中東情勢を見極め（検査用）",
+    "url": "https://example.com/kabu-test/10",
+    "source": "NHK 経済",
+    "agoMin": 600
+   },
+   {
+    "title": "金融政策決定会合 議事要旨（検査用）",
+    "url": "https://example.com/kabu-test/11",
+    "source": "日本銀行 新着",
+    "agoMin": 900
+   },
+   {
+    "title": "13件目の見出し（もっと見るの検査）",
+    "url": "https://example.com/kabu-test/12",
+    "source": "NHK 経済",
+    "agoMin": 1500
+   },
+   {
+    "title": "14件目の見出し（検査用）",
+    "url": "https://example.com/kabu-test/13",
+    "source": "Yahoo!ニュース 経済",
+    "agoMin": 1700
+   },
+   {
+    "title": "15件目の見出し（検査用）",
+    "url": "https://example.com/kabu-test/14",
+    "source": "NHK 経済",
+    "agoMin": 1800
+   },
+   {
+    "title": "16件目の見出し（検査用）",
+    "url": "https://example.com/kabu-test/15",
+    "source": "日本銀行 新着",
+    "agoMin": 2000
+   },
+   {
+    "title": "17件目 & 実体参照 \"引用\" の検査",
+    "url": "https://example.com/kabu-test/16",
+    "source": "NHK 経済",
+    "agoMin": 2600
+   },
+   {
+    "title": "18件目の見出し（検査用）",
+    "url": "https://example.com/kabu-test/17",
+    "source": "Yahoo!ニュース 経済",
+    "agoMin": 2900
+   },
+   {
+    "title": "19件目の見出し（検査用）",
+    "url": "https://example.com/kabu-test/18",
+    "source": "NHK 経済",
+    "agoMin": 3200
+   },
+   {
+    "title": "20件目の見出し（検査用）",
+    "url": "https://example.com/kabu-test/19",
+    "source": "Yahoo!ニュース 経済",
+    "agoMin": 3600
+   },
+   {
+    "title": "21件目の見出し（検査用）",
+    "url": "https://example.com/kabu-test/20",
+    "source": "日本銀行 新着",
+    "agoMin": 4000
+   },
+   {
+    "title": "22件目の見出し（検査用）",
+    "url": "https://example.com/kabu-test/21",
+    "source": "NHK 経済",
+    "agoMin": 4300
+   },
+   {
+    "title": "23件目の見出し（検査用）",
+    "url": "https://example.com/kabu-test/22",
+    "source": "Yahoo!ニュース 経済",
+    "agoMin": 4500
+   },
+   {
+    "title": "24件目の見出し（検査用）",
+    "url": "https://example.com/kabu-test/23",
+    "source": "NHK 経済",
+    "agoMin": 4700
+   },
+   {
+    "title": "25件目の見出し（検査用）",
+    "url": "https://example.com/kabu-test/24",
+    "source": "Yahoo!ニュース 経済",
+    "agoMin": 5000
+   },
+   {
+    "title": "26件目の見出し（検査用）",
+    "url": "https://example.com/kabu-test/25",
+    "source": "NHK 経済",
+    "agoMin": 5200
+   },
+   {
+    "title": "27件目の見出し（検査用）",
+    "url": "https://example.com/kabu-test/26",
+    "source": "日本銀行 新着",
+    "agoMin": 5600
+   },
+   {
+    "title": "28件目の見出し（検査用）",
+    "url": "https://example.com/kabu-test/27",
+    "source": "NHK 経済",
+    "agoMin": 5900
+   },
+   {
+    "title": "29件目（日付なし）",
+    "url": "https://example.com/kabu-test/28",
+    "source": "Yahoo!ニュース 経済",
+    "agoMin": null
+   },
+   {
+    "title": "30件目（日付なし）",
+    "url": "https://example.com/kabu-test/29",
+    "source": "NHK 経済",
+    "agoMin": null
+   }
+  ]
+ },
+ "refreshOk": {
+  "agoMin": 40,
+  "took": 31,
+  "steps": [
+   {
+    "key": "market",
+    "ok": true,
+    "message": "日経平均 68309.46円（-647.26 / -0.94%）2026-10-02",
+    "sec": 1.4
+   },
+   {
+    "key": "stocks",
+    "ok": true,
+    "message": "3銘柄（6501・7013・8001）",
+    "sec": 12.2
+   },
+   {
+    "key": "headlines",
+    "ok": true,
+    "message": "30件",
+    "sec": 3.3
+   },
+   {
+    "key": "build",
+    "ok": true,
+    "message": "data.js とビューアを作り直し",
+    "sec": 0
+   }
+  ],
+  "stocks": [
+   {
+    "code": "6501",
+    "ok": true,
+    "lastDate": "2026-10-02",
+    "message": "株価・銘柄情報・digest を更新"
+   },
+   {
+    "code": "7013",
+    "ok": true,
+    "lastDate": "2026-10-02",
+    "message": "最新のため収集を省略"
+   },
+   {
+    "code": "8001",
+    "ok": true,
+    "lastDate": "2026-10-02",
+    "message": "株価・銘柄情報・digest を更新"
+   }
+  ]
+ },
+ "refreshFail": {
+  "agoMin": 40,
+  "took": 44,
+  "steps": [
+   {
+    "key": "market",
+    "ok": true,
+    "message": "日経平均 68309.46円（-647.26 / -0.94%）2026-10-02",
+    "sec": 1.4
+   },
+   {
+    "key": "stocks",
+    "ok": false,
+    "message": "3銘柄中1銘柄が失敗（7013）",
+    "sec": 15.0
+   },
+   {
+    "key": "headlines",
+    "ok": false,
+    "message": "24件（失敗: 日本銀行 新着）",
+    "sec": 17.1
+   },
+   {
+    "key": "build",
+    "ok": true,
+    "message": "data.js とビューアを作り直し",
+    "sec": 0
+   }
+  ],
+  "stocks": [
+   {
+    "code": "6501",
+    "ok": true,
+    "lastDate": "2026-10-02",
+    "message": "株価・銘柄情報・digest を更新"
+   },
+   {
+    "code": "7013",
+    "ok": false,
+    "lastDate": "2026-10-02",
+    "message": "株探の取得に失敗: 通信失敗: https://kabutan.jp/stock/?code=7013 (タイムアウト(15000ms))"
+   },
+   {
+    "code": "8001",
+    "ok": true,
+    "lastDate": "2026-10-02",
+    "message": "株価・銘柄情報・digest を更新"
+   }
+  ]
+ }
+}
