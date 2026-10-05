@@ -1,8 +1,8 @@
-// digest-market.md（Claude が読む市場の要約）を組み立てる。4KB（4096バイト）以内。純粋関数のみ。
-// 入力: raw（parseMarket の結果）と series（parseSeries の結果）。
+// digest-market.md（Claude が読む市場の要約）を組み立てる。6KB（6144バイト）以内（P6a で 4KB→6KB）。純粋関数のみ。
+// 入力: raw（parseMarket の結果）、series（parseSeries の結果）、sectors（parseSectors の結果）、movers（buildMovers の結果）。
 import { sma, deviationPct, rsi } from './indicators.mjs';
 
-export const MARKET_DIGEST_LIMIT = 4096;
+export const MARKET_DIGEST_LIMIT = 6144;
 
 const isNum = (x) => typeof x === 'number' && Number.isFinite(x);
 const round = (x, n = 2) => (isNum(x) ? Math.round(x * 10 ** n) / 10 ** n : null);
@@ -64,8 +64,35 @@ export function seriesStats(rows, periods = [25, 75, 200]) {
 
 const SLOPE = { up: '上向き', down: '下向き', flat: '横ばい' };
 
-/** digest-market.md の本文（4KB以内）。series の各要素は {key, name, unit, rows} */
-export function buildMarketDigest({ raw, series, generatedAt = new Date().toISOString() }) {
+/** 業種の騰落率の節（17業種。1日の騰落率順。null は末尾） */
+export function sectorDigest(sectors) {
+  const items = Array.isArray(sectors?.items) ? sectors.items : [];
+  if (!items.length) return '## 業種の騰落率（TOPIX-17 業種別ETFで代用）\n未取得' + (sectors?.error ? `（${sectors.error}）` : '');
+  const v = (x) => (isNum(x) ? `${sign(x)}%` : '未取得');
+  const sorted = [...items].sort((a, b) => (isNum(b.d1) ? b.d1 : -Infinity) - (isNum(a.d1) ? a.d1 : -Infinity));
+  return [
+    `## 業種の騰落率（TOPIX-17 業種別ETFで代用。1日の騰落率順。終値 ${sectors.asOf ?? '未取得'}）`,
+    'sectorKey はコード列の値。1週＝5営業日前・1か月＝21営業日前の終値と比較',
+    '| コード | 業種 | 1日 | 1週 | 1か月 |', '|---|---|---|---|---|',
+    ...sorted.map((x) => `| ${x.code} | ${x.name} | ${v(x.d1)} | ${v(x.w1)} | ${v(x.m1)} |`),
+    ...(sectors.missing?.length ? [`未取得: ${sectors.missing.join('、')}`] : []),
+  ].join('\n');
+}
+
+/** 値上がり・値下がりの上位の節（各10） */
+export function moversDigest(movers) {
+  const head = '## 値上がり・値下がりの上位（東証プライム）';
+  if (!movers || (!movers.up?.length && !movers.down?.length)) return `${head}\n未取得` + (movers?.error ? `（${movers.error}）` : '');
+  const line = (x, i) => `${i + 1}. ${x.code} ${x.name} ${sign(x.pct)}%${isNum(x.close) ? `（${nfa(x.close, 1)}円）` : ''}`;
+  return [
+    `${head.replace('）', `。株探 ${movers.asOf ?? '日付不明'}${movers.time ? ' ' + movers.time + '時点' : ''}）`)}`,
+    '値上がり率:', ...(movers.up?.length ? movers.up.map(line) : ['未取得']),
+    '値下がり率:', ...(movers.down?.length ? movers.down.map(line) : ['未取得']),
+  ].join('\n');
+}
+
+/** digest-market.md の本文（6KB以内）。series の各要素は {key, name, unit, rows}。sectors・movers は無ければ「未取得」の節 */
+export function buildMarketDigest({ raw, series, sectors = null, movers = null, generatedAt = new Date().toISOString() }) {
   const S = series?.series ?? {};
   const byKey = Object.fromEntries(Object.values(S).map((s) => [s.key, s]));
   const head =
@@ -119,7 +146,11 @@ export function buildMarketDigest({ raw, series, generatedAt = new Date().toISOS
     ].join('\n'));
   } else out.push('## ドル円の移動平均\n未取得');
 
-  // 5. 直近の終値（収まる範囲で。上限を超えたら日数を減らす）
+  // 5・6. 業種の騰落率と値上がり・値下がりの上位（§5.10）
+  out.push(sectorDigest(sectors));
+  out.push(moversDigest(movers));
+
+  // 7. 直近の終値（収まる範囲で。上限を超えたら日数を減らす）
   const recent = (n) => [
     `## 直近${n}営業日の終値（古い順）`,
     ...Object.values(S).map((s) => `- ${s.name}: ${s.rows.slice(-n).map((r) => `${r.d.slice(5)} ${nfa(r.c, 3)}`).join(' / ')}`),
@@ -130,6 +161,6 @@ export function buildMarketDigest({ raw, series, generatedAt = new Date().toISOS
     if (bytes(text) <= MARKET_DIGEST_LIMIT) return text;
   }
   if (bytes(base) <= MARKET_DIGEST_LIMIT) return base;
-  const note = '\n…（4KB上限のため以降を省略）\n';
+  const note = '\n…（6KB上限のため以降を省略）\n';
   return Buffer.from(base, 'utf8').subarray(0, MARKET_DIGEST_LIMIT - bytes(note)).toString('utf8').replace(/�+$/, '') + note;
 }

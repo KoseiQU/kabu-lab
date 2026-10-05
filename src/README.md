@@ -7,7 +7,9 @@
 ```
 node collect/run.mjs 6501 [--type quick|chart|news|hansei] [--if-stale]  # 株価(Yahoo)・株探を収集し指標計算 → prices.json, profile.json, digest.md（4型とも同じ digest）
 node collect/run.mjs 6501 --type kessan [--if-stale]         # 株探の決算ページ → finance.json, digest-kessan.md（株価は取らない）
-node collect/market.mjs [--if-stale]       # 指数・為替・金利・原油（Yahoo spark range=2y を1回）→ data/market/<日付>-raw.json, series.json（日経平均・ドル円・米10年の日足2年）, digest-market.md（4KB以内）
+node collect/market.mjs [--if-stale]       # 指数・為替・金利・原油（Yahoo spark range=2y を1回）→ data/market/<日付>-raw.json, series.json（日経平均・ドル円・米10年の日足2年）, digest-market.md（6KB以内）
+                                           #   ＋業種の動き sectors.json（TOPIX-17 業種別ETF 1617〜1633。Yahoo 1回）・値上がり／値下がりの上位 movers.json（株探のランキング 東証プライム。2回）・
+                                           #     注目候補の株価 picks-prices.json（直近60日の市場分析の themes のコード。Yahoo 0〜2回）。失敗しても exit 0 で「一部未取得: …」を出す
 node collect/headlines.mjs                 # 最新の見出し（NHK 経済・Yahoo!ニュース 経済・日本銀行 新着の公開RSS、各1リクエスト）→ data/market/headlines.json（題名とリンクだけ。全部失敗なら既存を残して exit 1）
 node tools/entry-stats.mjs 6501 2026-08-28 5600   # 反省型の材料: 購入日の四本値と過熱の物差し・移動平均・直前のスイング・購入後の最大含み益/損（md 2KB以内）。範囲外は exit 1
 node tools/fetch-doc.mjs 6501 <PDFのURL> --name 2027-1Q-tanshin   # PDF → raw/docs/<名前>.pdf/.txt、ページ数・文字数・目次

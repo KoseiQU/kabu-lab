@@ -5,11 +5,15 @@
 // 1サイト最大4リクエストの制約のため、Yahoo の spark エンドポイント（chart API の複数銘柄版）を range=2y で
 // 1回だけ呼び、6銘柄の直近値と3銘柄の2年分を同じ応答から作る（Yahoo へのリクエストは1回）。
 // --if-stale: digest-market.md が最新（直近の大引け以降に作成、または作成から3時間以内）で、今日の raw と series があれば省く。
+// P6a（§5.10）: 続けて業種の動き（sectors.json。Yahoo 1回）・値上がり／値下がりの上位（movers.json。株探 2回）・
+// 注目候補の株価（picks-prices.json。Yahoo 0〜2回）を取る。これらが失敗しても raw・series・digest は書き、
+// 標準出力に「一部未取得: …」の行を出す（exit 0 のまま。refresh はこの行で一部失敗を知る）。Yahoo は合計4回以内。
 import { join } from 'node:path';
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { defaultFetcher } from './lib/fetch.mjs';
 import { DATA_DIR, isMain, writeJson, writeText, jstDate, fail, isDigestFresh } from './lib/util.mjs';
 import { buildMarketDigest, MARKET_DIGEST_LIMIT } from './lib/digest-market.mjs';
+import { SECTOR_CODES, SECTOR_RANGE, PICKS_RANGE, KABUTAN_RANK_URL, parseSectors, buildMovers, pickCodes, chunkCodes, parsePicksPrices } from './lib/market-extra.mjs';
 
 export const SYMBOLS = [
   { key: 'nikkei225', symbol: '^N225', name: '日経平均', unit: '円', series: true },
@@ -119,7 +123,84 @@ export const marketPaths = (dataDir = DATA_DIR, now = new Date()) => ({
   raw: join(dataDir, 'market', `${jstDate(now)}-raw.json`),
   series: join(dataDir, 'market', 'series.json'),
   digest: join(dataDir, 'market', 'digest-market.md'),
+  sectors: join(dataDir, 'market', 'sectors.json'),
+  movers: join(dataDir, 'market', 'movers.json'),
+  picks: join(dataDir, 'market', 'picks-prices.json'),
 });
+
+/** 一部未取得を知らせる標準出力の行の頭（refresh.mjs が読む） */
+export const PARTIAL_PREFIX = '一部未取得: ';
+const oneLine = (e) => String(e?.message ?? e).replace(/\s+/g, ' ').slice(0, 120);
+
+/** data/market/<日付>.json（市場型の分析）を読む。壊れたものは飛ばす */
+export function readMarketAnalyses(dataDir = DATA_DIR) {
+  const dir = join(dataDir, 'market');
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir).filter((f) => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).map((f) => {
+    try {
+      return JSON.parse(readFileSync(join(dir, f), 'utf8'));
+    } catch {
+      return null;
+    }
+  }).filter(Boolean);
+}
+
+/**
+ * 業種・上位・候補の株価を取って書く。どれかが失敗しても他を続け、失敗は failures に入れて返す（例外にしない）。
+ * fetcher は {json, text}（テストでは偽物）。返り値 {sectors, movers, picks, failures:[{key, label, message}], written:[path]}
+ */
+export async function collectExtras({ fetcher, dataDir = DATA_DIR, now = new Date(), paths = marketPaths(dataDir, now), analyses } = {}) {
+  const failures = [];
+  const written = [];
+  const out = { sectors: null, movers: null, picks: null, failures, written };
+  // 業種の動き（Yahoo 1回）
+  try {
+    const json = await fetcher.json(sparkUrl(SECTOR_CODES.map((c) => `${c}.T`), SECTOR_RANGE));
+    const sec = parseSectors(json, now);
+    if (sec.missing.length === SECTOR_CODES.length) throw new Error('17業種とも値が無い（応答形式の変化の可能性）');
+    writeJson(paths.sectors, sec);
+    written.push(paths.sectors);
+    out.sectors = sec;
+    if (sec.missing.length) failures.push({ key: 'sectors', label: '業種の一部', message: sec.missing.join('、') });
+  } catch (e) {
+    failures.push({ key: 'sectors', label: '業種の動き', message: oneLine(e) });
+  }
+  // 値上がり・値下がりの上位（株探 2回）
+  try {
+    const up = await fetcher.text(KABUTAN_RANK_URL('2_1'), { accept: 'text/html' });
+    const dn = await fetcher.text(KABUTAN_RANK_URL('2_2'), { accept: 'text/html' });
+    const mv = buildMovers(up, dn, now);
+    writeJson(paths.movers, mv);
+    written.push(paths.movers);
+    out.movers = mv;
+  } catch (e) {
+    failures.push({ key: 'movers', label: '値上がり・値下がりの上位', message: oneLine(e) });
+  }
+  // 注目候補の株価（Yahoo 0〜2回。候補が無ければ何もしない）
+  try {
+    const codes = pickCodes(analyses ?? readMarketAnalyses(dataDir), jstDate(now));
+    if (codes.length) {
+      const { chunks, over } = chunkCodes(codes);
+      const jsons = [];
+      const failed = [];
+      for (const ch of chunks) {
+        try {
+          jsons.push(await fetcher.json(sparkUrl(ch.map((c) => `${c}.T`), PICKS_RANGE)));
+        } catch (e) {
+          failed.push(...ch);
+          failures.push({ key: 'picks', label: '注目候補の株価', message: oneLine(e) });
+        }
+      }
+      const pp = parsePicksPrices(jsons, codes.slice(0, codes.length - over.length), { over, now, failed });
+      writeJson(paths.picks, pp);
+      written.push(paths.picks);
+      out.picks = pp;
+    }
+  } catch (e) {
+    failures.push({ key: 'picks', label: '注目候補の株価', message: oneLine(e) });
+  }
+  return out;
+}
 
 /** --if-stale で収集を省けるか（今日の raw・series・digest がそろい、digest が最新） */
 export function marketIsFresh(paths, now = new Date()) {
@@ -142,7 +223,18 @@ if (isMain(import.meta.url)) {
     const series = parseSeries(json, now);
     writeJson(paths.raw, m);
     writeText(paths.series, seriesJsonText(series));
-    const digest = buildMarketDigest({ raw: m, series, generatedAt: now.toISOString() });
+    // 業種・上位・候補（失敗しても市場の収集は成功させる）
+    let ex = { sectors: null, movers: null, failures: [], written: [] };
+    try {
+      ex = await collectExtras({ fetcher: defaultFetcher(), now, paths });
+    } catch (e) {
+      ex.failures.push({ key: 'extras', label: '業種・上位・候補', message: String(e?.message ?? e) });
+    }
+    const errOf = (k) => ex.failures.find((f) => f.key === k)?.message;
+    const digest = buildMarketDigest({
+      raw: m, series, generatedAt: now.toISOString(),
+      sectors: ex.sectors ?? { error: errOf('sectors') }, movers: ex.movers ?? { error: errOf('movers') },
+    });
     writeText(paths.digest, digest);
     for (const it of Object.values(m.items)) if (it) console.log(`${it.name} ${it.value}${it.unit}（${it.change >= 0 ? '+' : ''}${it.change} / ${it.changePct}%）${it.asOf}`);
     if (m.missing.length) console.log(`未取得: ${m.missing.join('、')}`);
@@ -151,6 +243,12 @@ if (isMain(import.meta.url)) {
     console.log(`  ${paths.raw}`);
     console.log(`  ${paths.series} (${Object.values(series.series).map((s) => `${s.name}${s.rows.length}本`).join('・')})`);
     console.log(`  ${paths.digest} (${Buffer.byteLength(digest)} bytes / 上限 ${MARKET_DIGEST_LIMIT})`);
+    for (const p of ex.written) console.log(`  ${p}`);
+    if (ex.sectors) console.log(`業種の動き: ${ex.sectors.items.filter((x) => x.close != null).length}/17業種（${ex.sectors.asOf}）`);
+    if (ex.movers) console.log(`値上がり・値下がりの上位: ${ex.movers.up.length}・${ex.movers.down.length}銘柄（株探 ${ex.movers.asOf} ${ex.movers.time ?? ''}）`);
+    if (ex.picks) console.log(`注目候補の株価: ${Object.keys(ex.picks.prices).length}銘柄${ex.picks.missing.length ? `（未取得 ${ex.picks.missing.map((x) => x.code).join('・')}）` : ''}`);
+    else console.log('注目候補の株価: 候補なし（直近60日の市場分析に themes が無い）');
+    if (ex.failures.length) console.log(`${PARTIAL_PREFIX}${ex.failures.map((f) => `${f.label}（${f.message}）`).join(' ／ ')}`);
   } catch (e) {
     fail(`市場データの取得に失敗しました: ${e.message}`);
   }

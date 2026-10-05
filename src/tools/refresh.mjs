@@ -1,6 +1,6 @@
 // 自動更新の第1層（DESIGN.md §5.9。トークン0）: 市場 → 登録銘柄 → 見出し → build を順に実行する。
 // 使い方（src で実行）: node tools/refresh.mjs [--no-viewer] [--data <dataDir>] [--viewer <path>]
-//   1. 市場の収集（node collect/market.mjs）
+//   1. 市場の収集（node collect/market.mjs。業種・上位・候補の株価を含む。それらが取れなければ「一部未取得」で一部失敗）
 //   2. 登録銘柄（data/stocks/<code>/analyses/ に分析が1件以上ある銘柄）の株価と銘柄情報（node collect/run.mjs <code> --if-stale）。銘柄の間は2秒以上あける
 //   3. 見出しの収集（collect/headlines.mjs の runHeadlines）
 //   4. build（node build.mjs。--no-viewer でビューアを省く。--data を付けたときは --viewer を明示しない限りビューアを書き換えない）
@@ -12,6 +12,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DATA_DIR, isMain, writeJson } from '../collect/lib/util.mjs';
 import { runHeadlines } from '../collect/headlines.mjs';
+import { PARTIAL_PREFIX } from '../collect/market.mjs';
 
 const SRC = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const STOCK_GAP_MS = 2000;
@@ -84,6 +85,18 @@ export function runNode(script, args = [], { env = {}, timeoutMs = CHILD_TIMEOUT
     });
   });
 }
+/**
+ * 市場の手順の結果（P6a）: exit 0 でも「一部未取得: …」の行があれば一部失敗（業種・上位・候補のどれかが取れなかった）。
+ * 指数・為替の収集は成功しているので、message に日経平均の行と取れなかったものを両方書く
+ */
+export function marketResult(r) {
+  if (r.code !== 0) return { ok: false, message: errLine(r) };
+  const lines = r.stdout.split('\n');
+  const nk = lines.find((l) => l.startsWith('日経平均'));
+  const part = lines.find((l) => l.startsWith(PARTIAL_PREFIX));
+  if (part) return { ok: false, message: oneLine(`指数・為替は更新。${part}`) };
+  return { ok: true, message: oneLine(nk || '市場データを更新') };
+}
 const errLine = (r) => oneLine(r.stderr.split('\n').filter((l) => l.trim()).map((l) => l.replace(/^エラー:\s*/, '')).join(' ／ ') || `exit ${r.code}`);
 
 /**
@@ -97,9 +110,7 @@ export function defaultRunners({ dataDir = DATA_DIR, customData = false, noViewe
     async market() {
       const r = await runNode('collect/market.mjs', [], { env });
       echo(r);
-      if (r.code !== 0) return { ok: false, message: errLine(r) };
-      const nk = r.stdout.split('\n').find((l) => l.startsWith('日経平均'));
-      return { ok: true, message: oneLine(nk || '市場データを更新') };
+      return marketResult(r);
     },
     async stock(code) {
       const r = await runNode('collect/run.mjs', [code, '--if-stale'], { env });

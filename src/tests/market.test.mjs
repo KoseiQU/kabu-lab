@@ -105,7 +105,7 @@ test('seriesStats: 一直線に上がる系列（答えが手計算できる）'
   assert.equal(seriesStats(daily(10, () => 5)).week52.position, null); // 全同値
 });
 
-test('buildMarketDigest: 保存した応答から作れて、4KB以内・必要な節がそろう', () => {
+test('buildMarketDigest: 保存した応答から作れて、6KB以内（P6a で 4KB→6KB）・必要な節がそろう', () => {
   const t = buildMarketDigest({ raw: parseMarket(SPARK, NOW), series: parseSeries(SPARK, NOW), generatedAt: NOW.toISOString() });
   assert.ok(Buffer.byteLength(t) <= MARKET_DIGEST_LIMIT);
   for (const h of ['各指標の直近値と前日比', '変化（', '日経平均のテクニカル', 'ドル円の移動平均', '直近']) assert.ok(t.includes(h), h);
@@ -113,7 +113,7 @@ test('buildMarketDigest: 保存した応答から作れて、4KB以内・必要�
   assert.ok(!/NaN|undefined/.test(t));
 });
 
-test('buildMarketDigest: 2年分の長い系列でも4KB以内（直近の終値の日数を減らして収める）・1か月/3か月/1年と25/75/200日線', () => {
+test('buildMarketDigest: 2年分の長い系列でも上限以内（直近の終値の日数を減らして収める）・1か月/3か月/1年と25/75/200日線', () => {
   const big = (key, name, unit, f) => ({ key, name, unit, rows: daily(730, f, '2024-10-03') });
   const series = { series: {
     '^N225': big('nikkei225', '日経平均', '円', (i) => 40000 + i * 37.123456),
