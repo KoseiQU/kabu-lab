@@ -6,3 +6,5 @@ node_modules/
 
 # 公開リポジトリに含めない（株探などから収集したデータ。手元でのみ生成・保持）
 data/
+src/tests/fixtures/kabutan-*.html
+src/tests/fixtures/yahoo-spark-*.json
